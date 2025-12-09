@@ -809,7 +809,7 @@ class DatabaseService {
         let dropQuery = PostgresQuery(unsafeSQL: dropQuerySQL)
         
         print("📝 [DatabaseService.deleteTable] Executing: \(dropQuerySQL)")
-        
+
         do {
             _ = try await connection.query(dropQuery, logger: logger)
             print("✅ [DatabaseService.deleteTable] SUCCESS - Table '\(schema).\(table)' deleted")
@@ -817,5 +817,143 @@ class DatabaseService {
             print("❌ [DatabaseService.deleteTable] ERROR: \(error)")
             throw error
         }
+    }
+
+    /// Fetch primary key columns for a table
+    func fetchPrimaryKeyColumns(schema: String, table: String) async throws -> [String] {
+        guard let connection = connection else {
+            throw ConnectionError.notConnected
+        }
+
+        let escapedSchema = schema.replacingOccurrences(of: "'", with: "''")
+        let escapedTable = table.replacingOccurrences(of: "'", with: "''")
+
+        let querySQL = """
+            SELECT kcu.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+              ON tc.constraint_name = kcu.constraint_name
+              AND tc.table_schema = kcu.table_schema
+            WHERE tc.constraint_type = 'PRIMARY KEY'
+              AND tc.table_schema = '\(escapedSchema)'
+              AND tc.table_name = '\(escapedTable)'
+            ORDER BY kcu.ordinal_position;
+            """
+
+        let query = PostgresQuery(unsafeSQL: querySQL)
+        let rows = try await connection.query(query, logger: logger)
+
+        var pkColumns: [String] = []
+        for try await row in rows {
+            let randomAccess = row.makeRandomAccess()
+            let columnName = try randomAccess[0].decode(String.self)
+            pkColumns.append(columnName)
+        }
+
+        return pkColumns
+    }
+
+    /// Delete rows from a table using primary key values
+    func deleteRows(
+        schema: String,
+        table: String,
+        primaryKeyColumns: [String],
+        rows: [TableRow]
+    ) async throws {
+        guard let connection = connection else {
+            throw ConnectionError.notConnected
+        }
+
+        guard !primaryKeyColumns.isEmpty else {
+            throw DatabaseError.noPrimaryKey
+        }
+
+        let escapedSchema = schema.replacingOccurrences(of: "\"", with: "\"\"")
+        let escapedTable = table.replacingOccurrences(of: "\"", with: "\"\"")
+
+        for row in rows {
+            var whereConditions: [String] = []
+            for pkColumn in primaryKeyColumns {
+                guard let value = row.values[pkColumn] else {
+                    throw DatabaseError.missingPrimaryKeyValue(column: pkColumn)
+                }
+
+                let escapedColumn = pkColumn.replacingOccurrences(of: "\"", with: "\"\"")
+                if let stringValue = value {
+                    let escapedValue = stringValue.replacingOccurrences(of: "'", with: "''")
+                    whereConditions.append("\"\(escapedColumn)\" = '\(escapedValue)'")
+                } else {
+                    whereConditions.append("\"\(escapedColumn)\" IS NULL")
+                }
+            }
+
+            let whereClause = whereConditions.joined(separator: " AND ")
+            let deleteSQL = "DELETE FROM \"\(escapedSchema)\".\"\(escapedTable)\" WHERE \(whereClause);"
+
+            let query = PostgresQuery(unsafeSQL: deleteSQL)
+            _ = try await connection.query(query, logger: logger)
+        }
+    }
+
+    /// Update a row in a table using primary key values
+    func updateRow(
+        schema: String,
+        table: String,
+        primaryKeyColumns: [String],
+        originalRow: TableRow,
+        updatedValues: [String: String?]
+    ) async throws {
+        guard let connection = connection else {
+            throw ConnectionError.notConnected
+        }
+
+        guard !primaryKeyColumns.isEmpty else {
+            throw DatabaseError.noPrimaryKey
+        }
+
+        let escapedSchema = schema.replacingOccurrences(of: "\"", with: "\"\"")
+        let escapedTable = table.replacingOccurrences(of: "\"", with: "\"\"")
+
+        var setConditions: [String] = []
+        for (column, newValue) in updatedValues {
+            let oldValue = originalRow.values[column] ?? nil
+            if oldValue == newValue {
+                continue
+            }
+
+            let escapedColumn = column.replacingOccurrences(of: "\"", with: "\"\"")
+            if let stringValue = newValue {
+                let escapedValue = stringValue.replacingOccurrences(of: "'", with: "''")
+                setConditions.append("\"\(escapedColumn)\" = '\(escapedValue)'")
+            } else {
+                setConditions.append("\"\(escapedColumn)\" = NULL")
+            }
+        }
+
+        guard !setConditions.isEmpty else {
+            return
+        }
+
+        var whereConditions: [String] = []
+        for pkColumn in primaryKeyColumns {
+            guard let value = originalRow.values[pkColumn] else {
+                throw DatabaseError.missingPrimaryKeyValue(column: pkColumn)
+            }
+
+            let escapedColumn = pkColumn.replacingOccurrences(of: "\"", with: "\"\"")
+            if let stringValue = value {
+                let escapedValue = stringValue.replacingOccurrences(of: "'", with: "''")
+                whereConditions.append("\"\(escapedColumn)\" = '\(escapedValue)'")
+            } else {
+                whereConditions.append("\"\(escapedColumn)\" IS NULL")
+            }
+        }
+
+        let setClause = setConditions.joined(separator: ", ")
+        let whereClause = whereConditions.joined(separator: " AND ")
+        let updateSQL = "UPDATE \"\(escapedSchema)\".\"\(escapedTable)\" SET \(setClause) WHERE \(whereClause);"
+
+        let query = PostgresQuery(unsafeSQL: updateSQL)
+        _ = try await connection.query(query, logger: logger)
     }
 }

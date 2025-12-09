@@ -11,10 +11,12 @@ struct TableInfo: Identifiable, Hashable {
     let id: String
     let name: String
     let schema: String
+    var primaryKeyColumns: [String]? = nil
 
-    init(name: String, schema: String = "public") {
+    init(name: String, schema: String = "public", primaryKeyColumns: [String]? = nil) {
         self.id = "\(schema).\(name)"
         self.name = name
         self.schema = schema
+        self.primaryKeyColumns = primaryKeyColumns
     }
 }

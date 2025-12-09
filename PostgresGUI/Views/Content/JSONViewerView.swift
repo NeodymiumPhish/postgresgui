@@ -55,10 +55,8 @@ struct JSONViewerView: View {
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(action: {
+                    Button("Copy JSON") {
                         copyToClipboard()
-                    }) {
-                        Image(systemName: "doc.on.doc")
                     }
                 }
             }
