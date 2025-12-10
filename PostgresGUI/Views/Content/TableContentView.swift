@@ -85,7 +85,20 @@ struct TableContentView: View {
                     Text(error)
                 }
             }
-            .sheet(isPresented: $showRowEditor) {
+            .sheet(isPresented: Binding(
+                get: {
+                    showRowEditor &&
+                    rowToEdit != nil &&
+                    appState.queryColumnNames != nil &&
+                    appState.selectedTable?.name != nil
+                },
+                set: { newValue in
+                    showRowEditor = newValue
+                    if !newValue {
+                        rowToEdit = nil
+                    }
+                }
+            )) {
                 if let rowToEdit = rowToEdit,
                    let columnNames = appState.queryColumnNames,
                    let tableName = appState.selectedTable?.name {
@@ -231,8 +244,15 @@ struct TableContentView: View {
             return
         }
 
-        guard let firstSelectedID = appState.selectedRowIDs.first,
-              let rowToEdit = appState.queryResults.first(where: { $0.id == firstSelectedID }) else {
+        // Validate we have column names
+        guard appState.queryColumnNames != nil else {
+            editError = "No query results available"
+            return
+        }
+
+        // Find selected row in current table's results
+        let selectedRows = appState.queryResults.filter { appState.selectedRowIDs.contains($0.id) }
+        guard let rowToEdit = selectedRows.first else {
             editError = "No row selected"
             return
         }
