@@ -15,6 +15,8 @@ struct RowEditorView: View {
     let onSave: ([String: String?]) async throws -> Void
 
     @State private var editedValues: [String: String?]
+    @State private var textValues: [String: String] = [:]
+    @State private var nullFlags: [String: Bool] = [:]
     @State private var isSaving = false
     @State private var saveError: String?
 
@@ -29,6 +31,21 @@ struct RowEditorView: View {
         self.tableName = tableName
         self.onSave = onSave
         _editedValues = State(initialValue: row.values)
+
+        // Initialize text values and null flags
+        var initialTextValues: [String: String] = [:]
+        var initialNullFlags: [String: Bool] = [:]
+        for (key, value) in row.values {
+            if let stringValue = value {
+                initialTextValues[key] = stringValue
+                initialNullFlags[key] = false
+            } else {
+                initialTextValues[key] = ""
+                initialNullFlags[key] = true
+            }
+        }
+        _textValues = State(initialValue: initialTextValues)
+        _nullFlags = State(initialValue: initialNullFlags)
     }
 
     var body: some View {
@@ -92,39 +109,27 @@ struct RowEditorView: View {
                 .frame(width: 120, alignment: .trailing)
                 .foregroundColor(.secondary)
 
-            VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .center, spacing: 8) {
                 TextField("", text: Binding(
                     get: {
-                        if let value = editedValues[columnName] {
-                            return value ?? ""
-                        }
-                        return ""
+                        textValues[columnName] ?? ""
                     },
                     set: { newValue in
-                        if newValue.isEmpty && editedValues[columnName] != nil {
-                            editedValues[columnName] = nil
-                        } else {
-                            editedValues[columnName] = newValue
-                        }
+                        textValues[columnName] = newValue
                     }
                 ))
                 .textFieldStyle(.roundedBorder)
-                .disabled(editedValues[columnName] == nil)
+                .disabled(nullFlags[columnName] ?? false)
 
                 Toggle("NULL", isOn: Binding(
                     get: {
-                        editedValues[columnName] == nil
+                        nullFlags[columnName] ?? false
                     },
                     set: { isNull in
-                        if isNull {
-                            editedValues[columnName] = nil
-                        } else {
-                            editedValues[columnName] = ""
-                        }
+                        nullFlags[columnName] = isNull
                     }
                 ))
                 .toggleStyle(.checkbox)
-                .font(.caption)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -134,8 +139,18 @@ struct RowEditorView: View {
     private func save() async {
         isSaving = true
 
+        // Combine textValues and nullFlags into editedValues
+        var finalValues: [String: String?] = [:]
+        for columnName in columnNames {
+            if nullFlags[columnName] ?? false {
+                finalValues[columnName] = nil
+            } else {
+                finalValues[columnName] = textValues[columnName] ?? ""
+            }
+        }
+
         do {
-            try await onSave(editedValues)
+            try await onSave(finalValues)
             dismiss()
         } catch {
             saveError = error.localizedDescription
