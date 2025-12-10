@@ -6,78 +6,96 @@
 //
 
 import Foundation
-import PostgresNIO
-import Logging
-import NIOSSL
 
 @MainActor
 class DatabaseService {
-    private var connection: PostgresConnection?
-    private var eventLoopGroup: EventLoopGroup?
-    private let logger = Logger(label: "com.postgresgui.database")
-
-    // Store connection details for operations that require reconnection
-    private var connectionHost: String?
-    private var connectionPort: Int?
-    private var connectionUsername: String?
-    private var connectionPassword: String?
-    private var connectionDatabase: String?
-    private var connectionSSLMode: SSLMode?
-
+    // Mock connection state
+    private var isConnectedState: Bool = false
+    private var currentDatabase: String?
+    
+    // Mock data storage
+    private var mockDatabases: [DatabaseInfo] = [
+        DatabaseInfo(name: "postgres"),
+        DatabaseInfo(name: "testdb"),
+        DatabaseInfo(name: "sample_db"),
+        DatabaseInfo(name: "demo")
+    ]
+    
+    private var mockTables: [String: [TableInfo]] = [
+        "postgres": [
+            TableInfo(name: "users", schema: "public"),
+            TableInfo(name: "orders", schema: "public"),
+            TableInfo(name: "products", schema: "public")
+        ],
+        "testdb": [
+            TableInfo(name: "customers", schema: "public"),
+            TableInfo(name: "invoices", schema: "public")
+        ],
+        "sample_db": [
+            TableInfo(name: "employees", schema: "public"),
+            TableInfo(name: "departments", schema: "public"),
+            TableInfo(name: "projects", schema: "public")
+        ],
+        "demo": [
+            TableInfo(name: "items", schema: "public")
+        ]
+    ]
+    
+    // Mock table data
+    private var mockTableData: [String: [TableRow]] = [:]
+    
     var isConnected: Bool {
-        connection != nil
+        isConnectedState
     }
 
-    init() {}
-
-    /// Helper function to decode a PostgreSQL value to a string representation
-    private func decodeValue(from randomAccess: PostgresRandomAccessRow, at index: Int) -> String? {
-        // Try to decode in order of specificity (most specific types first)
-        // Try Bool first (most specific)
-        if let boolValue = try? randomAccess[index].decode(Bool.self) {
-            return String(boolValue)
-        }
-        // Try Int64 (integers)
-        else if let intValue = try? randomAccess[index].decode(Int64.self) {
-            return String(intValue)
-        }
-        // Try Double (floating point)
-        else if let doubleValue = try? randomAccess[index].decode(Double.self) {
-            return String(doubleValue)
-        }
-        // Try Date (for timestamp columns)
-        else if let dateValue = try? randomAccess[index].decode(Date.self) {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .medium
-            return formatter.string(from: dateValue)
-        }
-        // Try Array of Strings (PostgreSQL text[] arrays)
-        else if let arrayValue = try? randomAccess[index].decode([String].self) {
-            // Convert array to JSON-like string representation
-            let jsonData = try? JSONSerialization.data(withJSONObject: arrayValue, options: [])
-            if let jsonData = jsonData, let jsonString = String(data: jsonData, encoding: .utf8) {
-                return jsonString
-            } else {
-                return "[\(arrayValue.map { "\"\($0)\"" }.joined(separator: ", "))]"
-            }
-        }
-        // Try String last (most general, catches everything else)
-        else if let stringValue = try? randomAccess[index].decode(String.self) {
-            return stringValue
-        }
-        else {
-            return nil // NULL or unsupported type
-        }
+    init() {
+        // Initialize mock table data
+        initializeMockData()
     }
     
-    deinit {
-        // Don't create async tasks in deinit - it causes retain cycles
-        // The connection and eventLoopGroup will be cleaned up when they go out of scope
-        // If we need cleanup, it should be done explicitly before deallocation
+    private func initializeMockData() {
+        // Mock data for users table
+        mockTableData["public.users"] = [
+            TableRow(values: ["id": "1", "name": "John Doe", "email": "john@example.com", "age": "30", "active": "true"]),
+            TableRow(values: ["id": "2", "name": "Jane Smith", "email": "jane@example.com", "age": "25", "active": "true"]),
+            TableRow(values: ["id": "3", "name": "Bob Johnson", "email": "bob@example.com", "age": "35", "active": "false"]),
+            TableRow(values: ["id": "4", "name": "Alice Williams", "email": "alice@example.com", "age": "28", "active": "true"]),
+            TableRow(values: ["id": "5", "name": "Charlie Brown", "email": "charlie@example.com", "age": "42", "active": "true"])
+        ]
+        
+        // Mock data for orders table
+        mockTableData["public.orders"] = [
+            TableRow(values: ["id": "1", "user_id": "1", "product": "Laptop", "amount": "1299.99", "status": "completed", "created_at": "2024-01-15 10:30:00"]),
+            TableRow(values: ["id": "2", "user_id": "2", "product": "Mouse", "amount": "29.99", "status": "pending", "created_at": "2024-01-16 14:20:00"]),
+            TableRow(values: ["id": "3", "user_id": "1", "product": "Keyboard", "amount": "79.99", "status": "completed", "created_at": "2024-01-17 09:15:00"]),
+            TableRow(values: ["id": "4", "user_id": "3", "product": "Monitor", "amount": "299.99", "status": "shipped", "created_at": "2024-01-18 11:45:00"])
+        ]
+        
+        // Mock data for products table
+        mockTableData["public.products"] = [
+            TableRow(values: ["id": "1", "name": "Laptop", "price": "1299.99", "stock": "50", "category": "Electronics"]),
+            TableRow(values: ["id": "2", "name": "Mouse", "price": "29.99", "stock": "200", "category": "Accessories"]),
+            TableRow(values: ["id": "3", "name": "Keyboard", "price": "79.99", "stock": "150", "category": "Accessories"]),
+            TableRow(values: ["id": "4", "name": "Monitor", "price": "299.99", "stock": "75", "category": "Electronics"]),
+            TableRow(values: ["id": "5", "name": "Webcam", "price": "89.99", "stock": "100", "category": "Accessories"])
+        ]
+        
+        // Mock data for customers table
+        mockTableData["public.customers"] = [
+            TableRow(values: ["id": "1", "name": "Acme Corp", "contact": "John Manager", "email": "contact@acme.com", "phone": "555-0101"]),
+            TableRow(values: ["id": "2", "name": "Tech Solutions", "contact": "Sarah Director", "email": "sarah@techsol.com", "phone": "555-0102"]),
+            TableRow(values: ["id": "3", "name": "Global Inc", "contact": "Mike CEO", "email": "mike@global.com", "phone": "555-0103"])
+        ]
+        
+        // Mock data for employees table
+        mockTableData["public.employees"] = [
+            TableRow(values: ["id": "1", "first_name": "Alice", "last_name": "Johnson", "department": "Engineering", "salary": "95000", "hire_date": "2020-03-15"]),
+            TableRow(values: ["id": "2", "first_name": "Bob", "last_name": "Smith", "department": "Sales", "salary": "75000", "hire_date": "2021-06-20"]),
+            TableRow(values: ["id": "3", "first_name": "Carol", "last_name": "Davis", "department": "Engineering", "salary": "105000", "hire_date": "2019-11-10"])
+        ]
     }
     
-    /// Connect to PostgreSQL database
+    /// Connect to PostgreSQL database (mock - always succeeds)
     func connect(
         host: String,
         port: Int,
@@ -86,149 +104,27 @@ class DatabaseService {
         database: String,
         sslMode: SSLMode = .default
     ) async throws {
-        print("🔌 [DatabaseService.connect] START - Connecting to \(database) at \(host):\(port) as \(username)")
-
+        // Simulate connection delay
+        try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        
         // Validate inputs
         guard !host.isEmpty else {
-            print("❌ [DatabaseService.connect] Invalid host: \(host)")
             throw ConnectionError.invalidHost(host)
         }
 
         guard port > 0 && port <= 65535 else {
-            print("❌ [DatabaseService.connect] Invalid port: \(port)")
             throw ConnectionError.invalidPort
         }
-
-        // Disconnect existing connection if any
-        print("🔄 [DatabaseService.connect] Disconnecting existing connection...")
-        await disconnect()
-        print("✅ [DatabaseService.connect] Disconnected")
-
-        // Create event loop group
-        print("⚙️  [DatabaseService.connect] Creating event loop group...")
-        let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-        self.eventLoopGroup = eventLoopGroup
-        print("✅ [DatabaseService.connect] Event loop group created")
-
-        // Store connection details for later use (e.g., reconnecting to drop databases)
-        self.connectionHost = host
-        self.connectionPort = port
-        self.connectionUsername = username
-        self.connectionPassword = password
-        self.connectionDatabase = database
-        self.connectionSSLMode = sslMode
-
-        // Create connection configuration with appropriate TLS settings
-        let tlsConfiguration: PostgresConnection.Configuration.TLS
-        switch sslMode {
-        case .disable:
-            tlsConfiguration = .disable
-        case .allow, .prefer:
-            // Try TLS, fall back to plain if unavailable
-            let sslContext = try! NIOSSLContext(configuration: .makeClientConfiguration())
-            tlsConfiguration = .prefer(sslContext)
-        case .require, .verifyCA, .verifyFull:
-            // Require TLS
-            let sslContext = try! NIOSSLContext(configuration: .makeClientConfiguration())
-            tlsConfiguration = .require(sslContext)
-        }
-
-        let configuration = PostgresConnection.Configuration(
-            host: host,
-            port: port,
-            username: username,
-            password: password,
-            database: database,
-            tls: tlsConfiguration
-        )
-        print("⚙️  [DatabaseService.connect] Configuration created for \(database) with SSL mode: \(sslMode.rawValue)")
-
-        do {
-            // Connect to PostgreSQL
-            print("🔌 [DatabaseService.connect] Attempting PostgreSQL connection...")
-            let connection = try await PostgresConnection.connect(
-                on: eventLoopGroup.next(),
-                configuration: configuration,
-                id: 1,
-                logger: logger
-            )
-
-            self.connection = connection
-            print("✅ [DatabaseService.connect] SUCCESS - Connected to \(database)")
-        } catch {
-            print("❌ [DatabaseService.connect] FAILED with error: \(error)")
-            print("❌ [DatabaseService.connect] Detailed error: \(String(reflecting: error))")
-            await disconnect()
-
-            // Map PostgresNIO errors to ConnectionError
-            if let postgresError = error as? PostgresError {
-                print("❌ [DatabaseService.connect] PostgresError code: \(postgresError.code)")
-                switch postgresError.code {
-                case .invalidPassword, .invalidAuthorizationSpecification:
-                    throw ConnectionError.authenticationFailed
-                case .invalidCatalogName:
-                    throw ConnectionError.databaseNotFound(database)
-                default:
-                    throw ConnectionError.unknownError(postgresError)
-                }
-            } else {
-                // Check for network errors or PostgresNIO errors
-                let nsError = error as NSError
-                print("❌ [DatabaseService.connect] NSError domain: \(nsError.domain), code: \(nsError.code)")
-                
-                // Check for PostgresNIO.PSQLError domain
-                if nsError.domain == "PostgresNIO.PSQLError" {
-                    // Extract detailed error information from userInfo
-                    var errorMessage = nsError.localizedDescription
-                    if let underlyingError = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
-                        errorMessage = String(reflecting: underlyingError)
-                    }
-                    print("❌ [DatabaseService.connect] PSQLError details: \(errorMessage)")
-                    
-                    // Try to map common PSQLError codes to ConnectionError
-                    switch nsError.code {
-                    case 28: // Invalid password
-                        throw ConnectionError.authenticationFailed
-                    default:
-                        throw ConnectionError.unknownError(error)
-                    }
-                } else if nsError.domain == NSPOSIXErrorDomain {
-                    switch nsError.code {
-                    case 60: // ETIMEDOUT
-                        throw ConnectionError.timeout
-                    case 51, 50: // ENETUNREACH, EHOSTUNREACH
-                        throw ConnectionError.networkUnreachable
-                    case 61: // ECONNREFUSED
-                        throw ConnectionError.networkUnreachable
-                    default:
-                        throw ConnectionError.unknownError(error)
-                    }
-                } else {
-                    throw ConnectionError.unknownError(error)
-                }
-            }
-        }
+        
+        // Mock connection - always succeeds
+        isConnectedState = true
+        currentDatabase = database
     }
     
     /// Disconnect from database
     func disconnect() async {
-        if let connection = connection {
-            try? await connection.close()
-            self.connection = nil
-        }
-        
-        if let eventLoopGroup = eventLoopGroup {
-            try? await eventLoopGroup.shutdownGracefully()
-            self.eventLoopGroup = nil
-        }
-        
-        // Clear connection details
-        connectionHost = nil
-        connectionPort = nil
-        connectionUsername = nil
-        connectionPassword = nil
-        connectionDatabase = nil
-        connectionSSLMode = nil
+        isConnectedState = false
+        currentDatabase = nil
     }
     
     /// Test connection without saving (static method - doesn't require instance)
@@ -240,688 +136,251 @@ class DatabaseService {
         database: String,
         sslMode: SSLMode = .default
     ) async throws -> Bool {
-        // Run PostgresNIO operations off the main actor to avoid threading issues
-        return try await Task.detached {
-            // Create temporary connection for testing
-            let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-            let testLogger = Logger(label: "com.postgresgui.test")
-            
-            var testConnection: PostgresConnection?
-            
-            // Cleanup helper
-            func cleanup() async {
-                if let connection = testConnection {
-                    try? await connection.close()
-                    testConnection = nil
-                }
-                try? await eventLoopGroup.shutdownGracefully()
-            }
-            
-            // Create TLS configuration based on SSL mode
-            let tlsConfiguration: PostgresConnection.Configuration.TLS
-            switch sslMode {
-            case .disable:
-                tlsConfiguration = .disable
-            case .allow, .prefer:
-                let sslContext = try! NIOSSLContext(configuration: .makeClientConfiguration())
-                tlsConfiguration = .prefer(sslContext)
-            case .require, .verifyCA, .verifyFull:
-                let sslContext = try! NIOSSLContext(configuration: .makeClientConfiguration())
-                tlsConfiguration = .require(sslContext)
-            }
-
-            let configuration = PostgresConnection.Configuration(
-                host: host,
-                port: port,
-                username: username,
-                password: password,
-                database: database,
-                tls: tlsConfiguration
-            )
-            
-            do {
-                testConnection = try await PostgresConnection.connect(
-                    on: eventLoopGroup.next(),
-                    configuration: configuration,
-                    id: 1,
-                    logger: testLogger
-                )
-                
-                // Test successful - close connection and cleanup
-                try await testConnection?.close()
-                testConnection = nil
-                try await eventLoopGroup.shutdownGracefully()
-                return true
-            } catch {
-                // Error occurred - ensure cleanup happens
-                await cleanup()
-                
-                // Map PostgresNIO errors to ConnectionError for better error messages
-                if let postgresError = error as? PostgresError {
-                    switch postgresError.code {
-                    case .invalidPassword, .invalidAuthorizationSpecification:
-                        throw ConnectionError.authenticationFailed
-                    case .invalidCatalogName:
-                        throw ConnectionError.databaseNotFound(database)
-                    default:
-                        throw ConnectionError.unknownError(postgresError)
-                    }
-                } else {
-                    // Check for network errors
-                    let nsError = error as NSError
-                    if nsError.domain == NSPOSIXErrorDomain {
-                        switch nsError.code {
-                        case 1: // EPERM - Operation not permitted (sandbox issue)
-                            throw ConnectionError.networkUnreachable
-                        case 60: // ETIMEDOUT
-                            throw ConnectionError.timeout
-                        case 51, 50: // ENETUNREACH, EHOSTUNREACH
-                            throw ConnectionError.networkUnreachable
-                        case 61: // ECONNREFUSED - Connection refused
-                            throw ConnectionError.networkUnreachable
-                        default:
-                            throw ConnectionError.unknownError(error)
-                        }
-                    } else {
-                        throw ConnectionError.unknownError(error)
-                    }
-                }
-            }
-        }.value
+        // Simulate connection test delay
+        try await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
+        
+        // Mock test - always succeeds
+        return true
     }
     
-    /// Fetch list of databases
+    /// Fetch list of databases (mock data)
     func fetchDatabases() async throws -> [DatabaseInfo] {
-        guard let connection = connection else {
+        guard isConnectedState else {
             throw ConnectionError.notConnected
         }
-
-        let query: PostgresQuery = """
-            SELECT datname
-            FROM pg_database
-            WHERE datistemplate = false
-            ORDER BY datname;
-            """
-
-        let rows = try await connection.query(query, logger: logger)
-
-        var databases: [DatabaseInfo] = []
-        for try await row in rows {
-            let randomAccess = row.makeRandomAccess()
-            let name = try randomAccess[0].decode(String.self)
-            databases.append(DatabaseInfo(name: name))
-        }
-
-        return databases
+        
+        // Simulate network delay
+        try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+        
+        return mockDatabases
     }
     
-    /// Fetch list of tables in a database
+    /// Fetch list of tables in a database (mock data)
     func fetchTables(database: String) async throws -> [TableInfo] {
-        print("📊 [DatabaseService.fetchTables] START for database: \(database)")
-
-        guard let connection = connection else {
-            print("❌ [DatabaseService.fetchTables] ERROR: Not connected")
+        guard isConnectedState else {
             throw ConnectionError.notConnected
         }
-        print("✅ [DatabaseService.fetchTables] Connection exists")
-
-        let query: PostgresQuery = """
-            SELECT table_name, table_schema
-            FROM information_schema.tables
-            WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
-            AND table_type = 'BASE TABLE'
-            ORDER BY table_schema, table_name;
-            """
-        print("📝 [DatabaseService.fetchTables] Executing query...")
-
-        let rows = try await connection.query(query, logger: logger)
-        print("✅ [DatabaseService.fetchTables] Query executed, processing rows...")
-
-        var tables: [TableInfo] = []
-        for try await row in rows {
-            let randomAccess = row.makeRandomAccess()
-            let name = try randomAccess[0].decode(String.self)
-            let schema = try randomAccess[1].decode(String.self)
-            tables.append(TableInfo(name: name, schema: schema))
-            print("   ➕ Found table: \(schema).\(name)")
-        }
-
-        print("✅ [DatabaseService.fetchTables] SUCCESS - Fetched \(tables.count) tables")
-        return tables
+        
+        // Simulate network delay
+        try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+        
+        return mockTables[database] ?? []
     }
     
-    /// Fetch table data with pagination
+    /// Fetch table data with pagination (mock data)
     func fetchTableData(
         schema: String,
         table: String,
         offset: Int,
         limit: Int
     ) async throws -> [TableRow] {
-        print("📊 [DatabaseService.fetchTableData] START for \(schema).\(table), offset=\(offset), limit=\(limit)")
-
-        guard let connection = connection else {
-            print("❌ [DatabaseService.fetchTableData] ERROR: Not connected")
+        guard isConnectedState else {
             throw ConnectionError.notConnected
         }
-
-        // Note: We can't use PostgresNIO's parameter binding for table names (identifiers)
-        // They must be part of the SQL string, but LIMIT/OFFSET can be bound
-        let querySQL = """
-            SELECT * FROM \(table)
-            LIMIT \(limit) OFFSET \(offset);
-            """
-
-        print("📝 [DatabaseService.fetchTableData] Query: \(querySQL)")
-        let query = PostgresQuery(unsafeSQL: querySQL)
-
-        let rows: PostgresRowSequence
-        do {
-            rows = try await connection.query(query, logger: logger)
-            print("✅ [DatabaseService.fetchTableData] Query executed successfully")
-        } catch {
-            print("❌ [DatabaseService.fetchTableData] ERROR executing query: \(error)")
-            print("❌ [DatabaseService.fetchTableData] Error details: \(String(reflecting: error))")
-            throw error
+        
+        // Simulate network delay
+        try await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
+        
+        let key = "\(schema).\(table)"
+        let allRows = mockTableData[key] ?? []
+        
+        // Apply pagination
+        let endIndex = min(offset + limit, allRows.count)
+        guard offset < allRows.count else {
+            return []
         }
-
-        // First, collect column names from the first row
-        var columnNames: [String] = []
-        var isFirstRow = true
-
-        var tableRows: [TableRow] = []
-        for try await row in rows {
-            var values: [String: String?] = [:]
-            let randomAccess = row.makeRandomAccess()
-
-            // On first row, extract column names using reflection
-            if isFirstRow {
-                // Use Mirror to inspect the row structure and extract column names
-                let mirror = Mirror(reflecting: randomAccess)
-                if let lookupTable = mirror.children.first(where: { $0.label == "lookupTable" })?.value as? [String: Int] {
-                    columnNames = lookupTable.sorted(by: { $0.value < $1.value }).map { $0.key }
-                } else {
-                    // Fallback: use index-based names if reflection fails
-                    columnNames = (0..<randomAccess.count).map { "col_\($0)" }
-                }
-                isFirstRow = false
-            }
-
-            // Extract values for each column
-            for (index, columnName) in columnNames.enumerated() {
-                guard index < randomAccess.count else { break }
-                values[columnName] = decodeValue(from: randomAccess, at: index)
-            }
-
-            tableRows.append(TableRow(values: values))
-        }
-
-        return tableRows
+        
+        return Array(allRows[offset..<endIndex])
     }
 
-
-    /// Execute arbitrary SQL query and return results along with column names
+    /// Execute arbitrary SQL query and return results along with column names (mock data)
     func executeQuery(_ sql: String) async throws -> ([TableRow], [String]) {
-        print("🔍 [DatabaseService.executeQuery] START")
-        print("📝 [DatabaseService.executeQuery] Query: \(sql)")
-
-        guard let connection = connection else {
-            print("❌ [DatabaseService.executeQuery] ERROR: Not connected")
+        guard isConnectedState else {
             throw ConnectionError.notConnected
         }
-
-        // Create query from raw SQL
-        let query = PostgresQuery(unsafeSQL: sql)
-
-        let rows: PostgresRowSequence
-        do {
-            rows = try await connection.query(query, logger: logger)
-            print("✅ [DatabaseService.executeQuery] Query executed successfully")
-        } catch {
-            print("❌ [DatabaseService.executeQuery] ERROR executing query: \(error)")
-            print("❌ [DatabaseService.executeQuery] Error details: \(String(reflecting: error))")
-            throw error
-        }
-
-        // First, collect column names from the first row (or try to extract from empty result)
-        var columnNames: [String] = []
-        var isFirstRow = true
-
-        var tableRows: [TableRow] = []
-        for try await row in rows {
-            var values: [String: String?] = [:]
-            let randomAccess = row.makeRandomAccess()
-
-            // On first row, extract column names using reflection
-            if isFirstRow {
-                // Use Mirror to inspect the row structure and extract column names
-                let mirror = Mirror(reflecting: randomAccess)
-                if let lookupTable = mirror.children.first(where: { $0.label == "lookupTable" })?.value as? [String: Int] {
-                    columnNames = lookupTable.sorted(by: { $0.value < $1.value }).map { $0.key }
-                    print("📋 [DatabaseService.executeQuery] Column names: \(columnNames.joined(separator: ", "))")
-                } else {
-                    // Fallback: use index-based names if reflection fails
-                    columnNames = (0..<randomAccess.count).map { "col_\($0)" }
-                    print("⚠️  [DatabaseService.executeQuery] Using fallback column names")
-                }
-                isFirstRow = false
-            }
-
-            // Extract values for each column
-            for (index, columnName) in columnNames.enumerated() {
-                guard index < randomAccess.count else { break }
-                values[columnName] = decodeValue(from: randomAccess, at: index)
-            }
-
-            tableRows.append(TableRow(values: values))
-        }
-
-        // If we have no rows but also no column names, try to extract from result metadata
-        if columnNames.isEmpty && tableRows.isEmpty {
-            print("🔍 [DatabaseService.executeQuery] Attempting to extract column metadata from empty result")
-            // Try multiple approaches to get column metadata
-            do {
-                let trimmedSQL = sql.trimmingCharacters(in: .whitespacesAndNewlines)
-                let upperSQL = trimmedSQL.uppercased()
-                
-                // Approach 1: Try wrapping SELECT queries in a CTE with LIMIT 0
-                if upperSQL.hasPrefix("SELECT") {
-                    // Use a CTE approach which is more reliable than subquery
-                    let metadataQuerySQL = "WITH _metadata_cte AS (\(trimmedSQL)) SELECT * FROM _metadata_cte LIMIT 0"
-                    print("📝 [DatabaseService.executeQuery] Trying CTE approach: \(metadataQuerySQL)")
-                    
-                    let metadataQuery = PostgresQuery(unsafeSQL: metadataQuerySQL)
-                    let metadataRows = try await connection.query(metadataQuery, logger: logger)
-                    
-                    // Try to iterate and get metadata from the first row (even if empty)
-                    var iterator = metadataRows.makeAsyncIterator()
-                    if let row = try await iterator.next() {
-                        let randomAccess = row.makeRandomAccess()
-                        let mirror = Mirror(reflecting: randomAccess)
-                        if let lookupTable = mirror.children.first(where: { $0.label == "lookupTable" })?.value as? [String: Int] {
-                            columnNames = lookupTable.sorted(by: { $0.value < $1.value }).map { $0.key }
-                            print("✅ [DatabaseService.executeQuery] Column names from CTE metadata: \(columnNames.joined(separator: ", "))")
-                        }
+        
+        // Simulate query execution delay
+        try await Task.sleep(nanoseconds: 400_000_000) // 0.4 seconds
+        
+        let upperSQL = sql.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        
+        // Mock SELECT queries
+        if upperSQL.hasPrefix("SELECT") {
+            // Try to match against known tables
+            for (key, rows) in mockTableData {
+                if upperSQL.contains(key.uppercased().replacingOccurrences(of: ".", with: " ")) {
+                    // Extract column names from first row
+                    if let firstRow = rows.first {
+                        let columnNames = Array(firstRow.values.keys).sorted()
+                        return (rows, columnNames)
                     }
                 }
-                
-                // Approach 2: If CTE failed, try simple LIMIT 0
-                if columnNames.isEmpty {
-                    let metadataQuerySQL = trimmedSQL + " LIMIT 0"
-                    print("📝 [DatabaseService.executeQuery] Trying LIMIT 0 approach: \(metadataQuerySQL)")
-                    
-                    let metadataQuery = PostgresQuery(unsafeSQL: metadataQuerySQL)
-                    let metadataRows = try await connection.query(metadataQuery, logger: logger)
-                    
-                    var iterator = metadataRows.makeAsyncIterator()
-                    if let row = try await iterator.next() {
-                        let randomAccess = row.makeRandomAccess()
-                        let mirror = Mirror(reflecting: randomAccess)
-                        if let lookupTable = mirror.children.first(where: { $0.label == "lookupTable" })?.value as? [String: Int] {
-                            columnNames = lookupTable.sorted(by: { $0.value < $1.value }).map { $0.key }
-                            print("✅ [DatabaseService.executeQuery] Column names from LIMIT 0 metadata: \(columnNames.joined(separator: ", "))")
-                        }
-                    }
-                }
-                
-                if columnNames.isEmpty {
-                    print("⚠️  [DatabaseService.executeQuery] Could not extract column metadata from empty result")
-                }
-            } catch {
-                // If metadata extraction fails, columnNames will remain empty
-                print("⚠️  [DatabaseService.executeQuery] Failed to extract column metadata: \(error.localizedDescription)")
             }
+            
+            // Default mock query result
+            let mockRows = [
+                TableRow(values: ["id": "1", "name": "Sample", "value": "100"]),
+                TableRow(values: ["id": "2", "name": "Test", "value": "200"]),
+                TableRow(values: ["id": "3", "name": "Demo", "value": "300"])
+            ]
+            return (mockRows, ["id", "name", "value"])
         }
-
-        print("✅ [DatabaseService.executeQuery] SUCCESS - Returned \(tableRows.count) rows, \(columnNames.count) columns")
-        return (tableRows, columnNames)
+        
+        // For non-SELECT queries, return empty result
+        return ([], [])
     }
     
-    /// Delete a database
+    /// Delete a database (mock - just removes from list)
     func deleteDatabase(name: String) async throws {
-        print("🗑️  [DatabaseService.deleteDatabase] START for database: \(name)")
-        
-        guard connection != nil else {
-            print("❌ [DatabaseService.deleteDatabase] ERROR: Not connected")
+        guard isConnectedState else {
             throw ConnectionError.notConnected
         }
         
-        // We need connection details to reconnect to 'postgres' database
-        guard let host = connectionHost,
-              let port = connectionPort,
-              let username = connectionUsername,
-              let password = connectionPassword else {
-            print("❌ [DatabaseService.deleteDatabase] ERROR: Connection details not available")
-            throw ConnectionError.notConnected
-        }
+        // Simulate delay
+        try await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
         
-        // Save original database name
-        let originalDatabase = connectionDatabase
+        mockDatabases.removeAll { $0.name == name }
+        mockTables.removeValue(forKey: name)
         
-        // Disconnect from current database (can't drop database while connected to it)
-        await disconnect()
-        
-        // Connect to 'postgres' database to drop the target database
-        let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-        self.eventLoopGroup = eventLoopGroup
-
-        // Use stored SSL mode or default
-        let sslMode = connectionSSLMode ?? .default
-        let tlsConfiguration: PostgresConnection.Configuration.TLS
-        switch sslMode {
-        case .disable:
-            tlsConfiguration = .disable
-        case .allow, .prefer:
-            let sslContext = try! NIOSSLContext(configuration: .makeClientConfiguration())
-            tlsConfiguration = .prefer(sslContext)
-        case .require, .verifyCA, .verifyFull:
-            let sslContext = try! NIOSSLContext(configuration: .makeClientConfiguration())
-            tlsConfiguration = .require(sslContext)
-        }
-
-        let configuration = PostgresConnection.Configuration(
-            host: host,
-            port: port,
-            username: username,
-            password: password,
-            database: "postgres", // Connect to postgres database
-            tls: tlsConfiguration
-        )
-        
-        do {
-            let postgresConnection = try await PostgresConnection.connect(
-                on: eventLoopGroup.next(),
-                configuration: configuration,
-                id: 1,
-                logger: logger
-            )
-            
-            self.connection = postgresConnection
-            
-            // Execute DROP DATABASE
-            // Escape database name properly
-            let escapedName = name.replacingOccurrences(of: "\"", with: "\"\"")
-            let dropQuerySQL = "DROP DATABASE \"\(escapedName)\";"
-            let dropQuery = PostgresQuery(unsafeSQL: dropQuerySQL)
-            
-            print("📝 [DatabaseService.deleteDatabase] Executing: \(dropQuerySQL)")
-            _ = try await postgresConnection.query(dropQuery, logger: logger)
-            
-            print("✅ [DatabaseService.deleteDatabase] SUCCESS - Database '\(name)' deleted")
-            
-            // Close connection to postgres
-            try? await postgresConnection.close()
-            self.connection = nil
-            try? await eventLoopGroup.shutdownGracefully()
-            self.eventLoopGroup = nil
-            
-            // Optionally reconnect to original database if it wasn't the one we deleted
-            if let originalDatabase = originalDatabase, originalDatabase != name {
-                print("🔄 [DatabaseService.deleteDatabase] Reconnecting to original database: \(originalDatabase)")
-                try await connect(
-                    host: host,
-                    port: port,
-                    username: username,
-                    password: password,
-                    database: originalDatabase,
-                    sslMode: sslMode
-                )
-            }
-            
-        } catch {
-            print("❌ [DatabaseService.deleteDatabase] ERROR: \(error)")
+        // If we deleted the current database, disconnect
+        if currentDatabase == name {
             await disconnect()
-            throw error
         }
     }
     
-    /// Create a new database
+    /// Create a new database (mock - adds to list)
     func createDatabase(name: String) async throws {
-        print("➕ [DatabaseService.createDatabase] START for database: \(name)")
-        
-        guard connection != nil else {
-            print("❌ [DatabaseService.createDatabase] ERROR: Not connected")
+        guard isConnectedState else {
             throw ConnectionError.notConnected
         }
         
-        // We need connection details to reconnect to 'postgres' database
-        guard let host = connectionHost,
-              let port = connectionPort,
-              let username = connectionUsername,
-              let password = connectionPassword else {
-            print("❌ [DatabaseService.createDatabase] ERROR: Connection details not available")
-            throw ConnectionError.notConnected
+        // Simulate delay
+        try await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
+        
+        // Check if database already exists
+        if mockDatabases.contains(where: { $0.name == name }) {
+            throw ConnectionError.databaseNotFound(name) // Reuse error for "already exists"
         }
         
-        // Save original database name
-        let originalDatabase = connectionDatabase
-        
-        // Disconnect from current database
-        await disconnect()
-        
-        // Connect to 'postgres' database to create the new database
-        let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-        self.eventLoopGroup = eventLoopGroup
-
-        // Use stored SSL mode or default
-        let sslMode = connectionSSLMode ?? .default
-        let tlsConfiguration: PostgresConnection.Configuration.TLS
-        switch sslMode {
-        case .disable:
-            tlsConfiguration = .disable
-        case .allow, .prefer:
-            let sslContext = try! NIOSSLContext(configuration: .makeClientConfiguration())
-            tlsConfiguration = .prefer(sslContext)
-        case .require, .verifyCA, .verifyFull:
-            let sslContext = try! NIOSSLContext(configuration: .makeClientConfiguration())
-            tlsConfiguration = .require(sslContext)
-        }
-
-        let configuration = PostgresConnection.Configuration(
-            host: host,
-            port: port,
-            username: username,
-            password: password,
-            database: "postgres", // Connect to postgres database
-            tls: tlsConfiguration
-        )
-        
-        do {
-            let postgresConnection = try await PostgresConnection.connect(
-                on: eventLoopGroup.next(),
-                configuration: configuration,
-                id: 1,
-                logger: logger
-            )
-            
-            self.connection = postgresConnection
-            
-            // Execute CREATE DATABASE
-            // Escape database name properly
-            let escapedName = name.replacingOccurrences(of: "\"", with: "\"\"")
-            let createQuerySQL = "CREATE DATABASE \"\(escapedName)\";"
-            let createQuery = PostgresQuery(unsafeSQL: createQuerySQL)
-            
-            print("📝 [DatabaseService.createDatabase] Executing: \(createQuerySQL)")
-            _ = try await postgresConnection.query(createQuery, logger: logger)
-            
-            print("✅ [DatabaseService.createDatabase] SUCCESS - Database '\(name)' created")
-            
-            // Close connection to postgres
-            try? await postgresConnection.close()
-            self.connection = nil
-            try? await eventLoopGroup.shutdownGracefully()
-            self.eventLoopGroup = nil
-            
-            // Reconnect to original database if it exists
-            if let originalDatabase = originalDatabase {
-                print("🔄 [DatabaseService.createDatabase] Reconnecting to original database: \(originalDatabase)")
-                try await connect(
-                    host: host,
-                    port: port,
-                    username: username,
-                    password: password,
-                    database: originalDatabase,
-                    sslMode: sslMode
-                )
-            }
-            
-        } catch {
-            print("❌ [DatabaseService.createDatabase] ERROR: \(error)")
-            await disconnect()
-            throw error
-        }
+        mockDatabases.append(DatabaseInfo(name: name))
+        mockTables[name] = []
     }
     
-    /// Delete a table
+    /// Delete a table (mock - removes from list)
     func deleteTable(schema: String, table: String) async throws {
-        print("🗑️  [DatabaseService.deleteTable] START for \(schema).\(table)")
-        
-        guard let connection = connection else {
-            print("❌ [DatabaseService.deleteTable] ERROR: Not connected")
+        guard isConnectedState else {
             throw ConnectionError.notConnected
         }
         
-        // Escape schema and table names properly
-        let escapedSchema = schema.replacingOccurrences(of: "\"", with: "\"\"")
-        let escapedTable = table.replacingOccurrences(of: "\"", with: "\"\"")
+        // Simulate delay
+        try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
         
-        // Execute DROP TABLE
-        let dropQuerySQL = "DROP TABLE \"\(escapedSchema)\".\"\(escapedTable)\";"
-        let dropQuery = PostgresQuery(unsafeSQL: dropQuerySQL)
-        
-        print("📝 [DatabaseService.deleteTable] Executing: \(dropQuerySQL)")
-
-        do {
-            _ = try await connection.query(dropQuery, logger: logger)
-            print("✅ [DatabaseService.deleteTable] SUCCESS - Table '\(schema).\(table)' deleted")
-        } catch {
-            print("❌ [DatabaseService.deleteTable] ERROR: \(error)")
-            throw error
+        guard let database = currentDatabase,
+              var tables = mockTables[database] else {
+            throw ConnectionError.notConnected
         }
+        
+        tables.removeAll { $0.name == table && $0.schema == schema }
+        mockTables[database] = tables
+        
+        // Remove table data
+        let key = "\(schema).\(table)"
+        mockTableData.removeValue(forKey: key)
     }
 
-    /// Fetch primary key columns for a table
+    /// Fetch primary key columns for a table (mock - returns "id" for most tables)
     func fetchPrimaryKeyColumns(schema: String, table: String) async throws -> [String] {
-        guard let connection = connection else {
+        guard isConnectedState else {
             throw ConnectionError.notConnected
         }
-
-        let escapedSchema = schema.replacingOccurrences(of: "'", with: "''")
-        let escapedTable = table.replacingOccurrences(of: "'", with: "''")
-
-        let querySQL = """
-            SELECT kcu.column_name
-            FROM information_schema.table_constraints tc
-            JOIN information_schema.key_column_usage kcu
-              ON tc.constraint_name = kcu.constraint_name
-              AND tc.table_schema = kcu.table_schema
-            WHERE tc.constraint_type = 'PRIMARY KEY'
-              AND tc.table_schema = '\(escapedSchema)'
-              AND tc.table_name = '\(escapedTable)'
-            ORDER BY kcu.ordinal_position;
-            """
-
-        let query = PostgresQuery(unsafeSQL: querySQL)
-        let rows = try await connection.query(query, logger: logger)
-
-        var pkColumns: [String] = []
-        for try await row in rows {
-            let randomAccess = row.makeRandomAccess()
-            let columnName = try randomAccess[0].decode(String.self)
-            pkColumns.append(columnName)
-        }
-
-        return pkColumns
+        
+        // Simulate delay
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+        
+        // Most tables have "id" as primary key
+        return ["id"]
     }
 
-    /// Fetch column information for a table
+    /// Fetch column information for a table (mock data)
     func fetchColumnInfo(schema: String, table: String) async throws -> [ColumnInfo] {
-        guard let connection = connection else {
+        guard isConnectedState else {
             throw ConnectionError.notConnected
         }
-
-        let escapedSchema = schema.replacingOccurrences(of: "'", with: "''")
-        let escapedTable = table.replacingOccurrences(of: "'", with: "''")
-
-        let querySQL = """
-            SELECT
-                c.column_name,
-                c.data_type,
-                c.is_nullable,
-                c.column_default
-            FROM information_schema.columns c
-            WHERE c.table_schema = '\(escapedSchema)'
-              AND c.table_name = '\(escapedTable)'
-            ORDER BY c.ordinal_position;
-            """
-
-        let query = PostgresQuery(unsafeSQL: querySQL)
-        let rows = try await connection.query(query, logger: logger)
-
+        
+        // Simulate delay
+        try await Task.sleep(nanoseconds: 150_000_000) // 0.15 seconds
+        
+        let key = "\(schema).\(table)"
+        guard let firstRow = mockTableData[key]?.first else {
+            return []
+        }
+        
+        // Generate column info from first row
         var columns: [ColumnInfo] = []
-        for try await row in rows {
-            let randomAccess = row.makeRandomAccess()
-            let columnName = try randomAccess[0].decode(String.self)
-            let dataType = try randomAccess[1].decode(String.self)
-            let isNullableStr = try randomAccess[2].decode(String.self)
-            let defaultValue = try? randomAccess[3].decode(String.self)
-
-            let isNullable = isNullableStr.uppercased() == "YES"
-
+        for (columnName, value) in firstRow.values.sorted(by: { $0.key < $1.key }) {
+            let isNullable = value == nil
+            let dataType: String
+            if columnName.lowercased().contains("id") {
+                dataType = "integer"
+            } else if columnName.lowercased().contains("email") || columnName.lowercased().contains("name") {
+                dataType = "character varying"
+            } else if columnName.lowercased().contains("price") || columnName.lowercased().contains("amount") || columnName.lowercased().contains("salary") {
+                dataType = "numeric"
+            } else if columnName.lowercased().contains("date") || columnName.lowercased().contains("created") {
+                dataType = "timestamp"
+            } else if columnName.lowercased().contains("active") {
+                dataType = "boolean"
+            } else {
+                dataType = "text"
+            }
+            
             columns.append(ColumnInfo(
                 name: columnName,
                 dataType: dataType,
                 isNullable: isNullable,
-                defaultValue: defaultValue
+                defaultValue: nil
             ))
         }
-
+        
         return columns
     }
 
-    /// Delete rows from a table using primary key values
+    /// Delete rows from a table using primary key values (mock - removes from data)
     func deleteRows(
         schema: String,
         table: String,
         primaryKeyColumns: [String],
         rows: [TableRow]
     ) async throws {
-        guard let connection = connection else {
+        guard isConnectedState else {
             throw ConnectionError.notConnected
         }
-
+        
         guard !primaryKeyColumns.isEmpty else {
             throw DatabaseError.noPrimaryKey
         }
-
-        let escapedSchema = schema.replacingOccurrences(of: "\"", with: "\"\"")
-        let escapedTable = table.replacingOccurrences(of: "\"", with: "\"\"")
-
-        for row in rows {
-            var whereConditions: [String] = []
-            for pkColumn in primaryKeyColumns {
-                guard let value = row.values[pkColumn] else {
-                    throw DatabaseError.missingPrimaryKeyValue(column: pkColumn)
-                }
-
-                let escapedColumn = pkColumn.replacingOccurrences(of: "\"", with: "\"\"")
-                if let stringValue = value {
-                    let escapedValue = stringValue.replacingOccurrences(of: "'", with: "''")
-                    whereConditions.append("\"\(escapedColumn)\" = '\(escapedValue)'")
-                } else {
-                    whereConditions.append("\"\(escapedColumn)\" IS NULL")
+        
+        // Simulate delay
+        try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+        
+        let key = "\(schema).\(table)"
+        guard var tableRows = mockTableData[key] else {
+            return
+        }
+        
+        // Remove rows matching primary keys
+        for rowToDelete in rows {
+            if let pkValue = rowToDelete.values[primaryKeyColumns[0]] {
+                tableRows.removeAll { existingRow in
+                    existingRow.values[primaryKeyColumns[0]] == pkValue
                 }
             }
-
-            let whereClause = whereConditions.joined(separator: " AND ")
-            let deleteSQL = "DELETE FROM \"\(escapedSchema)\".\"\(escapedTable)\" WHERE \(whereClause);"
-
-            let query = PostgresQuery(unsafeSQL: deleteSQL)
-            _ = try await connection.query(query, logger: logger)
         }
+        
+        mockTableData[key] = tableRows
     }
 
-    /// Update a row in a table using primary key values
+    /// Update a row in a table using primary key values (mock - updates in-memory data)
     func updateRow(
         schema: String,
         table: String,
@@ -929,84 +388,36 @@ class DatabaseService {
         originalRow: TableRow,
         updatedValues: [String: String?]
     ) async throws {
-        print("📝 [DatabaseService.updateRow] START")
-        print("  Schema: \(schema), Table: \(table)")
-        print("  Primary keys: \(primaryKeyColumns)")
-        print("  Original row values: \(originalRow.values)")
-        print("  Updated values: \(updatedValues)")
-
-        guard let connection = connection else {
+        guard isConnectedState else {
             throw ConnectionError.notConnected
         }
 
         guard !primaryKeyColumns.isEmpty else {
             throw DatabaseError.noPrimaryKey
         }
-
-        let escapedSchema = schema.replacingOccurrences(of: "\"", with: "\"\"")
-        let escapedTable = table.replacingOccurrences(of: "\"", with: "\"\"")
-
-        var setConditions: [String] = []
-        for (column, newValue) in updatedValues {
-            // Get old value from original row
-            let oldValue = originalRow.values[column] ?? nil
-
-            // Debug logging
-            print("🔍 [DatabaseService.updateRow] Column '\(column)': old='\(oldValue ?? "nil")' new='\(newValue ?? "nil")'")
-
-            // Compare old and new values
-            let valuesEqual: Bool
-            switch (oldValue, newValue) {
-            case (.none, .none):
-                valuesEqual = true
-            case (.some(let old), .some(let new)):
-                valuesEqual = old == new
-            default:
-                valuesEqual = false
-            }
-
-            if valuesEqual {
-                print("  ↪️ Values equal, skipping")
-                continue
-            }
-
-            print("  ✏️ Values different, will update")
-            let escapedColumn = column.replacingOccurrences(of: "\"", with: "\"\"")
-            if let stringValue = newValue {
-                let escapedValue = stringValue.replacingOccurrences(of: "'", with: "''")
-                setConditions.append("\"\(escapedColumn)\" = '\(escapedValue)'")
-            } else {
-                setConditions.append("\"\(escapedColumn)\" = NULL")
-            }
-        }
-
-        guard !setConditions.isEmpty else {
-            print("⚠️  [DatabaseService.updateRow] No changes detected, skipping update")
+        
+        // Simulate delay
+        try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+        
+        let key = "\(schema).\(table)"
+        guard var tableRows = mockTableData[key] else {
             return
         }
-
-        var whereConditions: [String] = []
-        for pkColumn in primaryKeyColumns {
-            guard let value = originalRow.values[pkColumn] else {
-                throw DatabaseError.missingPrimaryKeyValue(column: pkColumn)
-            }
-
-            let escapedColumn = pkColumn.replacingOccurrences(of: "\"", with: "\"\"")
-            if let stringValue = value {
-                let escapedValue = stringValue.replacingOccurrences(of: "'", with: "''")
-                whereConditions.append("\"\(escapedColumn)\" = '\(escapedValue)'")
-            } else {
-                whereConditions.append("\"\(escapedColumn)\" IS NULL")
-            }
+        
+        // Find and update the row
+        guard let pkValue = originalRow.values[primaryKeyColumns[0]] else {
+            throw DatabaseError.missingPrimaryKeyValue(column: primaryKeyColumns[0])
         }
-
-        let setClause = setConditions.joined(separator: ", ")
-        let whereClause = whereConditions.joined(separator: " AND ")
-        let updateSQL = "UPDATE \"\(escapedSchema)\".\"\(escapedTable)\" SET \(setClause) WHERE \(whereClause);"
-
-        print("📝 [DatabaseService.updateRow] Executing: \(updateSQL)")
-        let query = PostgresQuery(unsafeSQL: updateSQL)
-        _ = try await connection.query(query, logger: logger)
-        print("✅ [DatabaseService.updateRow] Row updated successfully")
+        
+        if let index = tableRows.firstIndex(where: { $0.values[primaryKeyColumns[0]] == pkValue }) {
+            var updatedRow = tableRows[index]
+            var newValues = updatedRow.values
+            for (column, newValue) in updatedValues {
+                newValues[column] = newValue
+            }
+            updatedRow = TableRow(values: newValues)
+            tableRows[index] = updatedRow
+            mockTableData[key] = tableRows
+        }
     }
 }
