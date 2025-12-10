@@ -15,7 +15,7 @@ class DatabaseService {
     private var connection: PostgresConnection?
     private var eventLoopGroup: EventLoopGroup?
     private let logger = Logger(label: "com.postgresgui.database")
-    
+
     // Store connection details for operations that require reconnection
     private var connectionHost: String?
     private var connectionPort: Int?
@@ -23,12 +23,53 @@ class DatabaseService {
     private var connectionPassword: String?
     private var connectionDatabase: String?
     private var connectionSSLMode: SSLMode?
-    
+
     var isConnected: Bool {
         connection != nil
     }
-    
+
     init() {}
+
+    /// Helper function to decode a PostgreSQL value to a string representation
+    private func decodeValue(from randomAccess: PostgresRandomAccessRow, at index: Int) -> String? {
+        // Try to decode in order of specificity (most specific types first)
+        // Try Bool first (most specific)
+        if let boolValue = try? randomAccess[index].decode(Bool.self) {
+            return String(boolValue)
+        }
+        // Try Int64 (integers)
+        else if let intValue = try? randomAccess[index].decode(Int64.self) {
+            return String(intValue)
+        }
+        // Try Double (floating point)
+        else if let doubleValue = try? randomAccess[index].decode(Double.self) {
+            return String(doubleValue)
+        }
+        // Try Date (for timestamp columns)
+        else if let dateValue = try? randomAccess[index].decode(Date.self) {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .medium
+            return formatter.string(from: dateValue)
+        }
+        // Try Array of Strings (PostgreSQL text[] arrays)
+        else if let arrayValue = try? randomAccess[index].decode([String].self) {
+            // Convert array to JSON-like string representation
+            let jsonData = try? JSONSerialization.data(withJSONObject: arrayValue, options: [])
+            if let jsonData = jsonData, let jsonString = String(data: jsonData, encoding: .utf8) {
+                return jsonString
+            } else {
+                return "[\(arrayValue.map { "\"\($0)\"" }.joined(separator: ", "))]"
+            }
+        }
+        // Try String last (most general, catches everything else)
+        else if let stringValue = try? randomAccess[index].decode(String.self) {
+            return stringValue
+        }
+        else {
+            return nil // NULL or unsupported type
+        }
+    }
     
     deinit {
         // Don't create async tasks in deinit - it causes retain cycles
@@ -408,37 +449,7 @@ class DatabaseService {
             // Extract values for each column
             for (index, columnName) in columnNames.enumerated() {
                 guard index < randomAccess.count else { break }
-                let value: String?
-
-                // Try to decode in order of specificity (most specific types first)
-                // Try Bool first (most specific)
-                if let boolValue = try? randomAccess[index].decode(Bool.self) {
-                    value = String(boolValue)
-                }
-                // Try Int64 (integers)
-                else if let intValue = try? randomAccess[index].decode(Int64.self) {
-                    value = String(intValue)
-                }
-                // Try Double (floating point)
-                else if let doubleValue = try? randomAccess[index].decode(Double.self) {
-                    value = String(doubleValue)
-                }
-                // Try Date (for timestamp columns)
-                else if let dateValue = try? randomAccess[index].decode(Date.self) {
-                    let formatter = DateFormatter()
-                    formatter.dateStyle = .medium
-                    formatter.timeStyle = .medium
-                    value = formatter.string(from: dateValue)
-                }
-                // Try String last (most general, catches everything else)
-                else if let stringValue = try? randomAccess[index].decode(String.self) {
-                    value = stringValue
-                }
-                else {
-                    value = nil // NULL or unsupported type
-                }
-
-                values[columnName] = value
+                values[columnName] = decodeValue(from: randomAccess, at: index)
             }
 
             tableRows.append(TableRow(values: values))
@@ -446,7 +457,7 @@ class DatabaseService {
 
         return tableRows
     }
-    
+
 
     /// Execute arbitrary SQL query and return results along with column names
     func executeQuery(_ sql: String) async throws -> ([TableRow], [String]) {
@@ -498,42 +509,12 @@ class DatabaseService {
             // Extract values for each column
             for (index, columnName) in columnNames.enumerated() {
                 guard index < randomAccess.count else { break }
-                let value: String?
-
-                // Try to decode in order of specificity (most specific types first)
-                // Try Bool first (most specific)
-                if let boolValue = try? randomAccess[index].decode(Bool.self) {
-                    value = String(boolValue)
-                }
-                // Try Int64 (integers)
-                else if let intValue = try? randomAccess[index].decode(Int64.self) {
-                    value = String(intValue)
-                }
-                // Try Double (floating point)
-                else if let doubleValue = try? randomAccess[index].decode(Double.self) {
-                    value = String(doubleValue)
-                }
-                // Try Date (for timestamp columns)
-                else if let dateValue = try? randomAccess[index].decode(Date.self) {
-                    let formatter = DateFormatter()
-                    formatter.dateStyle = .medium
-                    formatter.timeStyle = .medium
-                    value = formatter.string(from: dateValue)
-                }
-                // Try String last (most general, catches everything else)
-                else if let stringValue = try? randomAccess[index].decode(String.self) {
-                    value = stringValue
-                }
-                else {
-                    value = nil // NULL or unsupported type
-                }
-
-                values[columnName] = value
+                values[columnName] = decodeValue(from: randomAccess, at: index)
             }
 
             tableRows.append(TableRow(values: values))
         }
-        
+
         // If we have no rows but also no column names, try to extract from result metadata
         if columnNames.isEmpty && tableRows.isEmpty {
             print("🔍 [DatabaseService.executeQuery] Attempting to extract column metadata from empty result")
