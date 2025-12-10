@@ -15,6 +15,7 @@ struct TableContentView: View {
     @State private var showRowEditor = false
     @State private var rowToEdit: TableRow?
     @State private var editError: String?
+    @State private var editedRowValues: [String: String?] = [:]
 
     var body: some View {
         SplitContentView()
@@ -90,7 +91,8 @@ struct TableContentView: View {
                     showRowEditor &&
                     rowToEdit != nil &&
                     appState.queryColumnNames != nil &&
-                    appState.selectedTable?.name != nil
+                    appState.selectedTable?.name != nil &&
+                    appState.selectedTable?.columnInfo != nil
                 },
                 set: { newValue in
                     showRowEditor = newValue
@@ -101,13 +103,19 @@ struct TableContentView: View {
             )) {
                 if let rowToEdit = rowToEdit,
                    let columnNames = appState.queryColumnNames,
-                   let tableName = appState.selectedTable?.name {
+                   let tableName = appState.selectedTable?.name,
+                   let columnInfo = appState.selectedTable?.columnInfo {
                     RowEditorView(
                         row: rowToEdit,
                         columnNames: columnNames,
                         tableName: tableName,
-                        onSave: { updatedValues in
-                            try await saveEditedRow(originalRow: rowToEdit, updatedValues: updatedValues)
+                        columnInfo: columnInfo,
+                        editedValues: $editedRowValues,
+                        onSave: {
+                            // Capture editedRowValues from parent context instead of passing as parameter
+                            print("🔴 [Closure] Captured editedRowValues count: \(editedRowValues.count)")
+                            print("🔴 [Closure] Keys: \(Array(editedRowValues.keys))")
+                            try await saveEditedRow(originalRow: rowToEdit, updatedValues: editedRowValues)
                         }
                     )
                 }
@@ -276,8 +284,14 @@ struct TableContentView: View {
                 table: selectedTable.name
             )
 
+            let columnInfo = try await appState.databaseService.fetchColumnInfo(
+                schema: selectedTable.schema,
+                table: selectedTable.name
+            )
+
             var updatedTable = selectedTable
             updatedTable.primaryKeyColumns = pkColumns
+            updatedTable.columnInfo = columnInfo
             appState.selectedTable = updatedTable
 
             self.rowToEdit = row
@@ -288,6 +302,9 @@ struct TableContentView: View {
     }
 
     private func saveEditedRow(originalRow: TableRow, updatedValues: [String: String?]) async throws {
+        print("🟡 [TableContentView.saveEditedRow] Received updatedValues: \(updatedValues)")
+        print("  updatedValues count: \(updatedValues.count)")
+
         guard let selectedTable = appState.selectedTable else { return }
 
         guard let pkColumns = selectedTable.primaryKeyColumns, !pkColumns.isEmpty else {
@@ -302,6 +319,14 @@ struct TableContentView: View {
             updatedValues: updatedValues
         )
 
-        refreshQuery()
+        // Update the row in the UI
+        if let index = appState.queryResults.firstIndex(where: { $0.id == originalRow.id }) {
+            let updatedRow = TableRow(values: updatedValues)
+            appState.queryResults[index] = updatedRow
+
+            // Update selection to use the new row's ID
+            appState.selectedRowIDs.remove(originalRow.id)
+            appState.selectedRowIDs.insert(updatedRow.id)
+        }
     }
 }

@@ -853,6 +853,51 @@ class DatabaseService {
         return pkColumns
     }
 
+    /// Fetch column information for a table
+    func fetchColumnInfo(schema: String, table: String) async throws -> [ColumnInfo] {
+        guard let connection = connection else {
+            throw ConnectionError.notConnected
+        }
+
+        let escapedSchema = schema.replacingOccurrences(of: "'", with: "''")
+        let escapedTable = table.replacingOccurrences(of: "'", with: "''")
+
+        let querySQL = """
+            SELECT
+                c.column_name,
+                c.data_type,
+                c.is_nullable,
+                c.column_default
+            FROM information_schema.columns c
+            WHERE c.table_schema = '\(escapedSchema)'
+              AND c.table_name = '\(escapedTable)'
+            ORDER BY c.ordinal_position;
+            """
+
+        let query = PostgresQuery(unsafeSQL: querySQL)
+        let rows = try await connection.query(query, logger: logger)
+
+        var columns: [ColumnInfo] = []
+        for try await row in rows {
+            let randomAccess = row.makeRandomAccess()
+            let columnName = try randomAccess[0].decode(String.self)
+            let dataType = try randomAccess[1].decode(String.self)
+            let isNullableStr = try randomAccess[2].decode(String.self)
+            let defaultValue = try? randomAccess[3].decode(String.self)
+
+            let isNullable = isNullableStr.uppercased() == "YES"
+
+            columns.append(ColumnInfo(
+                name: columnName,
+                dataType: dataType,
+                isNullable: isNullable,
+                defaultValue: defaultValue
+            ))
+        }
+
+        return columns
+    }
+
     /// Delete rows from a table using primary key values
     func deleteRows(
         schema: String,
@@ -903,6 +948,12 @@ class DatabaseService {
         originalRow: TableRow,
         updatedValues: [String: String?]
     ) async throws {
+        print("📝 [DatabaseService.updateRow] START")
+        print("  Schema: \(schema), Table: \(table)")
+        print("  Primary keys: \(primaryKeyColumns)")
+        print("  Original row values: \(originalRow.values)")
+        print("  Updated values: \(updatedValues)")
+
         guard let connection = connection else {
             throw ConnectionError.notConnected
         }
@@ -916,11 +967,29 @@ class DatabaseService {
 
         var setConditions: [String] = []
         for (column, newValue) in updatedValues {
+            // Get old value from original row
             let oldValue = originalRow.values[column] ?? nil
-            if oldValue == newValue {
+
+            // Debug logging
+            print("🔍 [DatabaseService.updateRow] Column '\(column)': old='\(oldValue ?? "nil")' new='\(newValue ?? "nil")'")
+
+            // Compare old and new values
+            let valuesEqual: Bool
+            switch (oldValue, newValue) {
+            case (.none, .none):
+                valuesEqual = true
+            case (.some(let old), .some(let new)):
+                valuesEqual = old == new
+            default:
+                valuesEqual = false
+            }
+
+            if valuesEqual {
+                print("  ↪️ Values equal, skipping")
                 continue
             }
 
+            print("  ✏️ Values different, will update")
             let escapedColumn = column.replacingOccurrences(of: "\"", with: "\"\"")
             if let stringValue = newValue {
                 let escapedValue = stringValue.replacingOccurrences(of: "'", with: "''")
@@ -931,6 +1000,7 @@ class DatabaseService {
         }
 
         guard !setConditions.isEmpty else {
+            print("⚠️  [DatabaseService.updateRow] No changes detected, skipping update")
             return
         }
 
@@ -953,7 +1023,9 @@ class DatabaseService {
         let whereClause = whereConditions.joined(separator: " AND ")
         let updateSQL = "UPDATE \"\(escapedSchema)\".\"\(escapedTable)\" SET \(setClause) WHERE \(whereClause);"
 
+        print("📝 [DatabaseService.updateRow] Executing: \(updateSQL)")
         let query = PostgresQuery(unsafeSQL: updateSQL)
         _ = try await connection.query(query, logger: logger)
+        print("✅ [DatabaseService.updateRow] Row updated successfully")
     }
 }

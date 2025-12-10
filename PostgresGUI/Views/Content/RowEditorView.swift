@@ -12,9 +12,10 @@ struct RowEditorView: View {
     let row: TableRow
     let columnNames: [String]
     let tableName: String
-    let onSave: ([String: String?]) async throws -> Void
+    let columnInfo: [ColumnInfo]
+    @Binding var editedValues: [String: String?]
+    let onSave: () async throws -> Void
 
-    @State private var editedValues: [String: String?]
     @State private var textValues: [String: String] = [:]
     @State private var nullFlags: [String: Bool] = [:]
     @State private var isSaving = false
@@ -24,24 +25,33 @@ struct RowEditorView: View {
         row: TableRow,
         columnNames: [String],
         tableName: String,
-        onSave: @escaping ([String: String?]) async throws -> Void
+        columnInfo: [ColumnInfo],
+        editedValues: Binding<[String: String?]>,
+        onSave: @escaping () async throws -> Void
     ) {
         self.row = row
         self.columnNames = columnNames
         self.tableName = tableName
+        self.columnInfo = columnInfo
+        self._editedValues = editedValues
         self.onSave = onSave
-        _editedValues = State(initialValue: row.values)
 
-        // Initialize text values and null flags
+        // Initialize text values and null flags for all columns
         var initialTextValues: [String: String] = [:]
         var initialNullFlags: [String: Bool] = [:]
-        for (key, value) in row.values {
-            if let stringValue = value {
-                initialTextValues[key] = stringValue
-                initialNullFlags[key] = false
+        for columnName in columnNames {
+            if let value = row.values[columnName] {
+                if let stringValue = value {
+                    initialTextValues[columnName] = stringValue
+                    initialNullFlags[columnName] = false
+                } else {
+                    initialTextValues[columnName] = ""
+                    initialNullFlags[columnName] = true
+                }
             } else {
-                initialTextValues[key] = ""
-                initialNullFlags[key] = true
+                // Column doesn't exist in row.values, default to empty
+                initialTextValues[columnName] = ""
+                initialNullFlags[columnName] = false
             }
         }
         _textValues = State(initialValue: initialTextValues)
@@ -104,7 +114,10 @@ struct RowEditorView: View {
     }
 
     private func formRow(columnName: String) -> some View {
-        HStack(alignment: .center, spacing: 12) {
+        let column = columnInfo.first { $0.name == columnName }
+        let isNullable = column?.isNullable ?? true
+
+        return HStack(alignment: .center, spacing: 12) {
             Text(columnName)
                 .frame(width: 120, alignment: .trailing)
                 .foregroundColor(.secondary)
@@ -121,15 +134,17 @@ struct RowEditorView: View {
                 .textFieldStyle(.roundedBorder)
                 .disabled(nullFlags[columnName] ?? false)
 
-                Toggle("NULL", isOn: Binding(
-                    get: {
-                        nullFlags[columnName] ?? false
-                    },
-                    set: { isNull in
-                        nullFlags[columnName] = isNull
-                    }
-                ))
-                .toggleStyle(.checkbox)
+                if isNullable {
+                    Toggle("NULL", isOn: Binding(
+                        get: {
+                            nullFlags[columnName] ?? false
+                        },
+                        set: { isNull in
+                            nullFlags[columnName] = isNull
+                        }
+                    ))
+                    .toggleStyle(.checkbox)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -139,20 +154,42 @@ struct RowEditorView: View {
     private func save() async {
         isSaving = true
 
+        print("💾 [RowEditorView.save] START")
+        print("  columnNames: \(columnNames)")
+        print("  textValues: \(textValues)")
+        print("  nullFlags: \(nullFlags)")
+
         // Combine textValues and nullFlags into editedValues
         var finalValues: [String: String?] = [:]
         for columnName in columnNames {
             if nullFlags[columnName] ?? false {
+                print("    Setting \(columnName) = nil")
                 finalValues[columnName] = nil
             } else {
-                finalValues[columnName] = textValues[columnName] ?? ""
+                let value = textValues[columnName] ?? ""
+                print("    Setting \(columnName) = '\(value)'")
+                finalValues[columnName] = value
             }
         }
 
+        print("  finalValues count: \(finalValues.count)")
+        print("  finalValues keys: \(finalValues.keys)")
+        for (key, value) in finalValues {
+            print("    \(key): \(String(describing: value))")
+        }
+
+        // Store finalValues in the binding so parent can access it
+        editedValues = finalValues
+        print("  📤 Stored finalValues in editedValues binding")
+
         do {
-            try await onSave(finalValues)
+            print("  🔵 About to call onSave (no parameters)")
+            // Call onSave with no parameters - it will capture editedValues from parent context
+            try await onSave()
+            print("  ✅ onSave completed")
             dismiss()
         } catch {
+            print("  ❌ onSave failed: \(error)")
             saveError = error.localizedDescription
         }
 
