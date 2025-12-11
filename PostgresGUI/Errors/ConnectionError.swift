@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum ConnectionError: LocalizedError {
+enum ConnectionError: LocalizedError, Equatable {
     case invalidHost(String)
     case invalidPort
     case authenticationFailed
@@ -87,6 +87,37 @@ enum ConnectionError: LocalizedError {
             return parseError.recoverySuggestion
         case .unsupportedParameters:
             return "These parameters will be ignored. The connection will proceed with basic settings."
+        }
+    }
+    
+    // MARK: - Equatable Conformance
+    
+    static func == (lhs: ConnectionError, rhs: ConnectionError) -> Bool {
+        switch (lhs, rhs) {
+        case (.invalidHost(let lhsHost), .invalidHost(let rhsHost)):
+            return lhsHost == rhsHost
+        case (.invalidPort, .invalidPort):
+            return true
+        case (.authenticationFailed, .authenticationFailed):
+            return true
+        case (.databaseNotFound(let lhsDb), .databaseNotFound(let rhsDb)):
+            return lhsDb == rhsDb
+        case (.timeout, .timeout):
+            return true
+        case (.networkUnreachable, .networkUnreachable):
+            return true
+        case (.notConnected, .notConnected):
+            return true
+        case (.unknownError, .unknownError):
+            // For unknownError, we can't easily compare the underlying errors
+            // In tests, we should use specific error types instead
+            return false
+        case (.invalidConnectionString(let lhsError), .invalidConnectionString(let rhsError)):
+            return lhsError.localizedDescription == rhsError.localizedDescription
+        case (.unsupportedParameters(let lhsParams), .unsupportedParameters(let rhsParams)):
+            return lhsParams == rhsParams
+        default:
+            return false
         }
     }
 }
