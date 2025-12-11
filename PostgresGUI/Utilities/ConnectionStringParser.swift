@@ -7,47 +7,6 @@
 
 import Foundation
 
-/// SSL mode options for PostgreSQL connections
-enum SSLMode: String, Sendable {
-    case disable = "disable"
-    case allow = "allow"
-    case prefer = "prefer"
-    case require = "require"
-    case verifyCA = "verify-ca"
-    case verifyFull = "verify-full"
-
-    /// Default SSL mode when not specified
-    nonisolated static let `default` = SSLMode.prefer
-}
-
-/// Represents a parsed PostgreSQL connection string
-struct PostgresConnectionString {
-    let scheme: String
-    let username: String?
-    let password: String?
-    let host: String
-    let port: Int
-    let database: String?
-    let queryParameters: [String: String]
-    let sslMode: SSLMode
-
-    /// Returns a list of query parameters that are not currently supported by the application
-    var unsupportedParameters: [String] {
-        let unsupported = [
-            "connect_timeout", "application_name",
-            "client_encoding", "options", "fallback_application_name",
-            "keepalives", "keepalives_idle", "keepalives_interval",
-            "keepalives_count", "tcp_user_timeout", "replication",
-            "gssencmode", "sslcert", "sslkey", "sslrootcert",
-            "sslcrl", "requirepeer", "ssl_min_protocol_version",
-            "ssl_max_protocol_version", "krbsrvname", "gsslib",
-            "service", "target_session_attrs"
-        ]
-
-        return queryParameters.keys.filter { unsupported.contains($0) }
-    }
-}
-
 /// Utility for parsing and building PostgreSQL connection strings
 enum ConnectionStringParser {
 
