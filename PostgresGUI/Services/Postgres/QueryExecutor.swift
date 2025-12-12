@@ -112,16 +112,13 @@ enum QueryExecutor {
         limit: Int,
         offset: Int
     ) async throws -> [TableRow] {
-        // First, get column names from information_schema
-        let columnNames = try await fetchTableColumnNames(connection: connection, schema: schema, table: table)
-
         let qualifiedTable = "\(sanitizeIdentifier(schema)).\(sanitizeIdentifier(table))"
         let sql = "SELECT * FROM \(qualifiedTable) LIMIT \(limit) OFFSET \(offset)"
 
         logger.debug("Fetching table data: \(qualifiedTable), limit: \(limit), offset: \(offset)")
 
         let rows = try await connection.query(PostgresQuery(unsafeSQL: sql), logger: logger)
-        let tableRows = try await ResultMapper.mapRowsToTableRows(rows, columnNames: columnNames)
+        let tableRows = try await ResultMapper.mapRowsToTableRows(rows)
 
         logger.info("Fetched \(tableRows.count) rows from \(qualifiedTable)")
         return tableRows
@@ -256,7 +253,7 @@ enum QueryExecutor {
                 columnNames = row.map { $0.columnName }
             }
 
-            let tableRow = try ResultMapper.mapRowToTableRow(row, columnNames: columnNames)
+            let tableRow = try ResultMapper.mapRowToTableRow(row)
             tableRows.append(tableRow)
         }
 
