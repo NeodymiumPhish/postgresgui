@@ -23,7 +23,7 @@ enum SSLMode: String, Sendable {
 
     /// Convert SSLMode to NIO TLSConfiguration
     /// - Returns: TLSConfiguration for NIO, or nil if SSL is disabled
-    var nioTLSConfiguration: TLSConfiguration? {
+    nonisolated var nioTLSConfiguration: TLSConfiguration? {
         switch self {
         case .disable:
             // No TLS
