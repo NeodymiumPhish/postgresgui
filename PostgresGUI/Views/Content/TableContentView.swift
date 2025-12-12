@@ -19,16 +19,11 @@ struct TableContentView: View {
     @State private var editedRowValues: [String: String?] = [:]
 
     var body: some View {
-        SplitContentView()
+        SplitContentView(onDeleteKeyPressed: {
+            deleteSelectedRows()
+        })
             .toolbar {
                 ToolbarItemGroup(placement: .automatic) {
-                    Button(action: {
-                        editSelectedRows()
-                    }) {
-                        Image(systemName: "square.and.pencil")
-                    }
-                    .disabled(appState.selectedRowIDs.isEmpty)
-                    
                     Button(action: {
                         let selectedRows = appState.queryResults.filter { appState.selectedRowIDs.contains($0.id) }
                         guard !selectedRows.isEmpty else {
@@ -38,6 +33,13 @@ struct TableContentView: View {
                         showJSONView = true
                     }) {
                         Image(systemName: "doc.text")
+                    }
+                    .disabled(appState.selectedRowIDs.isEmpty)
+
+                    Button(action: {
+                        editSelectedRows()
+                    }) {
+                        Image(systemName: "square.and.pencil")
                     }
                     .disabled(appState.selectedRowIDs.isEmpty)
                     
@@ -283,7 +285,7 @@ struct TableContentView: View {
             return
         }
 
-        if selectedTable.primaryKeyColumns == nil {
+        if selectedTable.primaryKeyColumns == nil || selectedTable.columnInfo == nil {
             Task {
                 await fetchPrimaryKeysAndShowEditor(rowToEdit)
             }

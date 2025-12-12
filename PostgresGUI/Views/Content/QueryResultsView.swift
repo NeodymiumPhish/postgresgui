@@ -91,6 +91,7 @@ struct TableRowComparator: SortComparator, Hashable {
 struct QueryResultsView: View {
     @Environment(AppState.self) private var appState
     @State private var sortOrder: [TableRowComparator] = []
+    var onDeleteKeyPressed: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -152,6 +153,11 @@ struct QueryResultsView: View {
                             .textSelection(.enabled)
                     }
                     .width(min: Constants.ColumnWidth.tableColumnMin)
+                }
+            }
+            .onDeleteCommand {
+                if !appState.selectedRowIDs.isEmpty {
+                    onDeleteKeyPressed?()
                 }
             }
         }

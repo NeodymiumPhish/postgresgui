@@ -10,6 +10,7 @@ import SwiftUI
 struct SplitContentView: View {
     @Environment(AppState.self) private var appState
     @State private var bottomPaneHeight: CGFloat = 300
+    var onDeleteKeyPressed: (() -> Void)?
 
     var body: some View {
         GeometryReader { geometry in
@@ -54,7 +55,7 @@ struct SplitContentView: View {
                 .scaleEffect(0.8)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if appState.showQueryResults {
-            QueryResultsView()
+            QueryResultsView(onDeleteKeyPressed: onDeleteKeyPressed)
         } else {
             ContentUnavailableView {
                 Label {
