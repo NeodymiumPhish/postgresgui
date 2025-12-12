@@ -29,23 +29,10 @@ struct TableRowView: View {
                 
                 if isHovered {
                     Menu {
-                        Button {
-                            copyTableName()
-                        } label: {
-                            Label("Copy Name", systemImage: "doc.on.doc")
-                        }
-                        
-                        Button {
-                            refreshQuery()
-                        } label: {
-                            Label("Refresh", systemImage: "arrow.clockwise")
-                        }
-                        .disabled(appState.isExecutingQuery || appState.queryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        
                         Button(role: .destructive) {
                             showDeleteConfirmation = true
                         } label: {
-                            Label("Delete...", systemImage: "trash")
+                            Label("Delete Table...", systemImage: "trash")
                         }
                     } label: {
                         Image(systemName: "ellipsis")
@@ -65,23 +52,10 @@ struct TableRowView: View {
             .padding(.horizontal, 6)
         }
         .contextMenu {
-            Button {
-                copyTableName()
-            } label: {
-                Label("Copy Name", systemImage: "doc.on.doc")
-            }
-            
-            Button {
-                refreshQuery()
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .disabled(appState.isExecutingQuery || appState.queryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            
             Button(role: .destructive) {
                 showDeleteConfirmation = true
             } label: {
-                Label("Delete...", systemImage: "trash")
+                Label("Delete Table...", systemImage: "trash")
             }
         }
         .onHover { hovering in
