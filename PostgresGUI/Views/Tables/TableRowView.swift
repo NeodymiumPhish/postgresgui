@@ -11,6 +11,8 @@ import AppKit
 struct TableRowView: View {
     let table: TableInfo
     @Environment(AppState.self) private var appState
+    @State private var isHovered = false
+    @State private var isButtonHovered = false
     @State private var showDeleteConfirmation = false
     @State private var deleteError: String?
 
@@ -22,6 +24,42 @@ struct TableRowView: View {
 
                 Text(table.name)
                     .font(.headline)
+                
+                Spacer()
+                
+                if isHovered {
+                    Menu {
+                        Button {
+                            copyTableName()
+                        } label: {
+                            Label("Copy Name", systemImage: "doc.on.doc")
+                        }
+                        
+                        Button {
+                            refreshQuery()
+                        } label: {
+                            Label("Refresh", systemImage: "arrow.clockwise")
+                        }
+                        .disabled(appState.isExecutingQuery || appState.queryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        
+                        Button(role: .destructive) {
+                            showDeleteConfirmation = true
+                        } label: {
+                            Label("Delete...", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .foregroundColor(isButtonHovered ? .primary : .secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 6)
+                            .background(isButtonHovered ? Color.secondary.opacity(0.2) : Color.clear)
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { hovering in
+                        isButtonHovered = hovering
+                    }
+                }
             }
             .padding(.vertical, 4)
             .padding(.horizontal, 6)
@@ -45,6 +83,9 @@ struct TableRowView: View {
             } label: {
                 Label("Delete...", systemImage: "trash")
             }
+        }
+        .onHover { hovering in
+            isHovered = hovering
         }
         .confirmationDialog(
             "Delete Table?",
