@@ -72,7 +72,7 @@ struct JSONViewerView: View {
                 }
             }
         }
-        .frame(minWidth: 600, minHeight: 400)
+        .frame(minWidth: 600, minHeight: 500)
     }
     
     private func copyToClipboard() {
