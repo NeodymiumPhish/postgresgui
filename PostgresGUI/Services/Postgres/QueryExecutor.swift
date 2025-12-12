@@ -12,7 +12,7 @@ import Logging
 /// Executes PostgreSQL queries and returns structured results
 enum QueryExecutor {
 
-    private static let logger = Logger(label: "com.postgresgui.query")
+    private static let logger = Logger.debugLogger(label: "com.postgresgui.query")
 
     // MARK: - Database Operations
 

@@ -145,42 +145,42 @@ struct RowEditorView: View {
     private func save() async {
         isSaving = true
 
-        print("💾 [RowEditorView.save] START")
-        print("  columnNames: \(columnNames)")
-        print("  textValues: \(textValues)")
-        print("  nullFlags: \(nullFlags)")
+        DebugLog.print("💾 [RowEditorView.save] START")
+        DebugLog.print("  columnNames: \(columnNames)")
+        DebugLog.print("  textValues: \(textValues)")
+        DebugLog.print("  nullFlags: \(nullFlags)")
 
         // Combine textValues and nullFlags into editedValues
         var finalValues: [String: String?] = [:]
         for columnName in columnNames {
             if nullFlags[columnName] ?? false {
-                print("    Setting \(columnName) = nil")
+                DebugLog.print("    Setting \(columnName) = nil")
                 finalValues[columnName] = nil
             } else {
                 let value = textValues[columnName] ?? ""
-                print("    Setting \(columnName) = '\(value)'")
+                DebugLog.print("    Setting \(columnName) = '\(value)'")
                 finalValues[columnName] = value
             }
         }
 
-        print("  finalValues count: \(finalValues.count)")
-        print("  finalValues keys: \(finalValues.keys)")
+        DebugLog.print("  finalValues count: \(finalValues.count)")
+        DebugLog.print("  finalValues keys: \(finalValues.keys)")
         for (key, value) in finalValues {
-            print("    \(key): \(String(describing: value))")
+            DebugLog.print("    \(key): \(String(describing: value))")
         }
 
         // Store finalValues in the binding so parent can access it
         editedValues = finalValues
-        print("  📤 Stored finalValues in editedValues binding")
+        DebugLog.print("  📤 Stored finalValues in editedValues binding")
 
         do {
-            print("  🔵 About to call onSave (no parameters)")
+            DebugLog.print("  🔵 About to call onSave (no parameters)")
             // Call onSave with no parameters - it will capture editedValues from parent context
             try await onSave()
-            print("  ✅ onSave completed")
+            DebugLog.print("  ✅ onSave completed")
             dismiss()
         } catch {
-            print("  ❌ onSave failed: \(error)")
+            DebugLog.print("  ❌ onSave failed: \(error)")
             saveError = error.localizedDescription
         }
 

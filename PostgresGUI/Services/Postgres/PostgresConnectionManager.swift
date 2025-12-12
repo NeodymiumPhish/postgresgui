@@ -20,7 +20,7 @@ actor PostgresConnectionManager {
 
     private var eventLoopGroup: MultiThreadedEventLoopGroup?
     private var connection: PostgresConnection?
-    private let logger = Logger(label: "com.postgresgui.connection")
+    private let logger = Logger.debugLogger(label: "com.postgresgui.connection")
 
     /// Check if currently connected
     var isConnected: Bool {
@@ -181,7 +181,7 @@ actor PostgresConnectionManager {
         database: String,
         tlsConfiguration: TLSConfiguration? = nil
     ) async throws -> Bool {
-        let logger = Logger(label: "com.postgresgui.connection.test")
+        let logger = Logger.debugLogger(label: "com.postgresgui.connection.test")
         logger.info("Testing connection to \(host):\(port)")
 
         // Create temporary EventLoopGroup

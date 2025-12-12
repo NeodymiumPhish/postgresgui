@@ -96,7 +96,7 @@ struct ConnectionPickerView: View {
             
         } catch {
             // Handle error - could show alert here
-            print("Failed to connect: \(error)")
+            DebugLog.print("Failed to connect: \(error)")
         }
     }
     
@@ -104,7 +104,7 @@ struct ConnectionPickerView: View {
         do {
             appState.databases = try await appState.databaseService.fetchDatabases()
         } catch {
-            print("Failed to load databases: \(error)")
+            DebugLog.print("Failed to load databases: \(error)")
         }
     }
 }

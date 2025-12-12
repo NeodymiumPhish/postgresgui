@@ -80,7 +80,7 @@ struct QueryEditorView: View {
     }
 
     private func executeQuery() {
-        print("🎬 [QueryEditorView] Execute button clicked")
+        DebugLog.print("🎬 [QueryEditorView] Execute button clicked")
         Task {
             // Set loading state FIRST to prevent empty state flicker
             appState.isExecutingQuery = true
@@ -93,7 +93,7 @@ struct QueryEditorView: View {
             let startTime = Date()
 
             do {
-                print("📊 [QueryEditorView] Executing query...")
+                DebugLog.print("📊 [QueryEditorView] Executing query...")
                 let (results, columnNames) = try await appState.databaseService.executeQuery(appState.queryText)
                 appState.queryResults = results
                 appState.queryColumnNames = columnNames.isEmpty ? nil : columnNames
@@ -102,7 +102,7 @@ struct QueryEditorView: View {
                 let endTime = Date()
                 appState.queryExecutionTime = endTime.timeIntervalSince(startTime)
                 
-                print("✅ [QueryEditorView] Query executed successfully, showing results")
+                DebugLog.print("✅ [QueryEditorView] Query executed successfully, showing results")
             } catch {
                 appState.queryError = error.localizedDescription
                 appState.queryColumnNames = nil
@@ -111,7 +111,7 @@ struct QueryEditorView: View {
                 let endTime = Date()
                 appState.queryExecutionTime = endTime.timeIntervalSince(startTime)
                 
-                print("❌ [QueryEditorView] Query execution failed: \(error)")
+                DebugLog.print("❌ [QueryEditorView] Query execution failed: \(error)")
             }
 
             appState.isExecutingQuery = false

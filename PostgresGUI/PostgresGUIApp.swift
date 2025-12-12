@@ -26,8 +26,9 @@ struct PostgresGUIApp: App {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
             // If migration fails, try to delete the old database
-            print("⚠️ Failed to create ModelContainer: \(error)")
-            print("⚠️ Attempting to delete old database and create fresh...")
+            // Critical errors should remain visible in Release builds
+            Swift.print("⚠️ Failed to create ModelContainer: \(error)")
+            Swift.print("⚠️ Attempting to delete old database and create fresh...")
 
             // Get the default store URL
             let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -44,7 +45,7 @@ struct PostgresGUIApp: App {
                 for file in storeFiles {
                     if FileManager.default.fileExists(atPath: file.path) {
                         try FileManager.default.removeItem(at: file)
-                        print("✅ Removed: \(file.lastPathComponent)")
+                        DebugLog.print("✅ Removed: \(file.lastPathComponent)")
                     }
                 }
 

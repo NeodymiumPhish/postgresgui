@@ -35,20 +35,20 @@ struct TablesListView: View {
                             appState.showQueryResults = false
                             appState.queryText = ""
                             appState.queryResults = []
-                            print("🔴 [TablesListView] Table selection cleared")
+                            DebugLog.print("🔴 [TablesListView] Table selection cleared")
                             return
                         }
                         selectedTableID = unwrappedID
-                        print("🟢 [TablesListView] selectedTableID changed to \(unwrappedID)")
+                        DebugLog.print("🟢 [TablesListView] selectedTableID changed to \(unwrappedID)")
 
                         // Find the table object from the ID
                         let table = appState.tables.first { $0.id == unwrappedID }
 
-                        print("🔵 [TablesListView] Updating selectedTable to: \(table?.name ?? "nil")")
+                        DebugLog.print("🔵 [TablesListView] Updating selectedTable to: \(table?.name ?? "nil")")
                         appState.selectedTable = table
 
                         if let table = table {
-                            print("🟠 [TablesListView] Generating and executing query for: \(table.schema).\(table.name)")
+                            DebugLog.print("🟠 [TablesListView] Generating and executing query for: \(table.schema).\(table.name)")
                             Task {
                                 await populateAndExecuteQuery(for: table)
                             }
@@ -99,7 +99,7 @@ struct TablesListView: View {
 
     @MainActor
     private func populateAndExecuteQuery(for table: TableInfo) async {
-        print("🔍 [TablesListView] Auto-generating query for table: \(table.schema).\(table.name)")
+        DebugLog.print("🔍 [TablesListView] Auto-generating query for table: \(table.schema).\(table.name)")
 
         // Set loading state FIRST to prevent empty state flicker
         appState.isExecutingQuery = true
@@ -113,7 +113,7 @@ struct TablesListView: View {
 
         // Generate SELECT query with pagination
         let query = generateTableQuery(for: table)
-        print("📝 [TablesListView] Generated query: \(query)")
+        DebugLog.print("📝 [TablesListView] Generated query: \(query)")
 
         // Update query text in editor
         appState.queryText = query
@@ -125,7 +125,7 @@ struct TablesListView: View {
         let startTime = Date()
 
         do {
-            print("📊 [TablesListView] Executing query...")
+            DebugLog.print("📊 [TablesListView] Executing query...")
             let (results, columnNames) = try await appState.databaseService.executeQuery(query)
             appState.queryResults = results
             appState.queryColumnNames = columnNames.isEmpty ? nil : columnNames
@@ -134,7 +134,7 @@ struct TablesListView: View {
             let endTime = Date()
             appState.queryExecutionTime = endTime.timeIntervalSince(startTime)
 
-            print("✅ [TablesListView] Query executed successfully - \(appState.queryResults.count) rows")
+            DebugLog.print("✅ [TablesListView] Query executed successfully - \(appState.queryResults.count) rows")
         } catch {
             appState.queryError = error.localizedDescription
             appState.queryColumnNames = nil
@@ -143,7 +143,7 @@ struct TablesListView: View {
             let endTime = Date()
             appState.queryExecutionTime = endTime.timeIntervalSince(startTime)
 
-            print("❌ [TablesListView] Query execution failed: \(error)")
+            DebugLog.print("❌ [TablesListView] Query execution failed: \(error)")
         }
 
         appState.isExecutingQuery = false
@@ -151,15 +151,15 @@ struct TablesListView: View {
     
     @MainActor
     private func refreshTables() async {
-        print("🔄 [TablesListView] Refresh tables START")
+        DebugLog.print("🔄 [TablesListView] Refresh tables START")
         
         guard let database = appState.selectedDatabase else {
-            print("❌ [TablesListView] No database selected for refresh")
+            DebugLog.print("❌ [TablesListView] No database selected for refresh")
             return
         }
         
         defer {
-            print("🔄 [TablesListView] Refresh tables END - setting isLoadingTables=false")
+            DebugLog.print("🔄 [TablesListView] Refresh tables END - setting isLoadingTables=false")
             appState.isLoadingTables = false
         }
         
@@ -167,26 +167,26 @@ struct TablesListView: View {
         
         // Check if we're connected
         guard appState.databaseService.isConnected else {
-            print("❌ [TablesListView] Not connected, cannot refresh")
+            DebugLog.print("❌ [TablesListView] Not connected, cannot refresh")
             return
         }
         
         // Refresh databases list
         do {
-            print("📊 [TablesListView] Fetching databases...")
+            DebugLog.print("📊 [TablesListView] Fetching databases...")
             appState.databases = try await appState.databaseService.fetchDatabases()
-            print("✅ [TablesListView] Refreshed \(appState.databases.count) databases")
+            DebugLog.print("✅ [TablesListView] Refreshed \(appState.databases.count) databases")
         } catch {
-            print("❌ [TablesListView] Error refreshing databases: \(error)")
-            print("❌ [TablesListView] Error details: \(String(describing: error))")
+            DebugLog.print("❌ [TablesListView] Error refreshing databases: \(error)")
+            DebugLog.print("❌ [TablesListView] Error details: \(String(describing: error))")
             // Continue with table refresh even if database refresh fails
         }
         
         // Refresh tables list
         do {
-            print("📊 [TablesListView] Fetching tables from database: \(database.name)")
+            DebugLog.print("📊 [TablesListView] Fetching tables from database: \(database.name)")
             appState.tables = try await appState.databaseService.fetchTables(database: database.name)
-            print("✅ [TablesListView] Refreshed \(appState.tables.count) tables")
+            DebugLog.print("✅ [TablesListView] Refreshed \(appState.tables.count) tables")
             
             // Update selectedTable reference if it still exists in the refreshed list
             if let selectedTable = appState.selectedTable,
@@ -194,14 +194,14 @@ struct TablesListView: View {
                 appState.selectedTable = refreshedTable
             }
         } catch {
-            print("❌ [TablesListView] Error refreshing tables: \(error)")
-            print("❌ [TablesListView] Error details: \(String(describing: error))")
+            DebugLog.print("❌ [TablesListView] Error refreshing tables: \(error)")
+            DebugLog.print("❌ [TablesListView] Error details: \(String(describing: error))")
             // Keep existing tables on error
         }
         
         // Refresh query results if a table is selected
         if let selectedTable = appState.selectedTable {
-            print("🔄 [TablesListView] Refreshing query results for table: \(selectedTable.schema).\(selectedTable.name)")
+            DebugLog.print("🔄 [TablesListView] Refreshing query results for table: \(selectedTable.schema).\(selectedTable.name)")
             await populateAndExecuteQuery(for: selectedTable)
         }
     }

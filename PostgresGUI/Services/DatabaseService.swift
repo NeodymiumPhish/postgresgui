@@ -12,7 +12,7 @@ import Logging
 class DatabaseService {
     // Connection manager (actor-isolated)
     private let connectionManager = PostgresConnectionManager()
-    private let logger = Logger(label: "com.postgresgui.service")
+    private let logger = Logger.debugLogger(label: "com.postgresgui.service")
 
     // Connection state (tracked synchronously for UI access)
     private var currentDatabase: String?

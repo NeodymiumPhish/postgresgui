@@ -192,18 +192,18 @@ struct QueryResultsView: View {
     private func getColumnNames() -> [String]? {
         // First try to get column names from stored queryColumnNames (works even for empty results)
         if let columnNames = appState.queryColumnNames, !columnNames.isEmpty {
-            print("📋 [QueryResultsView] Using stored column names: \(columnNames.joined(separator: ", "))")
+            DebugLog.print("📋 [QueryResultsView] Using stored column names: \(columnNames.joined(separator: ", "))")
             return columnNames
         }
         
         // Fallback: Extract column names from the first row
         guard let firstRow = appState.queryResults.first else {
-            print("⚠️  [QueryResultsView] No column names available")
+            DebugLog.print("⚠️  [QueryResultsView] No column names available")
             return nil
         }
         // Sort column names alphabetically for consistent ordering
         let columnNames = Array(firstRow.values.keys.sorted())
-        print("📋 [QueryResultsView] Using column names from first row: \(columnNames.joined(separator: ", "))")
+        DebugLog.print("📋 [QueryResultsView] Using column names from first row: \(columnNames.joined(separator: ", "))")
         return columnNames
     }
 

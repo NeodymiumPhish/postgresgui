@@ -126,8 +126,8 @@ struct TableContentView: View {
                         editedValues: $editedRowValues,
                         onSave: {
                             // Capture editedRowValues from parent context instead of passing as parameter
-                            print("🔴 [Closure] Captured editedRowValues count: \(editedRowValues.count)")
-                            print("🔴 [Closure] Keys: \(Array(editedRowValues.keys))")
+                            DebugLog.print("🔴 [Closure] Captured editedRowValues count: \(editedRowValues.count)")
+                            DebugLog.print("🔴 [Closure] Keys: \(Array(editedRowValues.keys))")
                             try await saveEditedRow(originalRow: rowToEdit, updatedValues: editedRowValues)
                         }
                     )
@@ -169,7 +169,7 @@ struct TableContentView: View {
     }
 
     private func refreshQuery() {
-        print("🔄 [TableContentView] Refresh button clicked")
+        DebugLog.print("🔄 [TableContentView] Refresh button clicked")
         Task {
             // Set loading state FIRST to prevent empty state flicker
             appState.isExecutingQuery = true
@@ -183,7 +183,7 @@ struct TableContentView: View {
             let startTime = Date()
 
             do {
-                print("📊 [TableContentView] Executing query...")
+                DebugLog.print("📊 [TableContentView] Executing query...")
                 let (results, columnNames) = try await appState.databaseService.executeQuery(appState.queryText)
                 appState.queryResults = results
                 appState.queryColumnNames = columnNames.isEmpty ? nil : columnNames
@@ -192,7 +192,7 @@ struct TableContentView: View {
                 let endTime = Date()
                 appState.queryExecutionTime = endTime.timeIntervalSince(startTime)
                 
-                print("✅ [TableContentView] Query executed successfully, showing results")
+                DebugLog.print("✅ [TableContentView] Query executed successfully, showing results")
             } catch {
                 appState.queryError = error.localizedDescription
                 appState.queryColumnNames = nil
@@ -201,7 +201,7 @@ struct TableContentView: View {
                 let endTime = Date()
                 appState.queryExecutionTime = endTime.timeIntervalSince(startTime)
                 
-                print("❌ [TableContentView] Query execution failed: \(error)")
+                DebugLog.print("❌ [TableContentView] Query execution failed: \(error)")
             }
 
             appState.isExecutingQuery = false
@@ -209,7 +209,7 @@ struct TableContentView: View {
     }
     
     private func deleteSelectedRows() {
-        print("🗑️ [TableContentView] Delete button clicked for \(appState.selectedRowIDs.count) row(s)")
+        DebugLog.print("🗑️ [TableContentView] Delete button clicked for \(appState.selectedRowIDs.count) row(s)")
 
         guard let selectedTable = appState.selectedTable else {
             deleteError = "No table selected"
@@ -279,7 +279,7 @@ struct TableContentView: View {
     }
 
     private func editSelectedRows() {
-        print("✏️ [TableContentView] Edit button clicked for \(appState.selectedRowIDs.count) row(s)")
+        DebugLog.print("✏️ [TableContentView] Edit button clicked for \(appState.selectedRowIDs.count) row(s)")
 
         guard let selectedTable = appState.selectedTable else {
             editError = "No table selected"
@@ -336,8 +336,8 @@ struct TableContentView: View {
     }
 
     private func saveEditedRow(originalRow: TableRow, updatedValues: [String: String?]) async throws {
-        print("🟡 [TableContentView.saveEditedRow] Received updatedValues: \(updatedValues)")
-        print("  updatedValues count: \(updatedValues.count)")
+        DebugLog.print("🟡 [TableContentView.saveEditedRow] Received updatedValues: \(updatedValues)")
+        DebugLog.print("  updatedValues count: \(updatedValues.count)")
 
         guard let selectedTable = appState.selectedTable else { return }
 

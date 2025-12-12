@@ -98,7 +98,7 @@ struct WelcomeView: View {
             appState.databases = try await appState.databaseService.fetchDatabases()
         } catch {
             // Handle error
-            print("Failed to load databases: \(error)")
+            DebugLog.print("Failed to load databases: \(error)")
         }
     }
     

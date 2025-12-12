@@ -29,22 +29,22 @@ struct ConnectionsDatabasesSidebar: View {
                     appState.selectedDatabase = nil
                     appState.tables = []
                     appState.isLoadingTables = false
-                    print("🔴 [ConnectionsDatabasesSidebar] Selection cleared")
+                    DebugLog.print("🔴 [ConnectionsDatabasesSidebar] Selection cleared")
                     return
                 }
                 selectedDatabaseID = unwrappedID
-                print("🟢 [ConnectionsDatabasesSidebar] selectedDatabaseID changed to \(unwrappedID)")
+                DebugLog.print("🟢 [ConnectionsDatabasesSidebar] selectedDatabaseID changed to \(unwrappedID)")
 
                 // Find the database object from the ID
                 let database = appState.databases.first { $0.id == unwrappedID }
 
-                print("🔵 [ConnectionsDatabasesSidebar] Updating selectedDatabase to: \(database?.name ?? "nil")")
+                DebugLog.print("🔵 [ConnectionsDatabasesSidebar] Updating selectedDatabase to: \(database?.name ?? "nil")")
                 appState.selectedDatabase = database
 
                 // Clear tables immediately and show loading state
                 appState.tables = []
                 appState.isLoadingTables = true
-                print("🟡 [ConnectionsDatabasesSidebar] Cleared tables, isLoadingTables=true")
+                DebugLog.print("🟡 [ConnectionsDatabasesSidebar] Cleared tables, isLoadingTables=true")
 
                 // Clear table selection and all query-related state
                 appState.selectedTable = nil
@@ -54,20 +54,20 @@ struct ConnectionsDatabasesSidebar: View {
                 appState.showQueryResults = false
                 appState.queryError = nil
                 appState.queryExecutionTime = nil
-                print("🧹 [ConnectionsDatabasesSidebar] Cleared table selection and query state")
+                DebugLog.print("🧹 [ConnectionsDatabasesSidebar] Cleared table selection and query state")
 
                 if let database = database {
                     // Save last selected database name
                     UserDefaults.standard.set(database.name, forKey: Constants.UserDefaultsKeys.lastDatabaseName)
                     
-                    print("🟠 [ConnectionsDatabasesSidebar] Starting loadTables for: \(database.name)")
+                    DebugLog.print("🟠 [ConnectionsDatabasesSidebar] Starting loadTables for: \(database.name)")
                     Task {
                         await loadTables(for: database)
                     }
                 } else {
                     // Clear saved database when selection is cleared
                     UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
-                    print("🔴 [ConnectionsDatabasesSidebar] No database selected, stopping loading")
+                    DebugLog.print("🔴 [ConnectionsDatabasesSidebar] No database selected, stopping loading")
                     appState.isLoadingTables = false
                 }
             }
@@ -231,7 +231,7 @@ struct ConnectionsDatabasesSidebar: View {
             // After refreshing databases, restore last selected database if available
             await restoreLastDatabase()
         } catch {
-            print("Failed to refresh databases: \(error)")
+            DebugLog.print("Failed to refresh databases: \(error)")
         }
     }
     
@@ -264,7 +264,7 @@ struct ConnectionsDatabasesSidebar: View {
             await loadDatabases()
             
         } catch {
-            print("Failed to connect: \(error)")
+            DebugLog.print("Failed to connect: \(error)")
             connectionError = error.localizedDescription
             showConnectionError = true
             // Reset connection state on error
@@ -280,7 +280,7 @@ struct ConnectionsDatabasesSidebar: View {
             // After loading databases, restore last selected database if available
             await restoreLastDatabase()
         } catch {
-            print("Failed to load databases: \(error)")
+            DebugLog.print("Failed to load databases: \(error)")
         }
     }
     
@@ -324,28 +324,28 @@ struct ConnectionsDatabasesSidebar: View {
     }
     
     private func loadTables(for database: DatabaseInfo) async {
-        print("📍 [loadTables] START for database: \(database.name)")
+        DebugLog.print("📍 [loadTables] START for database: \(database.name)")
 
         defer {
-            print("📍 [loadTables] END - setting isLoadingTables=false")
+            DebugLog.print("📍 [loadTables] END - setting isLoadingTables=false")
             appState.isLoadingTables = false
         }
 
         do {
             // Reconnect to the selected database
             guard let connection = appState.currentConnection else {
-                print("❌ [loadTables] ERROR: No current connection")
+                DebugLog.print("❌ [loadTables] ERROR: No current connection")
                 return
             }
-            print("✅ [loadTables] Current connection: \(connection.name)")
+            DebugLog.print("✅ [loadTables] Current connection: \(connection.name)")
 
             // Get password from Keychain
-            print("🔑 [loadTables] Getting password from Keychain for connection: \(connection.id)")
+            DebugLog.print("🔑 [loadTables] Getting password from Keychain for connection: \(connection.id)")
             let password = try KeychainService.getPassword(for: connection.id) ?? ""
-            print("✅ [loadTables] Password retrieved (length: \(password.count))")
+            DebugLog.print("✅ [loadTables] Password retrieved (length: \(password.count))")
 
             // Reconnect to the selected database
-            print("🔌 [loadTables] Connecting to database: \(database.name) at \(connection.host):\(connection.port)")
+            DebugLog.print("🔌 [loadTables] Connecting to database: \(database.name) at \(connection.host):\(connection.port)")
             try await appState.databaseService.connect(
                 host: connection.host,
                 port: connection.port,
@@ -354,18 +354,18 @@ struct ConnectionsDatabasesSidebar: View {
                 database: database.name,
                 sslMode: connection.sslModeEnum
             )
-            print("✅ [loadTables] Connected successfully to \(database.name)")
+            DebugLog.print("✅ [loadTables] Connected successfully to \(database.name)")
 
             // Now fetch tables from the newly connected database
-            print("📊 [loadTables] Fetching tables from database: \(database.name)")
+            DebugLog.print("📊 [loadTables] Fetching tables from database: \(database.name)")
             appState.tables = try await appState.databaseService.fetchTables(database: database.name)
-            print("✅ [loadTables] Fetched \(appState.tables.count) tables")
+            DebugLog.print("✅ [loadTables] Fetched \(appState.tables.count) tables")
             for (index, table) in appState.tables.enumerated() {
-                print("   Table \(index + 1): \(table.schema).\(table.name)")
+                DebugLog.print("   Table \(index + 1): \(table.schema).\(table.name)")
             }
         } catch {
-            print("❌ [loadTables] ERROR: \(error)")
-            print("❌ [loadTables] Error details: \(String(describing: error))")
+            DebugLog.print("❌ [loadTables] ERROR: \(error)")
+            DebugLog.print("❌ [loadTables] Error details: \(String(describing: error))")
             appState.tables = []
         }
     }
@@ -466,12 +466,12 @@ private struct DatabaseRowView: View {
     }
     
     private func deleteDatabase(_ database: DatabaseInfo) async {
-        print("🗑️  [DatabaseRowView] Deleting database: \(database.name)")
+        DebugLog.print("🗑️  [DatabaseRowView] Deleting database: \(database.name)")
         
         do {
             // Get connection details
             guard appState.currentConnection != nil else {
-                print("❌ [DatabaseRowView] No current connection")
+                DebugLog.print("❌ [DatabaseRowView] No current connection")
                 return
             }
             
@@ -491,9 +491,9 @@ private struct DatabaseRowView: View {
             // Refresh databases list
             await refreshDatabases()
             
-            print("✅ [DatabaseRowView] Database deleted successfully")
+            DebugLog.print("✅ [DatabaseRowView] Database deleted successfully")
         } catch {
-            print("❌ [DatabaseRowView] Error deleting database: \(error)")
+            DebugLog.print("❌ [DatabaseRowView] Error deleting database: \(error)")
             // Display error message to user
             if let connectionError = error as? ConnectionError {
                 deleteError = connectionError.errorDescription ?? "Failed to delete database."
@@ -507,16 +507,16 @@ private struct DatabaseRowView: View {
         do {
             appState.databases = try await appState.databaseService.fetchDatabases()
         } catch {
-            print("Failed to refresh databases: \(error)")
+            DebugLog.print("Failed to refresh databases: \(error)")
         }
     }
     
     @MainActor
     private func refreshTables(for database: DatabaseInfo) async {
-        print("🔄 [DatabaseRowView] Refresh tables for database: \(database.name)")
+        DebugLog.print("🔄 [DatabaseRowView] Refresh tables for database: \(database.name)")
         
         guard appState.databaseService.isConnected else {
-            print("❌ [DatabaseRowView] Not connected, cannot refresh tables")
+            DebugLog.print("❌ [DatabaseRowView] Not connected, cannot refresh tables")
             return
         }
         
@@ -533,9 +533,9 @@ private struct DatabaseRowView: View {
         
         // Refresh tables list
         do {
-            print("📊 [DatabaseRowView] Fetching tables from database: \(database.name)")
+            DebugLog.print("📊 [DatabaseRowView] Fetching tables from database: \(database.name)")
             appState.tables = try await appState.databaseService.fetchTables(database: database.name)
-            print("✅ [DatabaseRowView] Refreshed \(appState.tables.count) tables")
+            DebugLog.print("✅ [DatabaseRowView] Refreshed \(appState.tables.count) tables")
             
             // Update selectedTable reference if it still exists in the refreshed list
             if let selectedTable = appState.selectedTable,
@@ -549,7 +549,7 @@ private struct DatabaseRowView: View {
                 appState.queryResults = []
             }
         } catch {
-            print("❌ [DatabaseRowView] Error refreshing tables: \(error)")
+            DebugLog.print("❌ [DatabaseRowView] Error refreshing tables: \(error)")
         }
     }
 }

@@ -155,8 +155,8 @@ struct ConnectionsListView: View {
             await loadDatabases()
             
         } catch {
-            print("Failed to connect: \(error)")
-            print("Failed to connect - detailed error: \(String(reflecting: error))")
+            DebugLog.print("Failed to connect: \(error)")
+            DebugLog.print("Failed to connect - detailed error: \(String(reflecting: error))")
             
             // Show user-friendly error message
             if let connectionError = error as? ConnectionError {
@@ -176,12 +176,12 @@ struct ConnectionsListView: View {
         do {
             appState.databases = try await appState.databaseService.fetchDatabases()
         } catch {
-            print("Failed to load databases: \(error)")
+            DebugLog.print("Failed to load databases: \(error)")
         }
     }
     
     private func deleteConnection(_ connection: ConnectionProfile) async {
-        print("🗑️  [ConnectionsListView] Deleting connection: \(connection.name)")
+        DebugLog.print("🗑️  [ConnectionsListView] Deleting connection: \(connection.name)")
         
         do {
             // Check if this is the currently active connection
@@ -213,7 +213,7 @@ struct ConnectionsListView: View {
             modelContext.delete(connection)
             try modelContext.save()
             
-            print("✅ [ConnectionsListView] Connection deleted successfully")
+            DebugLog.print("✅ [ConnectionsListView] Connection deleted successfully")
             connectionToDelete = nil
             
             // If this was the last connection, close modal and show welcome screen
@@ -223,7 +223,7 @@ struct ConnectionsListView: View {
             }
             
         } catch {
-            print("❌ [ConnectionsListView] Error deleting connection: \(error)")
+            DebugLog.print("❌ [ConnectionsListView] Error deleting connection: \(error)")
             if let keychainError = error as? KeychainError {
                 deleteError = keychainError.errorDescription ?? "Failed to delete connection."
             } else {
