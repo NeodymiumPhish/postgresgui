@@ -15,6 +15,7 @@ struct TableContentView: View {
     @State private var showRowEditor = false
     @State private var rowToEdit: TableRow?
     @State private var editError: String?
+    @State private var jsonViewError: String?
     @State private var editedRowValues: [String: String?] = [:]
 
     var body: some View {
@@ -29,6 +30,11 @@ struct TableContentView: View {
                     .disabled(appState.selectedRowIDs.isEmpty)
                     
                     Button(action: {
+                        let selectedRows = appState.queryResults.filter { appState.selectedRowIDs.contains($0.id) }
+                        guard !selectedRows.isEmpty else {
+                            jsonViewError = "No rows selected"
+                            return
+                        }
                         showJSONView = true
                     }) {
                         Image(systemName: "doc.text")
@@ -129,6 +135,18 @@ struct TableContentView: View {
                 }
             } message: {
                 if let error = editError {
+                    Text(error)
+                }
+            }
+            .alert("Error Viewing JSON", isPresented: Binding(
+                get: { jsonViewError != nil },
+                set: { if !$0 { jsonViewError = nil } }
+            )) {
+                Button("OK", role: .cancel) {
+                    jsonViewError = nil
+                }
+            } message: {
+                if let error = jsonViewError {
                     Text(error)
                 }
             }
