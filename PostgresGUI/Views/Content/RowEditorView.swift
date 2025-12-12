@@ -61,16 +61,6 @@ struct RowEditorView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                HStack {
-                    Text("Edit Row")
-                        .font(.headline)
-                    Spacer()
-                }
-                .padding()
-                .background(Color(nsColor: .controlBackgroundColor))
-
-                Divider()
-
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(columnNames, id: \.self) { columnName in
@@ -81,6 +71,7 @@ struct RowEditorView: View {
                 }
                 .background(Color(nsColor: .controlBackgroundColor))
             }
+            .navigationTitle("Edit Row")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
