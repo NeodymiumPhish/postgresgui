@@ -46,17 +46,6 @@ struct ConnectionFormView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Header with title
-                HStack {
-                    Text(connectionToEdit == nil ? "Create New Connection" : "Edit Connection")
-                        .font(.headline)
-                    Spacer()
-                }
-                .padding()
-                .background(Color(nsColor: .controlBackgroundColor))
-
-                Divider()
-
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         if inputMode == .individual {
@@ -132,6 +121,7 @@ struct ConnectionFormView: View {
                     }
                 }
             }
+            .navigationTitle(connectionToEdit == nil ? "Create New Connection" : "Edit Connection")
         }
         .frame(width: 500, height: 400)
     }
