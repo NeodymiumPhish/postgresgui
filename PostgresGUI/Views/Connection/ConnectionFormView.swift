@@ -33,7 +33,6 @@ struct ConnectionFormView: View {
     @State private var inputMode: ConnectionInputMode = .individual
     @State private var connectionString: String = ""
     @State private var connectionStringWarnings: [String] = []
-    @State private var isButtonHovered = false
 
     enum ConnectionInputMode {
         case individual
@@ -47,34 +46,11 @@ struct ConnectionFormView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Header with title and toggle
+                // Header with title
                 HStack {
                     Text(connectionToEdit == nil ? "Create New Connection" : "Edit Connection")
                         .font(.headline)
-
                     Spacer()
-
-                    Button(action: {
-                        let oldMode = inputMode
-                        let newMode: ConnectionInputMode = inputMode == .individual ? .connectionString : .individual
-                        handleInputModeChange(from: oldMode, to: newMode)
-                        inputMode = newMode
-                    }) {
-                        Image(systemName: "link")
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(
-                                inputMode == .connectionString 
-                                    ? Color.secondary.opacity(0.2) 
-                                    : (isButtonHovered ? Color.secondary.opacity(0.1) : Color.clear)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 100))
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { hovering in
-                        isButtonHovered = hovering
-                    }
                 }
                 .padding()
                 .background(Color(nsColor: .controlBackgroundColor))
@@ -124,6 +100,18 @@ struct ConnectionFormView: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                }
+
+                ToolbarItem(placement: .automatic) {
+                    Toggle("Use Connection String", isOn: Binding(
+                        get: { inputMode == .connectionString },
+                        set: { newValue in
+                            let oldMode = inputMode
+                            let newMode: ConnectionInputMode = newValue ? .connectionString : .individual
+                            handleInputModeChange(from: oldMode, to: newMode)
+                            inputMode = newMode
+                        }
+                    ))
                 }
 
                 ToolbarItem(placement: .confirmationAction) {

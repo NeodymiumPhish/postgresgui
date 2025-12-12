@@ -6,28 +6,29 @@
 //
 
 import Foundation
+import Logging
 
 @MainActor
 class DatabaseService {
-    // Mock connection state
-    private var isConnectedState: Bool = false
+    // Connection manager (actor-isolated)
+    private let connectionManager = PostgresConnectionManager()
+    private let logger = Logger(label: "com.postgresgui.service")
+
+    // Connection state (tracked synchronously for UI access)
     private var currentDatabase: String?
-    
-    // Mock data storage
-    private var mockDatabases: [DatabaseInfo] = MockDatabaseData.databases
-    private var mockTables: [String: [TableInfo]] = MockDatabaseData.tables
-    private var mockTableData: [String: [TableRow]] = [:]
-    
+    private var _isConnected: Bool = false
+
     var isConnected: Bool {
-        isConnectedState
+        _isConnected
     }
 
     init() {
-        // Initialize mock table data
-        mockTableData = MockDatabaseData.initializeTableData()
+        logger.info("DatabaseService initialized")
     }
-    
-    /// Connect to PostgreSQL database (mock - always succeeds)
+
+    // MARK: - Connection Management
+
+    /// Connect to PostgreSQL database
     func connect(
         host: String,
         port: Int,
@@ -36,9 +37,6 @@ class DatabaseService {
         database: String,
         sslMode: SSLMode = .default
     ) async throws {
-        // Simulate connection delay
-        try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-        
         // Validate inputs
         guard !host.isEmpty else {
             throw ConnectionError.invalidHost(host)
@@ -47,18 +45,40 @@ class DatabaseService {
         guard port > 0 && port <= 65535 else {
             throw ConnectionError.invalidPort
         }
-        
-        // Mock connection - always succeeds
-        isConnectedState = true
-        currentDatabase = database
+
+        logger.info("Connecting to \(host):\(port), database: \(database)")
+
+        // Get TLS configuration from SSLMode
+        let tlsConfig = sslMode.nioTLSConfiguration
+
+        do {
+            try await connectionManager.connect(
+                host: host,
+                port: port,
+                username: username,
+                password: password,
+                database: database,
+                tlsConfiguration: tlsConfig
+            )
+
+            currentDatabase = database
+            _isConnected = true
+            logger.info("Successfully connected")
+        } catch {
+            logger.error("Connection failed: \(error)")
+            _isConnected = false
+            throw error
+        }
     }
-    
+
     /// Disconnect from database
     func disconnect() async {
-        isConnectedState = false
+        logger.info("Disconnecting")
+        await connectionManager.disconnect()
         currentDatabase = nil
+        _isConnected = false
     }
-    
+
     /// Test connection without saving (static method - doesn't require instance)
     nonisolated static func testConnection(
         host: String,
@@ -68,251 +88,191 @@ class DatabaseService {
         database: String,
         sslMode: SSLMode = .default
     ) async throws -> Bool {
-        // Simulate connection test delay
-        try await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
-        
-        // Mock test - always succeeds
-        return true
+        let tlsConfig = sslMode.nioTLSConfiguration
+
+        return try await PostgresConnectionManager.testConnection(
+            host: host,
+            port: port,
+            username: username,
+            password: password,
+            database: database,
+            tlsConfiguration: tlsConfig
+        )
     }
-    
-    /// Fetch list of databases (mock data)
+
+    // MARK: - Database Operations
+
+    /// Fetch list of databases
     func fetchDatabases() async throws -> [DatabaseInfo] {
-        guard isConnectedState else {
+        guard _isConnected else {
             throw ConnectionError.notConnected
         }
-        
-        // Simulate network delay
-        try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
-        
-        return mockDatabases
+
+        logger.debug("Fetching databases")
+
+        return try await connectionManager.withConnection { conn in
+            try await QueryExecutor.fetchDatabases(connection: conn)
+        }
     }
-    
-    /// Fetch list of tables in a database (mock data)
+
+    /// Create a new database
+    func createDatabase(name: String) async throws {
+        guard _isConnected else {
+            throw ConnectionError.notConnected
+        }
+
+        logger.info("Creating database: \(name)")
+
+        try await connectionManager.withConnection { conn in
+            try await QueryExecutor.createDatabase(connection: conn, name: name)
+        }
+    }
+
+    /// Delete a database
+    func deleteDatabase(name: String) async throws {
+        guard _isConnected else {
+            throw ConnectionError.notConnected
+        }
+
+        logger.info("Deleting database: \(name)")
+
+        try await connectionManager.withConnection { conn in
+            try await QueryExecutor.dropDatabase(connection: conn, name: name)
+        }
+
+        // If we deleted the current database, disconnect
+        if currentDatabase == name {
+            await disconnect()
+        }
+    }
+
+    // MARK: - Table Operations
+
+    /// Fetch list of tables in the connected database
     func fetchTables(database: String) async throws -> [TableInfo] {
-        guard isConnectedState else {
+        guard _isConnected else {
             throw ConnectionError.notConnected
         }
-        
-        // Simulate network delay
-        try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
-        
-        return mockTables[database] ?? []
+
+        logger.debug("Fetching tables for database: \(database)")
+
+        return try await connectionManager.withConnection { conn in
+            try await QueryExecutor.fetchTables(connection: conn)
+        }
     }
-    
-    /// Fetch table data with pagination (mock data)
+
+    /// Fetch table data with pagination
     func fetchTableData(
         schema: String,
         table: String,
         offset: Int,
         limit: Int
     ) async throws -> [TableRow] {
-        guard isConnectedState else {
+        guard _isConnected else {
             throw ConnectionError.notConnected
         }
-        
-        // Simulate network delay
-        try await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
-        
-        let key = "\(schema).\(table)"
-        let allRows = mockTableData[key] ?? []
-        
-        // Apply pagination
-        let endIndex = min(offset + limit, allRows.count)
-        guard offset < allRows.count else {
-            return []
+
+        logger.debug("Fetching table data: \(schema).\(table)")
+
+        return try await connectionManager.withConnection { conn in
+            try await QueryExecutor.fetchTableData(
+                connection: conn,
+                schema: schema,
+                table: table,
+                limit: limit,
+                offset: offset
+            )
         }
-        
-        return Array(allRows[offset..<endIndex])
     }
 
-    /// Execute arbitrary SQL query and return results along with column names (mock data)
-    func executeQuery(_ sql: String) async throws -> ([TableRow], [String]) {
-        guard isConnectedState else {
-            throw ConnectionError.notConnected
-        }
-        
-        // Simulate query execution delay
-        try await Task.sleep(nanoseconds: 400_000_000) // 0.4 seconds
-        
-        let upperSQL = sql.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        
-        // Mock SELECT queries
-        if upperSQL.hasPrefix("SELECT") {
-            // Try to match against known tables
-            for (key, rows) in mockTableData {
-                if upperSQL.contains(key.uppercased().replacingOccurrences(of: ".", with: " ")) {
-                    // Extract column names from first row
-                    if let firstRow = rows.first {
-                        let columnNames = Array(firstRow.values.keys).sorted()
-                        return (rows, columnNames)
-                    }
-                }
-            }
-            
-            // Default mock query result
-            let mockRows = [
-                TableRow(values: ["id": "1", "name": "Sample", "value": "100"]),
-                TableRow(values: ["id": "2", "name": "Test", "value": "200"]),
-                TableRow(values: ["id": "3", "name": "Demo", "value": "300"])
-            ]
-            return (mockRows, ["id", "name", "value"])
-        }
-        
-        // For non-SELECT queries, return empty result
-        return ([], [])
-    }
-    
-    /// Delete a database (mock - just removes from list)
-    func deleteDatabase(name: String) async throws {
-        guard isConnectedState else {
-            throw ConnectionError.notConnected
-        }
-        
-        // Simulate delay
-        try await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
-        
-        mockDatabases.removeAll { $0.name == name }
-        mockTables.removeValue(forKey: name)
-        
-        // If we deleted the current database, disconnect
-        if currentDatabase == name {
-            await disconnect()
-        }
-    }
-    
-    /// Create a new database (mock - adds to list)
-    func createDatabase(name: String) async throws {
-        guard isConnectedState else {
-            throw ConnectionError.notConnected
-        }
-        
-        // Simulate delay
-        try await Task.sleep(nanoseconds: 300_000_000) // 0.3 seconds
-        
-        // Check if database already exists
-        if mockDatabases.contains(where: { $0.name == name }) {
-            throw ConnectionError.databaseNotFound(name) // Reuse error for "already exists"
-        }
-        
-        mockDatabases.append(DatabaseInfo(name: name))
-        mockTables[name] = []
-    }
-    
-    /// Delete a table (mock - removes from list)
+    /// Delete a table
     func deleteTable(schema: String, table: String) async throws {
-        guard isConnectedState else {
+        guard _isConnected else {
             throw ConnectionError.notConnected
         }
-        
-        // Simulate delay
-        try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
-        
-        guard let database = currentDatabase,
-              var tables = mockTables[database] else {
-            throw ConnectionError.notConnected
+
+        logger.info("Deleting table: \(schema).\(table)")
+
+        try await connectionManager.withConnection { conn in
+            try await QueryExecutor.dropTable(connection: conn, schema: schema, table: table)
         }
-        
-        tables.removeAll { $0.name == table && $0.schema == schema }
-        mockTables[database] = tables
-        
-        // Remove table data
-        let key = "\(schema).\(table)"
-        mockTableData.removeValue(forKey: key)
     }
 
-    /// Fetch primary key columns for a table (mock - returns "id" for most tables)
+    // MARK: - Query Execution
+
+    /// Execute arbitrary SQL query and return results along with column names
+    func executeQuery(_ sql: String) async throws -> ([TableRow], [String]) {
+        guard _isConnected else {
+            throw ConnectionError.notConnected
+        }
+
+        logger.info("Executing query")
+        logger.debug("SQL: \(sql.prefix(200))")
+
+        return try await connectionManager.withConnection { conn in
+            try await QueryExecutor.executeQuery(connection: conn, sql: sql)
+        }
+    }
+
+    // MARK: - Metadata Operations
+
+    /// Fetch primary key columns for a table
     func fetchPrimaryKeyColumns(schema: String, table: String) async throws -> [String] {
-        guard isConnectedState else {
+        guard _isConnected else {
             throw ConnectionError.notConnected
         }
-        
-        // Simulate delay
-        try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-        
-        // Most tables have "id" as primary key
-        return ["id"]
+
+        logger.debug("Fetching primary keys for \(schema).\(table)")
+
+        return try await connectionManager.withConnection { conn in
+            try await QueryExecutor.fetchPrimaryKeys(connection: conn, schema: schema, table: table)
+        }
     }
 
-    /// Fetch column information for a table (mock data)
+    /// Fetch column information for a table
     func fetchColumnInfo(schema: String, table: String) async throws -> [ColumnInfo] {
-        guard isConnectedState else {
+        guard _isConnected else {
             throw ConnectionError.notConnected
         }
-        
-        // Simulate delay
-        try await Task.sleep(nanoseconds: 150_000_000) // 0.15 seconds
-        
-        let key = "\(schema).\(table)"
-        guard let firstRow = mockTableData[key]?.first else {
-            return []
+
+        logger.debug("Fetching column info for \(schema).\(table)")
+
+        return try await connectionManager.withConnection { conn in
+            try await QueryExecutor.fetchColumns(connection: conn, schema: schema, table: table)
         }
-        
-        // Generate column info from first row
-        var columns: [ColumnInfo] = []
-        for (columnName, value) in firstRow.values.sorted(by: { $0.key < $1.key }) {
-            let isNullable = value == nil
-            let dataType: String
-            if columnName.lowercased().contains("id") {
-                dataType = "integer"
-            } else if columnName.lowercased().contains("email") || columnName.lowercased().contains("name") {
-                dataType = "character varying"
-            } else if columnName.lowercased().contains("price") || columnName.lowercased().contains("amount") || columnName.lowercased().contains("salary") {
-                dataType = "numeric"
-            } else if columnName.lowercased().contains("date") || columnName.lowercased().contains("created") {
-                dataType = "timestamp"
-            } else if columnName.lowercased().contains("active") {
-                dataType = "boolean"
-            } else {
-                dataType = "text"
-            }
-            
-            columns.append(ColumnInfo(
-                name: columnName,
-                dataType: dataType,
-                isNullable: isNullable,
-                defaultValue: nil
-            ))
-        }
-        
-        return columns
     }
 
-    /// Delete rows from a table using primary key values (mock - removes from data)
+    // MARK: - Row Operations
+
+    /// Delete rows from a table using primary key values
     func deleteRows(
         schema: String,
         table: String,
         primaryKeyColumns: [String],
         rows: [TableRow]
     ) async throws {
-        guard isConnectedState else {
+        guard _isConnected else {
             throw ConnectionError.notConnected
         }
-        
+
         guard !primaryKeyColumns.isEmpty else {
             throw DatabaseError.noPrimaryKey
         }
-        
-        // Simulate delay
-        try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
-        
-        let key = "\(schema).\(table)"
-        guard var tableRows = mockTableData[key] else {
-            return
+
+        logger.info("Deleting \(rows.count) rows from \(schema).\(table)")
+
+        try await connectionManager.withConnection { conn in
+            try await QueryExecutor.deleteRows(
+                connection: conn,
+                schema: schema,
+                table: table,
+                primaryKeyColumns: primaryKeyColumns,
+                rows: rows
+            )
         }
-        
-        // Remove rows matching primary keys
-        for rowToDelete in rows {
-            if let pkValue = rowToDelete.values[primaryKeyColumns[0]] {
-                tableRows.removeAll { existingRow in
-                    existingRow.values[primaryKeyColumns[0]] == pkValue
-                }
-            }
-        }
-        
-        mockTableData[key] = tableRows
     }
 
-    /// Update a row in a table using primary key values (mock - updates in-memory data)
+    /// Update a row in a table using primary key values
     func updateRow(
         schema: String,
         table: String,
@@ -320,36 +280,25 @@ class DatabaseService {
         originalRow: TableRow,
         updatedValues: [String: String?]
     ) async throws {
-        guard isConnectedState else {
+        guard _isConnected else {
             throw ConnectionError.notConnected
         }
 
         guard !primaryKeyColumns.isEmpty else {
             throw DatabaseError.noPrimaryKey
         }
-        
-        // Simulate delay
-        try await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
-        
-        let key = "\(schema).\(table)"
-        guard var tableRows = mockTableData[key] else {
-            return
-        }
-        
-        // Find and update the row
-        guard let pkValue = originalRow.values[primaryKeyColumns[0]] else {
-            throw DatabaseError.missingPrimaryKeyValue(column: primaryKeyColumns[0])
-        }
-        
-        if let index = tableRows.firstIndex(where: { $0.values[primaryKeyColumns[0]] == pkValue }) {
-            var updatedRow = tableRows[index]
-            var newValues = updatedRow.values
-            for (column, newValue) in updatedValues {
-                newValues[column] = newValue
-            }
-            updatedRow = TableRow(values: newValues)
-            tableRows[index] = updatedRow
-            mockTableData[key] = tableRows
+
+        logger.info("Updating row in \(schema).\(table)")
+
+        try await connectionManager.withConnection { conn in
+            try await QueryExecutor.updateRow(
+                connection: conn,
+                schema: schema,
+                table: table,
+                primaryKeyColumns: primaryKeyColumns,
+                originalRow: originalRow,
+                updatedValues: updatedValues
+            )
         }
     }
 }

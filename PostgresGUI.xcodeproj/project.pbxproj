@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		EA7C89D42EDB7AE7005BEBE5 /* CodeEditorView in Frameworks */ = {isa = PBXBuildFile; productRef = EA7C89D32EDB7AE7005BEBE5 /* CodeEditorView */; };
 		EA7C89D62EDB7AE7005BEBE5 /* LanguageSupport in Frameworks */ = {isa = PBXBuildFile; productRef = EA7C89D52EDB7AE7005BEBE5 /* LanguageSupport */; };
+		EAC879F82EEB2A3B0085136E /* PostgresNIO in Frameworks */ = {isa = PBXBuildFile; productRef = EAC879F72EEB2A3B0085136E /* PostgresNIO */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,6 +59,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				EA7C89D62EDB7AE7005BEBE5 /* LanguageSupport in Frameworks */,
+				EAC879F82EEB2A3B0085136E /* PostgresNIO in Frameworks */,
 				EA7C89D42EDB7AE7005BEBE5 /* CodeEditorView in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -129,6 +131,7 @@
 			packageProductDependencies = (
 				EA7C89D32EDB7AE7005BEBE5 /* CodeEditorView */,
 				EA7C89D52EDB7AE7005BEBE5 /* LanguageSupport */,
+				EAC879F72EEB2A3B0085136E /* PostgresNIO */,
 			);
 			productName = PostgresGUI;
 			productReference = EA3CC4A82EDA978C00DEE264 /* PostgresGUI.app */;
@@ -214,6 +217,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				EA7C89D12EDB7ACD005BEBE5 /* XCRemoteSwiftPackageReference "CodeEditorView" */,
+				EAC879F62EEB2A3B0085136E /* XCRemoteSwiftPackageReference "postgres-nio" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = EA3CC4A92EDA978C00DEE264 /* Products */;
@@ -613,6 +617,14 @@
 				minimumVersion = 0.15.4;
 			};
 		};
+		EAC879F62EEB2A3B0085136E /* XCRemoteSwiftPackageReference "postgres-nio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/vapor/postgres-nio.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.29.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -625,6 +637,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = EA7C89D12EDB7ACD005BEBE5 /* XCRemoteSwiftPackageReference "CodeEditorView" */;
 			productName = LanguageSupport;
+		};
+		EAC879F72EEB2A3B0085136E /* PostgresNIO */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EAC879F62EEB2A3B0085136E /* XCRemoteSwiftPackageReference "postgres-nio" */;
+			productName = PostgresNIO;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

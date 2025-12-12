@@ -94,7 +94,7 @@ struct TablesListView: View {
     }
 
     private func generateTableQuery(for table: TableInfo) -> String {
-        return "SELECT * FROM \(table.name) LIMIT \(appState.rowsPerPage);"
+        return "SELECT * FROM \(table.schema).\(table.name) LIMIT \(appState.rowsPerPage);"
     }
 
     @MainActor
