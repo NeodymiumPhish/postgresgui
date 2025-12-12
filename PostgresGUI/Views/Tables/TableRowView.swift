@@ -27,25 +27,24 @@ struct TableRowView: View {
                 
                 Spacer()
                 
-                if isHovered {
-                    Menu {
-                        Button(role: .destructive) {
-                            showDeleteConfirmation = true
-                        } label: {
-                            Label("Delete Table...", systemImage: "trash")
-                        }
+                Menu {
+                    Button(role: .destructive) {
+                        showDeleteConfirmation = true
                     } label: {
-                        Image(systemName: "ellipsis")
-                            .foregroundColor(isButtonHovered ? .primary : .secondary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 6)
-                            .background(isButtonHovered ? Color.secondary.opacity(0.2) : Color.clear)
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                        Label("Delete Table...", systemImage: "trash")
                     }
-                    .buttonStyle(.plain)
-                    .onHover { hovering in
-                        isButtonHovered = hovering
-                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .foregroundColor(isButtonHovered ? .primary : .secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 6)
+                        .background(isButtonHovered ? Color.secondary.opacity(0.2) : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .opacity((isHovered || isButtonHovered) ? 1.0 : 0.0)
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    isButtonHovered = hovering
                 }
             }
             .padding(.vertical, 4)
