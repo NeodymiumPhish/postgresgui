@@ -403,19 +403,10 @@ private struct DatabaseRowView: View {
                 Spacer()
                 if isHovered {
                     Menu {
-                        Button {
-                            Task {
-                                await refreshTables(for: database)
-                            }
-                        } label: {
-                            Label("Refresh", systemImage: "arrow.clockwise")
-                        }
-                        .disabled(appState.isLoadingTables || !appState.databaseService.isConnected)
-                        
                         Button(role: .destructive) {
                             showDeleteConfirmation = true
                         } label: {
-                            Text("Delete...")
+                            Label("Delete Database...", systemImage: "trash")
                         }
                     } label: {
                         Image(systemName: "ellipsis")
@@ -433,19 +424,10 @@ private struct DatabaseRowView: View {
             }
         }
         .contextMenu {
-            Button {
-                Task {
-                    await refreshTables(for: database)
-                }
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .disabled(appState.isLoadingTables || !appState.databaseService.isConnected)
-            
             Button(role: .destructive) {
                 showDeleteConfirmation = true
             } label: {
-                Label("Delete...", systemImage: "trash")
+                Label("Delete Database...", systemImage: "trash")
             }
         }
         .onHover { hovering in
