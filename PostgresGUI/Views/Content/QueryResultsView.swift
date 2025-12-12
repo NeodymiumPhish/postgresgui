@@ -92,6 +92,7 @@ struct QueryResultsView: View {
     @Environment(AppState.self) private var appState
     @State private var sortOrder: [TableRowComparator] = []
     var onDeleteKeyPressed: (() -> Void)?
+    var onSpaceKeyPressed: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -159,6 +160,13 @@ struct QueryResultsView: View {
                 if !appState.selectedRowIDs.isEmpty {
                     onDeleteKeyPressed?()
                 }
+            }
+            .onKeyPress(.space) {
+                if !appState.selectedRowIDs.isEmpty {
+                    onSpaceKeyPressed?()
+                    return .handled
+                }
+                return .ignored
             }
         }
     }

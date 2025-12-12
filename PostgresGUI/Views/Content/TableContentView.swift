@@ -19,9 +19,14 @@ struct TableContentView: View {
     @State private var editedRowValues: [String: String?] = [:]
 
     var body: some View {
-        SplitContentView(onDeleteKeyPressed: {
-            deleteSelectedRows()
-        })
+        SplitContentView(
+            onDeleteKeyPressed: {
+                deleteSelectedRows()
+            },
+            onSpaceKeyPressed: {
+                openJSONView()
+            }
+        )
             .toolbar {
                 ToolbarItemGroup(placement: .automatic) {
                     Button(action: {
@@ -154,6 +159,15 @@ struct TableContentView: View {
             }
     }
     
+    private func openJSONView() {
+        let selectedRows = appState.queryResults.filter { appState.selectedRowIDs.contains($0.id) }
+        guard !selectedRows.isEmpty else {
+            jsonViewError = "No rows selected"
+            return
+        }
+        showJSONView = true
+    }
+
     private func refreshQuery() {
         print("🔄 [TableContentView] Refresh button clicked")
         Task {
