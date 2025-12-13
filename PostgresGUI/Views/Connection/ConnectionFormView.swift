@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import AppKit
 
 struct ConnectionFormView: View {
     @Environment(\.dismiss) private var dismiss
@@ -319,9 +320,28 @@ struct ConnectionFormView: View {
                         }
 
                     if connectionToEdit != nil {
-                        Text("Connection string is read-only when editing")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        HStack(spacing: 6) {
+                            Text("Connection string is read-only when editing")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            Spacer()
+                            
+                            Button(action: {
+                                copyConnectionStringToClipboard()
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "doc.on.doc")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Text("Copy")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .help("Copy connection string")
+                        }
                     }
 
                     if !connectionStringWarnings.isEmpty {
@@ -641,6 +661,13 @@ struct ConnectionFormView: View {
         
         // User has entered a new password or cleared it
         return password
+    }
+    
+    /// Copy the connection string to the clipboard
+    private func copyConnectionStringToClipboard() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(connectionString, forType: .string)
     }
     
     /// Generate a connection string from the current connection being edited
