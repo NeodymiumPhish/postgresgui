@@ -264,11 +264,11 @@ private struct ConnectionRowView: View {
                 }
                 
                 HStack(spacing: 12) {
-                    Label(connection.host, systemImage: "server.rack")
+                    Label(connection.rootDomain, systemImage: "server.rack")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
-                    Label("\(connection.port)", systemImage: "network")
+                    Label(formatPort(connection.port), systemImage: "network")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
@@ -341,6 +341,14 @@ private struct ConnectionRowView: View {
         .onHover { hovering in
             isHovered = hovering
         }
+    }
+    
+    /// Format port number without comma separators
+    private func formatPort(_ port: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .none
+        formatter.usesGroupingSeparator = false
+        return formatter.string(from: NSNumber(value: port)) ?? String(port)
     }
 }
 
