@@ -27,6 +27,10 @@ struct ConnectionFormView: View {
     @State private var username: String = "postgres"
     @State private var password: String = ""
     @State private var database: String = "postgres"
+    @State private var showPassword: Bool = false
+    @State private var hasStoredPassword: Bool = false
+    @State private var actualStoredPassword: String = ""
+    @State private var passwordModified: Bool = false
 
     @State private var testResult: String?
     @State private var testResultColor: Color = .primary
@@ -82,8 +86,21 @@ struct ConnectionFormView: View {
                     port = String(connection.port)
                     username = connection.username
                     database = connection.database
-                    // Don't load password - user needs to re-enter if changing
-                    password = ""
+                    
+                    // Check if password exists in keychain
+                    if let storedPassword = try? KeychainService.getPassword(for: connection.id), !storedPassword.isEmpty {
+                        hasStoredPassword = true
+                        actualStoredPassword = storedPassword
+                        passwordModified = false
+                        // Show asterisks to indicate password exists (password is hidden by default)
+                        password = String(repeating: "•", count: 8)
+                    } else {
+                        hasStoredPassword = false
+                        actualStoredPassword = ""
+                        passwordModified = false
+                        password = ""
+                    }
+                    
                     // Show name fields when editing only if name is not nil
                     showIndividualNameField = connection.name != nil
                     showConnectionStringNameField = connection.name != nil
@@ -189,8 +206,55 @@ struct ConnectionFormView: View {
             }
 
             formRow(label: "Password") {
-                SecureField("", text: $password)
+                HStack(spacing: 8) {
+                    Group {
+                        if showPassword {
+                            TextField("", text: Binding(
+                                get: {
+                                    // If showing password and it hasn't been modified, show actual stored password
+                                    if hasStoredPassword && !passwordModified {
+                                        return actualStoredPassword
+                                    }
+                                    return password
+                                },
+                                set: { newValue in
+                                    password = newValue
+                                    // User is modifying the password
+                                    if hasStoredPassword && !passwordModified {
+                                        passwordModified = true
+                                    }
+                                }
+                            ))
+                        } else {
+                            SecureField("", text: Binding(
+                                get: {
+                                    // If hidden and not modified, show asterisks
+                                    if hasStoredPassword && !passwordModified {
+                                        return String(repeating: "•", count: 8)
+                                    }
+                                    return password
+                                },
+                                set: { newValue in
+                                    password = newValue
+                                    // User is modifying the password
+                                    if hasStoredPassword && !passwordModified {
+                                        passwordModified = true
+                                    }
+                                }
+                            ))
+                        }
+                    }
                     .textFieldStyle(.roundedBorder)
+                    
+                    Button(action: {
+                        showPassword.toggle()
+                    }) {
+                        Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(showPassword ? "Hide password" : "Show password")
+                }
             }
 
             formRow(label: "Database") {
@@ -372,14 +436,7 @@ struct ConnectionFormView: View {
                     return
                 }
 
-                let passwordToUse: String
-                if !password.isEmpty {
-                    passwordToUse = password
-                } else if let connection = connectionToEdit {
-                    passwordToUse = (try? KeychainService.getPassword(for: connection.id)) ?? ""
-                } else {
-                    passwordToUse = ""
-                }
+                let passwordToUse = getActualPassword()
 
                 connectionDetails = (
                     host: host.isEmpty ? "localhost" : host,
@@ -458,14 +515,7 @@ struct ConnectionFormView: View {
                     return
                 }
 
-                let passwordToUse: String
-                if !password.isEmpty {
-                    passwordToUse = password
-                } else if let connection = connectionToEdit {
-                    passwordToUse = (try? KeychainService.getPassword(for: connection.id)) ?? ""
-                } else {
-                    passwordToUse = ""
-                }
+                let passwordToUse = getActualPassword()
 
                 connectionDetails = (
                     host: host.isEmpty ? "localhost" : host,
@@ -489,10 +539,17 @@ struct ConnectionFormView: View {
                 profile.database = connectionDetails.database
                 profile.sslMode = connectionDetails.sslMode.rawValue
 
-                // Update password in Keychain only if provided
-                if !connectionDetails.password.isEmpty {
-                    try KeychainService.savePassword(connectionDetails.password, for: profile.id)
+                // Update password in Keychain only if user actually changed it
+                if passwordModified {
+                    if !password.isEmpty {
+                        // User entered a new password
+                        try KeychainService.savePassword(password, for: profile.id)
+                    } else {
+                        // User cleared the password field - remove from keychain
+                        try? KeychainService.deletePassword(for: profile.id)
+                    }
                 }
+                // If password hasn't been modified, don't update keychain
 
                 // Save changes to SwiftData
                 try modelContext.save()
@@ -569,6 +626,21 @@ struct ConnectionFormView: View {
             testResult = "Connected but failed to load databases: \(error.localizedDescription)"
             testResultColor = .orange
         }
+    }
+    
+    /// Get the actual password value, handling the asterisks placeholder
+    /// Returns the password from the field if it's been changed, otherwise returns stored password from keychain
+    private func getActualPassword() -> String {
+        // If password hasn't been modified and we have a stored password, use stored one
+        if hasStoredPassword && !passwordModified {
+            if let connection = connectionToEdit {
+                return (try? KeychainService.getPassword(for: connection.id)) ?? ""
+            }
+            return ""
+        }
+        
+        // User has entered a new password or cleared it
+        return password
     }
     
     /// Generate a connection string from the current connection being edited
