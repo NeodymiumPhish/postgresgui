@@ -100,11 +100,17 @@ extension ConnectionProfile {
         return (profile: profile, password: parsed.password)
     }
 
+    /// Extract the domain from the host
+    /// Returns the host as-is (which is the domain), handling both domain names and IP addresses
+    var domain: String {
+        return host
+    }
+    
     /// Returns a display name for the connection, with fallback if name is nil
     var displayName: String {
         if let name = name, !name.isEmpty {
             return name
         }
-        return "\(username)@\(host):\(port)/\(database)"
+        return domain
     }
 }
