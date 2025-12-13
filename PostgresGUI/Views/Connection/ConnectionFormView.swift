@@ -427,36 +427,112 @@ struct ConnectionFormView: View {
         testResult = nil
         connectionStringWarnings.removeAll()
 
+        // Log test context
+        DebugLog.print("🧪 [ConnectionFormView] ========== Starting Connection Test ==========")
+        DebugLog.print("   Mode: \(inputMode == .connectionString ? "Connection String" : "Individual Fields")")
+        if let connection = connectionToEdit {
+            DebugLog.print("   Editing existing connection: \(connection.displayName)")
+            DebugLog.print("   Connection ID: \(connection.id)")
+            DebugLog.print("   Stored connection details:")
+            DebugLog.print("     - Host: \(connection.host)")
+            DebugLog.print("     - Port: \(connection.port)")
+            DebugLog.print("     - Username: \(connection.username)")
+            DebugLog.print("     - Database: \(connection.database)")
+            DebugLog.print("     - SSL Mode: \(connection.sslModeEnum.rawValue)")
+            DebugLog.print("   Password modified: \(passwordModified)")
+            DebugLog.print("   Has stored password: \(hasStoredPassword)")
+        } else {
+            DebugLog.print("   Creating new connection")
+        }
+
         // Parse connection details based on input mode
         let connectionDetails: (host: String, port: Int, username: String, password: String, database: String)
 
         do {
             if inputMode == .connectionString {
+                DebugLog.print("   Parsing connection string...")
                 let parsed = try ConnectionStringParser.parse(connectionString)
 
                 // Show warnings for unsupported parameters
                 if !parsed.unsupportedParameters.isEmpty {
                     let params = parsed.unsupportedParameters.joined(separator: ", ")
                     connectionStringWarnings.append("Unsupported parameters will be ignored: \(params)")
+                    DebugLog.print("   ⚠️  Unsupported parameters detected: \(params)")
                 }
+
+                var parsedPassword = parsed.password ?? ""
+                var passwordSource: String
+                
+                // When testing an existing connection, if password is "YOUR_PASSWORD" placeholder,
+                // replace it with the actual password from keychain
+                if let connection = connectionToEdit, parsedPassword == "YOUR_PASSWORD" {
+                    if let keychainPassword = try? KeychainService.getPassword(for: connection.id), !keychainPassword.isEmpty {
+                        DebugLog.print("   🔑 Detected 'YOUR_PASSWORD' placeholder, replacing with keychain password")
+                        parsedPassword = keychainPassword
+                        passwordSource = "keychain (replaced YOUR_PASSWORD placeholder)"
+                    } else {
+                        passwordSource = "YOUR_PASSWORD placeholder (no keychain password found)"
+                    }
+                } else {
+                    passwordSource = parsedPassword.isEmpty ? "none (from connection string)" : "from connection string"
+                }
+                
+                DebugLog.print("   ✅ Connection string parsed successfully")
+                DebugLog.print("   Password source: \(passwordSource)")
 
                 connectionDetails = (
                     host: parsed.host,
                     port: parsed.port,
                     username: parsed.username ?? Constants.PostgreSQL.defaultUsername,
-                    password: parsed.password ?? "",
+                    password: parsedPassword,
                     database: parsed.database ?? Constants.PostgreSQL.defaultDatabase
                 )
             } else {
                 // Individual fields mode (existing logic)
+                DebugLog.print("   Parsing individual fields...")
+                DebugLog.print("   Input fields:")
+                DebugLog.print("     - Host: '\(host)'")
+                DebugLog.print("     - Port: '\(port)'")
+                DebugLog.print("     - Username: '\(username)'")
+                DebugLog.print("     - Database: '\(database)'")
+                DebugLog.print("     - Password field: \(password.isEmpty ? "empty" : (hasStoredPassword && !passwordModified ? "showing asterisks" : "user entered"))")
+
                 guard let portInt = Int(port), portInt > 0 && portInt <= 65535 else {
+                    DebugLog.print("   ❌ Validation failed: Invalid port number '\(port)'")
                     testResult = "Invalid port number"
                     testResultColor = .red
                     isConnecting = false
                     return
                 }
+                DebugLog.print("   ✅ Port validation passed: \(portInt)")
 
-                let passwordToUse = getActualPassword()
+                // When testing an existing connection, always use the real password from keychain
+                // regardless of what's displayed in the UI
+                let passwordToUse: String
+                let passwordSource: String
+                if let connection = connectionToEdit {
+                    // For existing connections, prefer keychain password
+                    if let keychainPassword = try? KeychainService.getPassword(for: connection.id), !keychainPassword.isEmpty {
+                        passwordToUse = keychainPassword
+                        passwordSource = "keychain (existing connection)"
+                        DebugLog.print("   🔑 Using password from keychain")
+                    } else if passwordModified && !password.isEmpty {
+                        // User has modified the password, use the new one
+                        passwordToUse = password
+                        passwordSource = "user input (modified)"
+                        DebugLog.print("   ✏️  Using modified password from user input")
+                    } else {
+                        // Fallback to getActualPassword logic
+                        passwordToUse = getActualPassword()
+                        passwordSource = "getActualPassword() fallback"
+                        DebugLog.print("   🔄 Using password from getActualPassword() fallback")
+                    }
+                } else {
+                    // For new connections, use getActualPassword
+                    passwordToUse = getActualPassword()
+                    passwordSource = passwordToUse.isEmpty ? "none (new connection)" : "user input (new connection)"
+                    DebugLog.print("   📝 New connection - password: \(passwordToUse.isEmpty ? "none" : "provided")")
+                }
 
                 connectionDetails = (
                     host: host.isEmpty ? "localhost" : host,
@@ -465,18 +541,44 @@ struct ConnectionFormView: View {
                     password: passwordToUse,
                     database: database.isEmpty ? "postgres" : database
                 )
+                
+                DebugLog.print("   Password source: \(passwordSource)")
             }
 
             // Get SSL mode
             let sslMode: SSLMode
+            let sslModeSource: String
             if inputMode == .connectionString {
                 let parsed = try ConnectionStringParser.parse(connectionString)
                 sslMode = parsed.sslMode
+                sslModeSource = "from connection string"
             } else {
-                sslMode = .default
+                // Use stored SSL mode if editing existing connection, otherwise use default
+                if let connection = connectionToEdit {
+                    sslMode = connection.sslModeEnum
+                    sslModeSource = "from stored connection"
+                } else {
+                    sslMode = .default
+                    sslModeSource = "default (new connection)"
+                }
             }
+            DebugLog.print("   SSL Mode: \(sslMode.rawValue) (\(sslModeSource))")
 
+            // Log final connection details (mask password for security)
+            let passwordMasked = connectionDetails.password.isEmpty ? "(empty)" : "***"
+            DebugLog.print("   ──────────────────────────────────────────")
+            DebugLog.print("   Final connection parameters:")
+            DebugLog.print("     Host: \(connectionDetails.host)")
+            DebugLog.print("     Port: \(connectionDetails.port)")
+            DebugLog.print("     Username: \(connectionDetails.username)")
+            DebugLog.print("     Password: \(passwordMasked) (length: \(connectionDetails.password.count))")
+            DebugLog.print("     Database: \(connectionDetails.database)")
+            DebugLog.print("     SSL Mode: \(sslMode.rawValue)")
+            DebugLog.print("   ──────────────────────────────────────────")
+            
             // Test connection with parsed details
+            DebugLog.print("   🔌 Attempting to connect to database...")
+            let startTime = Date()
             let success = try await DatabaseService.testConnection(
                 host: connectionDetails.host,
                 port: connectionDetails.port,
@@ -485,15 +587,32 @@ struct ConnectionFormView: View {
                 database: connectionDetails.database,
                 sslMode: sslMode
             )
+            let duration = Date().timeIntervalSince(startTime)
+            DebugLog.print("   ⏱️  Connection attempt took \(String(format: "%.2f", duration))s")
 
             if success {
+                DebugLog.print("   ✅ Connection test successful!")
+                DebugLog.print("🧪 [ConnectionFormView] ========== Connection Test PASSED ==========")
                 testResult = "Connection successful!"
                 testResultColor = .green
             } else {
+                DebugLog.print("   ❌ Connection test failed (returned false)")
+                DebugLog.print("🧪 [ConnectionFormView] ========== Connection Test FAILED ==========")
                 testResult = "Connection failed"
                 testResultColor = .red
             }
         } catch {
+            DebugLog.print("   ❌ Exception during connection test:")
+            DebugLog.print("      Error type: \(type(of: error))")
+            DebugLog.print("      Error description: \(error.localizedDescription)")
+            let nsError = error as NSError
+            DebugLog.print("      Error domain: \(nsError.domain)")
+            DebugLog.print("      Error code: \(nsError.code)")
+            if !nsError.userInfo.isEmpty {
+                DebugLog.print("      Error userInfo: \(nsError.userInfo)")
+            }
+            DebugLog.print("      Full error: \(String(reflecting: error))")
+            DebugLog.print("🧪 [ConnectionFormView] ========== Connection Test ERROR ==========")
             testResult = error.localizedDescription
             testResultColor = .red
         }
@@ -518,11 +637,21 @@ struct ConnectionFormView: View {
                     connectionStringWarnings.append("Unsupported parameters will be ignored: \(params)")
                 }
 
+                var parsedPassword = parsed.password ?? ""
+                
+                // When connecting with an existing connection, if password is "YOUR_PASSWORD" placeholder,
+                // replace it with the actual password from keychain
+                if let connection = connectionToEdit, parsedPassword == "YOUR_PASSWORD" {
+                    if let keychainPassword = try? KeychainService.getPassword(for: connection.id), !keychainPassword.isEmpty {
+                        parsedPassword = keychainPassword
+                    }
+                }
+
                 connectionDetails = (
                     host: parsed.host,
                     port: parsed.port,
                     username: parsed.username ?? Constants.PostgreSQL.defaultUsername,
-                    password: parsed.password ?? "",
+                    password: parsedPassword,
                     database: parsed.database ?? Constants.PostgreSQL.defaultDatabase,
                     sslMode: parsed.sslMode
                 )
@@ -537,15 +666,33 @@ struct ConnectionFormView: View {
 
                 let passwordToUse = getActualPassword()
 
+                // Use stored SSL mode if editing existing connection, otherwise use default
+                let sslModeForConnection: SSLMode
+                if let connection = connectionToEdit {
+                    sslModeForConnection = connection.sslModeEnum
+                } else {
+                    sslModeForConnection = .default
+                }
+
                 connectionDetails = (
                     host: host.isEmpty ? "localhost" : host,
                     port: portInt,
                     username: username.isEmpty ? "postgres" : username,
                     password: passwordToUse,
                     database: database.isEmpty ? "postgres" : database,
-                    sslMode: .default
+                    sslMode: sslModeForConnection
                 )
             }
+
+            // Log connection details (mask password for security)
+            let passwordMasked = connectionDetails.password.isEmpty ? "(empty)" : "***"
+            DebugLog.print("🔌 [ConnectionFormView] Connecting to database:")
+            DebugLog.print("   Host: \(connectionDetails.host)")
+            DebugLog.print("   Port: \(connectionDetails.port)")
+            DebugLog.print("   Username: \(connectionDetails.username)")
+            DebugLog.print("   Password: \(passwordMasked)")
+            DebugLog.print("   Database: \(connectionDetails.database)")
+            DebugLog.print("   SSL Mode: \(connectionDetails.sslMode.rawValue)")
 
             let profile: ConnectionProfile
 
@@ -609,6 +756,16 @@ struct ConnectionFormView: View {
                 passwordToUse = (try? KeychainService.getPassword(for: profile.id)) ?? ""
             }
 
+            // Log actual connection parameters being used
+            let actualPasswordMasked = passwordToUse.isEmpty ? "(empty)" : "***"
+            DebugLog.print("🔌 [ConnectionFormView] Establishing connection with:")
+            DebugLog.print("   Host: \(profile.host)")
+            DebugLog.print("   Port: \(profile.port)")
+            DebugLog.print("   Username: \(profile.username)")
+            DebugLog.print("   Password: \(actualPasswordMasked)")
+            DebugLog.print("   Database: \(profile.database)")
+            DebugLog.print("   SSL Mode: \(profile.sslModeEnum.rawValue)")
+
             try await appState.databaseService.connect(
                 host: profile.host,
                 port: profile.port,
@@ -617,6 +774,8 @@ struct ConnectionFormView: View {
                 database: profile.database,
                 sslMode: profile.sslModeEnum
             )
+
+            DebugLog.print("✅ [ConnectionFormView] Successfully connected to database")
 
             try? modelContext.save()
 
@@ -632,6 +791,7 @@ struct ConnectionFormView: View {
             dismiss()
 
         } catch {
+            DebugLog.print("❌ [ConnectionFormView] Connection error: \(error)")
             testResult = error.localizedDescription
             testResultColor = .red
         }
