@@ -9,10 +9,14 @@ import SwiftUI
 import SwiftData
 
 struct ConnectionPickerView: View {
-    @Query(sort: \ConnectionProfile.name) private var connections: [ConnectionProfile]
+    @Query private var connections: [ConnectionProfile]
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
-    
+
+    private var sortedConnections: [ConnectionProfile] {
+        connections.sorted { $0.displayName < $1.displayName }
+    }
+
     var body: some View {
         Picker("Connection", selection: Binding(
             get: { 
@@ -26,8 +30,8 @@ struct ConnectionPickerView: View {
             set: { appState.currentConnection = $0 }
         )) {
             Text("Select Connection").tag(nil as ConnectionProfile?)
-            ForEach(connections) { connection in
-                Text(connection.name).tag(connection as ConnectionProfile?)
+            ForEach(sortedConnections) { connection in
+                Text(connection.displayName).tag(connection as ConnectionProfile?)
             }
         }
         .pickerStyle(.menu)

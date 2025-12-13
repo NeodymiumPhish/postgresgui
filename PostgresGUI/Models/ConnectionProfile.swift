@@ -11,7 +11,7 @@ import SwiftData
 @Model
 final class ConnectionProfile: Identifiable {
     var id: UUID
-    var name: String
+    var name: String?
     var host: String
     var port: Int
     var username: String
@@ -21,7 +21,7 @@ final class ConnectionProfile: Identifiable {
 
     init(
         id: UUID = UUID(),
-        name: String,
+        name: String?,
         host: String,
         port: Int = Constants.PostgreSQL.defaultPort,
         username: String,
@@ -44,7 +44,7 @@ extension ConnectionProfile {
     /// Creates a default localhost connection profile
     static func localhost() -> ConnectionProfile {
         ConnectionProfile(
-            name: "localhost",
+            name: nil,
             host: "localhost",
             port: Constants.PostgreSQL.defaultPort,
             username: Constants.PostgreSQL.defaultUsername,
@@ -82,7 +82,7 @@ extension ConnectionProfile {
     /// - Throws: ConnectionStringParser.ParseError if the connection string is invalid
     static func from(
         connectionString: String,
-        name: String,
+        name: String?,
         id: UUID = UUID()
     ) throws -> (profile: ConnectionProfile, password: String?) {
         let parsed = try ConnectionStringParser.parse(connectionString)
@@ -98,5 +98,13 @@ extension ConnectionProfile {
         )
 
         return (profile: profile, password: parsed.password)
+    }
+
+    /// Returns a display name for the connection, with fallback if name is nil
+    var displayName: String {
+        if let name = name, !name.isEmpty {
+            return name
+        }
+        return "\(username)@\(host):\(port)/\(database)"
     }
 }

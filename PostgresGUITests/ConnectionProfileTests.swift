@@ -48,9 +48,9 @@ struct ConnectionProfileTests {
     func testConnectionProfileLocalhost() {
         // Act
         let profile = ConnectionProfile.localhost()
-        
+
         // Assert
-        #expect(profile.name == "localhost")
+        #expect(profile.name == nil)
         #expect(profile.host == "localhost")
         #expect(profile.port == Constants.PostgreSQL.defaultPort)
         #expect(profile.username == Constants.PostgreSQL.defaultUsername)
@@ -141,5 +141,63 @@ struct ConnectionProfileTests {
         #expect(connectionString.contains("localhost"))
         #expect(connectionString.contains("/mydb"))
         #expect(connectionString.contains("sslmode=require"))
+    }
+
+    @Test("ConnectionProfile initializes with nil name")
+    func testConnectionProfileNilName() {
+        // Arrange & Act
+        let profile = ConnectionProfile(
+            name: nil,
+            host: "localhost",
+            username: "testuser"
+        )
+
+        // Assert
+        #expect(profile.name == nil)
+        #expect(profile.host == "localhost")
+        #expect(profile.username == "testuser")
+    }
+
+    @Test("ConnectionProfile displayName returns name when present")
+    func testConnectionProfileDisplayNameWithName() {
+        // Arrange
+        let profile = ConnectionProfile(
+            name: "My Connection",
+            host: "example.com",
+            username: "user",
+            database: "mydb"
+        )
+
+        // Act & Assert
+        #expect(profile.displayName == "My Connection")
+    }
+
+    @Test("ConnectionProfile displayName returns fallback when name is nil")
+    func testConnectionProfileDisplayNameWithoutName() {
+        // Arrange
+        let profile = ConnectionProfile(
+            name: nil,
+            host: "example.com",
+            port: 5433,
+            username: "user",
+            database: "mydb"
+        )
+
+        // Act & Assert
+        #expect(profile.displayName == "user@example.com:5433/mydb")
+    }
+
+    @Test("ConnectionProfile displayName returns fallback when name is empty")
+    func testConnectionProfileDisplayNameWithEmptyName() {
+        // Arrange
+        let profile = ConnectionProfile(
+            name: "",
+            host: "localhost",
+            username: "postgres",
+            database: "testdb"
+        )
+
+        // Act & Assert
+        #expect(profile.displayName == "postgres@localhost:5432/testdb")
     }
 }

@@ -11,7 +11,7 @@ import SwiftData
 struct ConnectionsDatabasesSidebar: View {
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \ConnectionProfile.name) private var connections: [ConnectionProfile]
+    @Query private var connections: [ConnectionProfile]
     @State private var selectedDatabaseID: DatabaseInfo.ID?
     @State private var connectionError: String?
     @State private var showConnectionError = false
@@ -19,6 +19,10 @@ struct ConnectionsDatabasesSidebar: View {
     @State private var newDatabaseName = ""
     @State private var createDatabaseError: String?
     @State private var hasRestoredConnection = false
+
+    private var sortedConnections: [ConnectionProfile] {
+        connections.sorted { $0.displayName < $1.displayName }
+    }
 
     var body: some View {
         List(selection: Binding<DatabaseInfo.ID?>(
@@ -87,8 +91,8 @@ struct ConnectionsDatabasesSidebar: View {
                         if appState.currentConnection == nil {
                             Text("Select Connection").tag(nil as ConnectionProfile?)
                         }
-                        ForEach(connections) { connection in
-                            Text(connection.name).tag(connection as ConnectionProfile?)
+                        ForEach(sortedConnections) { connection in
+                            Text(connection.displayName).tag(connection as ConnectionProfile?)
                         }
                     }
                     .pickerStyle(.menu)
@@ -337,7 +341,7 @@ struct ConnectionsDatabasesSidebar: View {
                 DebugLog.print("❌ [loadTables] ERROR: No current connection")
                 return
             }
-            DebugLog.print("✅ [loadTables] Current connection: \(connection.name)")
+            DebugLog.print("✅ [loadTables] Current connection: \(connection.displayName)")
 
             // Get password from Keychain
             DebugLog.print("🔑 [loadTables] Getting password from Keychain for connection: \(connection.id)")

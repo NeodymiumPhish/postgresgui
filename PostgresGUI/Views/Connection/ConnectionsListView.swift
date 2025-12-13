@@ -12,14 +12,18 @@ struct ConnectionsListView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
-    @Query(sort: \ConnectionProfile.name) private var connections: [ConnectionProfile]
-    
+    @Query private var connections: [ConnectionProfile]
+
     @State private var connectionToDelete: ConnectionProfile?
     @State private var showDeleteConfirmation = false
     @State private var deleteError: String?
     @State private var connectionError: String?
     @State private var showConnectionError = false
-    
+
+    private var sortedConnections: [ConnectionProfile] {
+        connections.sorted { $0.displayName < $1.displayName }
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -45,7 +49,7 @@ struct ConnectionsListView: View {
                     Spacer()
                 } else {
                     List {
-                        ForEach(connections) { connection in
+                        ForEach(sortedConnections) { connection in
                             ConnectionRowView(
                                 connection: connection,
                                 isActive: appState.currentConnection?.id == connection.id,
@@ -102,7 +106,7 @@ struct ConnectionsListView: View {
                     connectionToDelete = nil
                 }
             } message: { connection in
-                Text("Are you sure you want to delete '\(connection.name)'? This action cannot be undone.")
+                Text("Are you sure you want to delete '\(connection.displayName)'? This action cannot be undone.")
             }
             .alert("Error Deleting Connection", isPresented: Binding(
                 get: { deleteError != nil },
@@ -181,8 +185,8 @@ struct ConnectionsListView: View {
     }
     
     private func deleteConnection(_ connection: ConnectionProfile) async {
-        DebugLog.print("🗑️  [ConnectionsListView] Deleting connection: \(connection.name)")
-        
+        DebugLog.print("🗑️  [ConnectionsListView] Deleting connection: \(connection.displayName)")
+
         do {
             // Check if this is the currently active connection
             let isActiveConnection = appState.currentConnection?.id == connection.id
@@ -247,7 +251,7 @@ private struct ConnectionRowView: View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(connection.name)
+                    Text(connection.displayName)
                         .font(.headline)
                     if connection.isFavorite {
                         Image(systemName: "star.fill")
