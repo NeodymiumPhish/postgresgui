@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import AppKit
 
 @main
 struct PostgresGUIApp: App {
@@ -62,5 +63,16 @@ struct PostgresGUIApp: App {
                 .environment(appState)
         }
         .modelContainer(sharedModelContainer)
+        .commands {
+            CommandGroup(after: .appInfo) {
+                Button(action: {
+                    if let url = URL(string: "https://postgresgui.com/support") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }) {
+                    Label("Help and Support...", systemImage: "questionmark.circle")
+                }
+            }
+        }
     }
 }
