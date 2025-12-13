@@ -33,6 +33,14 @@ struct ConnectionsListView: View {
                         .font(.title2)
                         .fontWeight(.semibold)
                     Spacer()
+                    
+                    Button {
+                        appState.connectionToEdit = nil
+                        appState.showConnectionForm()
+                    } label: {
+                        Label("New Connection", systemImage: "plus")
+                    }
+                    .buttonStyle(.borderless)
                 }
                 .padding()
                 
@@ -78,15 +86,6 @@ struct ConnectionsListView: View {
                         dismiss()
                     } label: {
                         Text("Done")
-                    }
-                }
-                
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        appState.connectionToEdit = nil
-                        appState.showConnectionForm()
-                    } label: {
-                        Label("New Connection", systemImage: "plus")
                     }
                 }
             }
@@ -286,7 +285,8 @@ private struct ConnectionRowView: View {
                     Label("Connect", systemImage: "powerplug")
                 }
             }
-            .tint(isActive ? .green : .gray)
+            .buttonStyle(.glass)
+            .tint(isActive ? .green : nil)
             
             Menu {
                 Button {
