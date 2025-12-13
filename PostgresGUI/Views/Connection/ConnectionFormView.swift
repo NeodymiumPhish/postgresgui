@@ -249,7 +249,7 @@ struct ConnectionFormView: View {
                     Button(action: {
                         showPassword.toggle()
                     }) {
-                        Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
+                        Image(systemName: showPassword ? "eye.fill" : "eye.slash.fill")
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
