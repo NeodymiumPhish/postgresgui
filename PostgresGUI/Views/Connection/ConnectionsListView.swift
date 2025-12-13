@@ -258,9 +258,6 @@ private struct ConnectionRowView: View {
                             .foregroundColor(.yellow)
                             .font(.caption)
                     }
-                    if isActive {
-                        Badge(text: "Connected", color: .green)
-                    }
                 }
                 
                 HStack(spacing: 12) {
@@ -280,43 +277,45 @@ private struct ConnectionRowView: View {
             
             Spacer()
             
-            if isHovered {
-                Button {
-                    onConnect()
-                } label: {
+            Button {
+                onConnect()
+            } label: {
+                if isActive {
+                    Label("Connected", systemImage: "checkmark")
+                } else {
                     Label("Connect", systemImage: "powerplug")
                 }
-                .buttonStyle(.bordered)
-                
-                Menu {
-                    Button {
-                        onEdit()
-                    } label: {
-                        Label("Edit...", systemImage: "pencil")
-                    }
-                    
-                    Button(role: .destructive) {
-                        onDelete()
-                    } label: {
-                        Label("Delete...", systemImage: "trash")
-                    }
+            }
+            .tint(isActive ? .green : .gray)
+            
+            Menu {
+                Button {
+                    onEdit()
                 } label: {
-                    Image(systemName: "ellipsis")
-                        .foregroundColor(isButtonHovered ? .primary : .secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 8)
-                        .background(isButtonHovered ? Color.secondary.opacity(0.2) : Color.clear)
-                        .clipShape(RoundedRectangle(cornerRadius: 100))
+                    Label("Edit...", systemImage: "pencil")
                 }
-                .buttonStyle(.plain)
-                .onHover { hovering in
-                    isButtonHovered = hovering
+                
+                Button(role: .destructive) {
+                    onDelete()
+                } label: {
+                    Label("Delete...", systemImage: "trash")
                 }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .foregroundColor(isButtonHovered ? .primary : .secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 8)
+                    .background(isButtonHovered ? Color.secondary.opacity(0.2) : Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 100))
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering in
+                isButtonHovered = hovering
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(isHovered ? Color.secondary.opacity(0.1) : Color.clear)
+        // .background(isHovered ? Color.secondary.opacity(0.1) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .contentShape(Rectangle())
         .contextMenu {
