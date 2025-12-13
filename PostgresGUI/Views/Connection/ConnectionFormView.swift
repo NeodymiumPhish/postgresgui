@@ -87,6 +87,11 @@ struct ConnectionFormView: View {
                     // Show name fields when editing only if name is not nil
                     showIndividualNameField = connection.name != nil
                     showConnectionStringNameField = connection.name != nil
+                    
+                    // If in connection string mode, populate the connection string
+                    if inputMode == .connectionString {
+                        connectionString = generateConnectionStringFromCurrentConnection()
+                    }
                 }
             }
             .toolbar {
@@ -238,15 +243,22 @@ struct ConnectionFormView: View {
                         .font(.system(.body, design: .monospaced))
                         .frame(height: 80)
                         .padding(4)
-                        .background(Color(nsColor: .textBackgroundColor))
+                        .background(Color(nsColor: connectionToEdit != nil ? .controlBackgroundColor : .textBackgroundColor))
                         .cornerRadius(4)
                         .overlay(
                             RoundedRectangle(cornerRadius: 4)
                                 .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
                         )
+                        .disabled(connectionToEdit != nil)
                         .onChange(of: connectionString) { _, _ in
                             validateConnectionString()
                         }
+
+                    if connectionToEdit != nil {
+                        Text("Connection string is read-only when editing")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
 
                     if !connectionStringWarnings.isEmpty {
                         ForEach(connectionStringWarnings, id: \.self) { warning in
@@ -294,6 +306,11 @@ struct ConnectionFormView: View {
         // Clear any previous errors when switching tabs
         testResult = nil
         connectionStringWarnings.removeAll()
+        
+        // If switching to connection string mode in edit mode, populate the connection string
+        if newMode == .connectionString, connectionToEdit != nil {
+            connectionString = generateConnectionStringFromCurrentConnection()
+        }
     }
 
     private func validateConnectionString() {
@@ -552,5 +569,33 @@ struct ConnectionFormView: View {
             testResult = "Connected but failed to load databases: \(error.localizedDescription)"
             testResultColor = .orange
         }
+    }
+    
+    /// Generate a connection string from the current connection being edited
+    /// Uses "YOUR_PASSWORD" as placeholder if password exists, otherwise no password in string
+    private func generateConnectionStringFromCurrentConnection() -> String {
+        guard let connection = connectionToEdit else {
+            return ""
+        }
+        
+        // Check if password exists in keychain
+        let hasPassword: Bool
+        if let _ = try? KeychainService.getPassword(for: connection.id) {
+            hasPassword = true
+        } else {
+            hasPassword = false
+        }
+        
+        // Use "YOUR_PASSWORD" as placeholder if password exists, otherwise nil
+        let passwordPlaceholder = hasPassword ? "YOUR_PASSWORD" : nil
+        
+        return ConnectionStringParser.build(
+            username: connection.username,
+            password: passwordPlaceholder,
+            host: connection.host,
+            port: connection.port,
+            database: connection.database,
+            sslMode: connection.sslModeEnum
+        )
     }
 }
