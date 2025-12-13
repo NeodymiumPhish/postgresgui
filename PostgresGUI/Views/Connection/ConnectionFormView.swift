@@ -330,11 +330,12 @@ struct ConnectionFormView: View {
                             Button(action: {
                                 copyConnectionStringToClipboard()
                             }) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "doc.on.doc")
+                                Label {
+                                    Text("Copy")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
-                                    Text("Copy")
+                                } icon: {
+                                    Image(systemName: "doc.on.doc")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
