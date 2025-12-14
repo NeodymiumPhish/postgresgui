@@ -53,6 +53,7 @@ struct WelcomeView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal)
         .padding(.vertical)
+        .padding(.bottom, 24)
     }
     
     private func connectToLocalhost() {
