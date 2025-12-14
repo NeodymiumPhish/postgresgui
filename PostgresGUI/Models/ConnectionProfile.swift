@@ -18,6 +18,8 @@ final class ConnectionProfile: Identifiable {
     var database: String
     var isFavorite: Bool
     var sslMode: String
+    var password: String?
+    var saveInKeychain: Bool
 
     init(
         id: UUID = UUID(),
@@ -27,7 +29,9 @@ final class ConnectionProfile: Identifiable {
         username: String,
         database: String = Constants.PostgreSQL.defaultDatabase,
         isFavorite: Bool = false,
-        sslMode: SSLMode = .default
+        sslMode: SSLMode = .default,
+        password: String? = nil,
+        saveInKeychain: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -37,6 +41,8 @@ final class ConnectionProfile: Identifiable {
         self.database = database
         self.isFavorite = isFavorite
         self.sslMode = sslMode.rawValue
+        self.password = password
+        self.saveInKeychain = saveInKeychain
     }
 }
 
@@ -53,10 +59,19 @@ extension ConnectionProfile {
     }
 
     /// Generate a connection string from this profile
-    /// - Parameter includePassword: Whether to include the password from Keychain in the connection string
+    /// - Parameter includePassword: Whether to include the password in the connection string
     /// - Returns: A PostgreSQL connection string
     func toConnectionString(includePassword: Bool = false) -> String {
-        let password = includePassword ? (try? KeychainService.getPassword(for: id)) : nil
+        let password: String?
+        if includePassword {
+            if saveInKeychain {
+                password = try? KeychainService.getPassword(for: id)
+            } else {
+                password = self.password
+            }
+        } else {
+            password = nil
+        }
         let sslModeEnum = SSLMode(rawValue: sslMode) ?? .default
         return ConnectionStringParser.build(
             username: username,

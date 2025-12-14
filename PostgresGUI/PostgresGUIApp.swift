@@ -12,6 +12,7 @@ import AppKit
 @main
 struct PostgresGUIApp: App {
     @State private var appState = AppState()
+    @State private var hasMigrated = UserDefaults.standard.bool(forKey: "didMigrateKeychainFlags_v1")
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -61,6 +62,11 @@ struct PostgresGUIApp: App {
         WindowGroup {
             RootView()
                 .environment(appState)
+                .task {
+                    if !hasMigrated {
+                        await migrateKeychainFlags()
+                    }
+                }
         }
         .modelContainer(sharedModelContainer)
         .commands {
@@ -73,6 +79,44 @@ struct PostgresGUIApp: App {
                     Label("Help and Support...", systemImage: "questionmark.circle")
                 }
             }
+        }
+    }
+
+    /// Migrate existing connections to use the saveInKeychain flag
+    /// This ensures backward compatibility for connections created before the feature was added
+    @MainActor
+    private func migrateKeychainFlags() async {
+        let context = sharedModelContainer.mainContext
+
+        do {
+            let descriptor = FetchDescriptor<ConnectionProfile>()
+            let connections = try context.fetch(descriptor)
+
+            var migratedCount = 0
+
+            for connection in connections {
+                // Only migrate connections that have default values (not yet migrated)
+                if connection.saveInKeychain == false && connection.password == nil {
+                    // Check if password exists in Keychain
+                    if let _ = try? KeychainService.getPassword(for: connection.id) {
+                        // Password exists in Keychain, set flag to true
+                        connection.saveInKeychain = true
+                        migratedCount += 1
+                    }
+                }
+            }
+
+            if migratedCount > 0 {
+                try context.save()
+                DebugLog.print("✅ Migrated \(migratedCount) connection(s) to use saveInKeychain flag")
+            }
+
+            // Mark migration as complete
+            UserDefaults.standard.set(true, forKey: "didMigrateKeychainFlags_v1")
+            hasMigrated = true
+
+        } catch {
+            DebugLog.print("⚠️ Failed to migrate keychain flags: \(error)")
         }
     }
 }

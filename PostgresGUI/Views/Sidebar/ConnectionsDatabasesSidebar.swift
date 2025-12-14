@@ -241,9 +241,14 @@ struct ConnectionsDatabasesSidebar: View {
     
     private func connect(to connection: ConnectionProfile) async {
         do {
-            // Get password from Keychain
-            let password = try KeychainService.getPassword(for: connection.id) ?? ""
-            
+            // Get password based on storage method
+            let password: String
+            if connection.saveInKeychain {
+                password = try KeychainService.getPassword(for: connection.id) ?? ""
+            } else {
+                password = connection.password ?? ""
+            }
+
             // Connect
             try await appState.databaseService.connect(
                 host: connection.host,
@@ -343,9 +348,15 @@ struct ConnectionsDatabasesSidebar: View {
             }
             DebugLog.print("✅ [loadTables] Current connection: \(connection.displayName)")
 
-            // Get password from Keychain
-            DebugLog.print("🔑 [loadTables] Getting password from Keychain for connection: \(connection.id)")
-            let password = try KeychainService.getPassword(for: connection.id) ?? ""
+            // Get password based on storage method
+            let password: String
+            if connection.saveInKeychain {
+                DebugLog.print("🔑 [loadTables] Getting password from Keychain for connection: \(connection.id)")
+                password = try KeychainService.getPassword(for: connection.id) ?? ""
+            } else {
+                DebugLog.print("📝 [loadTables] Getting password from model for connection: \(connection.id)")
+                password = connection.password ?? ""
+            }
             DebugLog.print("✅ [loadTables] Password retrieved (length: \(password.count))")
 
             // Reconnect to the selected database

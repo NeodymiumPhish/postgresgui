@@ -134,9 +134,14 @@ struct ConnectionsListView: View {
     
     private func connect(to connection: ConnectionProfile) async {
         do {
-            // Get password from Keychain
-            let password = try KeychainService.getPassword(for: connection.id) ?? ""
-            
+            // Get password based on storage method
+            let password: String
+            if connection.saveInKeychain {
+                password = try KeychainService.getPassword(for: connection.id) ?? ""
+            } else {
+                password = connection.password ?? ""
+            }
+
             // Connect
             try await appState.databaseService.connect(
                 host: connection.host,
@@ -192,10 +197,12 @@ struct ConnectionsListView: View {
             
             // Check if this is the last connection before deletion
             let wasLastConnection = connections.count == 1
-            
-            // Delete password from Keychain
-            try KeychainService.deletePassword(for: connection.id)
-            
+
+            // Delete password from Keychain only if using keychain storage
+            if connection.saveInKeychain {
+                try KeychainService.deletePassword(for: connection.id)
+            }
+
             // Disconnect if this is the active connection
             if isActiveConnection {
                 await appState.databaseService.disconnect()
