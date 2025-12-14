@@ -171,36 +171,38 @@ struct ConnectionFormView: View {
 
     private var individualFieldsView: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if showIndividualNameField {
-                formRow(label: "Name") {
-                    HStack(spacing: 8) {
-                        TextField("", text: $individualName)
-                            .textFieldStyle(.roundedBorder)
+            if connectionToEdit != nil {
+                if showIndividualNameField {
+                    formRow(label: "Name") {
+                        HStack(spacing: 8) {
+                            TextField("", text: $individualName)
+                                .textFieldStyle(.roundedBorder)
 
+                            Button(action: {
+                                showIndividualNameField = false
+                                individualName = ""
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Remove custom name")
+                        }
+                    }
+                } else {
+                    formRow(label: "Name") {
                         Button(action: {
-                            showIndividualNameField = false
-                            individualName = ""
+                            showIndividualNameField = true
                         }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.secondary)
+                            HStack(spacing: 4) {
+                                Image(systemName: "plus.circle.fill")
+                                    .foregroundColor(.secondary)
+                                Text("Add Connection Name")
+                                    .foregroundColor(.secondary)
+                            }
                         }
                         .buttonStyle(.plain)
-                        .help("Remove custom name")
                     }
-                }
-            } else {
-                formRow(label: "Name") {
-                    Button(action: {
-                        showIndividualNameField = true
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "plus.circle.fill")
-                                .foregroundColor(.secondary)
-                            Text("Add Connection Name")
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
                 }
             }
 
@@ -311,36 +313,38 @@ struct ConnectionFormView: View {
 
     private var connectionStringView: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if showConnectionStringNameField {
-                formRow(label: "Name") {
-                    HStack(spacing: 8) {
-                        TextField("", text: $connectionStringName)
-                            .textFieldStyle(.roundedBorder)
+            if connectionToEdit != nil {
+                if showConnectionStringNameField {
+                    formRow(label: "Name") {
+                        HStack(spacing: 8) {
+                            TextField("", text: $connectionStringName)
+                                .textFieldStyle(.roundedBorder)
 
+                            Button(action: {
+                                showConnectionStringNameField = false
+                                connectionStringName = ""
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Remove custom name")
+                        }
+                    }
+                } else {
+                    formRow(label: "Name") {
                         Button(action: {
-                            showConnectionStringNameField = false
-                            connectionStringName = ""
+                            showConnectionStringNameField = true
                         }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.secondary)
+                            HStack(spacing: 4) {
+                                Image(systemName: "plus.circle.fill")
+                                    .foregroundColor(.secondary)
+                                Text("Add Connection Name")
+                                    .foregroundColor(.secondary)
+                            }
                         }
                         .buttonStyle(.plain)
-                        .help("Remove custom name")
                     }
-                }
-            } else {
-                formRow(label: "Name") {
-                    Button(action: {
-                        showConnectionStringNameField = true
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "plus.circle.fill")
-                                .foregroundColor(.secondary)
-                            Text("Add Connection Name")
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
                 }
             }
 
