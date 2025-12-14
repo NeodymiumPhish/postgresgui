@@ -37,6 +37,12 @@ struct ConnectionFormView: View {
     @State private var testResult: String?
     @State private var testResultColor: Color = .primary
     @State private var isConnecting: Bool = false
+    
+    // Alert state for test results
+    @State private var showTestResultAlert: Bool = false
+    @State private var alertTitle: String = ""
+    @State private var alertMessage: String = ""
+    @State private var isSuccessAlert: Bool = false
 
     @State private var inputMode: ConnectionInputMode = .individual
     @State private var connectionString: String = ""
@@ -60,19 +66,6 @@ struct ConnectionFormView: View {
                             individualFieldsView
                         } else {
                             connectionStringView
-                        }
-
-                        // Test result
-                        if let testResult = testResult {
-                            HStack(spacing: 12) {
-                                Text("")
-                                    .frame(width: 120, alignment: .trailing)
-                                Text(testResult)
-                                    .foregroundColor(testResultColor)
-                                    .font(.caption)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .padding(.vertical, 6)
                         }
                     }
                     .padding(20)
@@ -165,6 +158,13 @@ struct ConnectionFormView: View {
             .navigationTitle(connectionToEdit == nil ? "Create New Connection" : "Edit Connection")
         }
         .frame(width: 500, height: 400)
+        .alert(alertTitle, isPresented: $showTestResultAlert) {
+            Button("OK") {
+                showTestResultAlert = false
+            }
+        } message: {
+            Text(alertMessage)
+        }
     }
 
     // MARK: - Individual Fields View
@@ -461,6 +461,7 @@ struct ConnectionFormView: View {
         // No automatic sync - each tab maintains its own state independently
         // Clear any previous errors when switching tabs
         testResult = nil
+        showTestResultAlert = false
         connectionStringWarnings.removeAll()
         
         // If switching to connection string mode in edit mode, populate the connection string
@@ -497,6 +498,7 @@ struct ConnectionFormView: View {
     private func testConnection() async {
         isConnecting = true
         testResult = nil
+        showTestResultAlert = false
         connectionStringWarnings.removeAll()
 
         // Log test context
@@ -581,8 +583,10 @@ struct ConnectionFormView: View {
 
                 guard let portInt = Int(port), portInt > 0 && portInt <= 65535 else {
                     DebugLog.print("   ❌ Validation failed: Invalid port number '\(port)'")
-                    testResult = "Invalid port number"
-                    testResultColor = .red
+                    alertTitle = "Connection Error"
+                    alertMessage = "Invalid port number"
+                    isSuccessAlert = false
+                    showTestResultAlert = true
                     isConnecting = false
                     return
                 }
@@ -676,13 +680,17 @@ struct ConnectionFormView: View {
             if success {
                 DebugLog.print("   ✅ Connection test successful!")
                 DebugLog.print("🧪 [ConnectionFormView] ========== Connection Test PASSED ==========")
-                testResult = "Connection successful!"
-                testResultColor = .green
+                alertTitle = "Connection Successful"
+                alertMessage = "The connection test was successful."
+                isSuccessAlert = true
+                showTestResultAlert = true
             } else {
                 DebugLog.print("   ❌ Connection test failed (returned false)")
                 DebugLog.print("🧪 [ConnectionFormView] ========== Connection Test FAILED ==========")
-                testResult = "Connection failed"
-                testResultColor = .red
+                alertTitle = "Connection Failed"
+                alertMessage = "The connection test failed. Please check your connection settings."
+                isSuccessAlert = false
+                showTestResultAlert = true
             }
         } catch {
             DebugLog.print("   ❌ Exception during connection test:")
@@ -696,8 +704,10 @@ struct ConnectionFormView: View {
             }
             DebugLog.print("      Full error: \(String(reflecting: error))")
             DebugLog.print("🧪 [ConnectionFormView] ========== Connection Test ERROR ==========")
-            testResult = error.localizedDescription
-            testResultColor = .red
+            alertTitle = "Connection Error"
+            alertMessage = error.localizedDescription
+            isSuccessAlert = false
+            showTestResultAlert = true
         }
 
         isConnecting = false
