@@ -280,31 +280,36 @@ struct ConnectionFormView: View {
             
             Spacer()
             
-            HStack(alignment: .top, spacing: 6) {
-                Toggle("", isOn: $saveInKeychain)
-                    .labelsHidden()
-                    .toggleStyle(.checkbox)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Save Password in Keychain")
-                        .font(.body)
-
-                    Text("Storing passwords in the system Keychain provides enhanced security by encrypting credentials and restricting access to this application only.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
+            HStack {
                 Spacer()
-            }
-            .padding(12)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 6))
-            .onTapGesture {
-                saveInKeychain.toggle()
+                    .frame(width: 132)
+                
+                HStack(alignment: .top, spacing: 6) {
+                    Toggle("", isOn: $saveInKeychain)
+                        .labelsHidden()
+                        .toggleStyle(.checkbox)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Save Password in Keychain")
+                            .font(.body)
+
+                        Text("Storing passwords in the system Keychain provides enhanced security by encrypting credentials and restricting access to this application only.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+                }
+                .padding(12)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 6))
+                .onTapGesture {
+                    saveInKeychain.toggle()
+                }
             }
         }
     }
@@ -403,31 +408,36 @@ struct ConnectionFormView: View {
             
             Spacer()
             
-            HStack(alignment: .top, spacing: 6) {
-                Toggle("", isOn: $saveInKeychain)
-                    .labelsHidden()
-                    .toggleStyle(.checkbox)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Save Password in Keychain")
-                        .font(.body)
-
-                    Text("Storing passwords in the system Keychain provides enhanced security by encrypting credentials and restricting access to this application only.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
+            HStack {
                 Spacer()
-            }
-            .padding(12)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 6))
-            .onTapGesture {
-                saveInKeychain.toggle()
+                    .frame(width: 132)
+                
+                HStack(alignment: .top, spacing: 6) {
+                    Toggle("", isOn: $saveInKeychain)
+                        .labelsHidden()
+                        .toggleStyle(.checkbox)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Save Password in Keychain")
+                            .font(.body)
+
+                        Text("Storing passwords in the system Keychain provides enhanced security by encrypting credentials and restricting access to this application only.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+                }
+                .padding(12)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 6))
+                .onTapGesture {
+                    saveInKeychain.toggle()
+                }
             }
         }
     }
