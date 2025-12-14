@@ -276,7 +276,7 @@ struct ConnectionFormView: View {
                     .textFieldStyle(.roundedBorder)
             }
             
-            Spacer().frame(height: 12)
+            Spacer()
             
             HStack(alignment: .top, spacing: 6) {
                 Toggle("", isOn: $saveInKeychain)
@@ -397,20 +397,33 @@ struct ConnectionFormView: View {
                 }
             }
             
-            // Keychain Security Section
-            VStack(alignment: .leading, spacing: 8) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle(isOn: $saveInKeychain) {
-                        Text("Save Password in Keychain")
-                        Text("Storing passwords in the system Keychain provides enhanced security by encrypting credentials and restricting access to this application only. This is the recommended option.")
-                    }
+            Spacer()
+            
+            HStack(alignment: .top, spacing: 6) {
+                Toggle("", isOn: $saveInKeychain)
+                    .labelsHidden()
+                    .toggleStyle(.checkbox)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Save Password in Keychain")
+                        .font(.body)
+
+                    Text("Storing passwords in the system Keychain provides enhanced security by encrypting credentials and restricting access to this application only.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
-                .padding(12)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-                )
+
+                Spacer()
+            }
+            .padding(12)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 6))
+            .onTapGesture {
+                saveInKeychain.toggle()
             }
         }
     }
