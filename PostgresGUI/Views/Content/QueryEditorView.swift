@@ -6,14 +6,9 @@
 //
 
 import SwiftUI
-import CodeEditorView
-import LanguageSupport
 
 struct QueryEditorView: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var position: CodeEditor.Position = CodeEditor.Position()
-    @State private var messages: Set<TextLocated<Message>> = Set()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -60,22 +55,14 @@ struct QueryEditorView: View {
             .padding(Constants.Spacing.small)
             .background(Color(NSColor.controlBackgroundColor))
 
-            // Code editor
-            CodeEditor(
-                text: Binding(
-                    get: { appState.queryText },
-                    set: { appState.queryText = $0 }
-                ),
-                position: $position,
-                messages: $messages,
-                language: .sqlite(),
-            )
-            .environment(\.codeEditorLayoutConfiguration,
-                CodeEditor.LayoutConfiguration(showMinimap: false, wrapText: true)
-            )
-            .environment(\.codeEditorTheme,
-                         colorScheme == .dark ? Theme.defaultDark : Theme.defaultLight)
+            // Text editor
+            TextEditor(text: Binding(
+                get: { appState.queryText },
+                set: { appState.queryText = $0 }
+            ))
+            .font(.system(.body, design: .monospaced))
             .frame(minHeight: 150)
+            .padding(4)
         }
     }
 
