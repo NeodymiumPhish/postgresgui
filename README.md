@@ -1,8 +1,6 @@
-# PostgresGUI
+# PostgresGUI - A native PostgreSQL client for macOS
 
 ![Hero](screenshots/PostgresGUI-Query_Result_View-1440x900.jpg)
-
-**A native PostgreSQL client for macOS**
 
 [![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)](https://postgresgui.com)
 [![License](https://img.shields.io/badge/license-GPL--3.0-green.svg)](LICENSE)
