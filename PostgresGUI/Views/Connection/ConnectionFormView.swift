@@ -127,7 +127,7 @@ struct ConnectionFormView: View {
                 }
 
                 ToolbarItem(placement: .automatic) {
-                    Toggle("Use Connection String", isOn: Binding(
+                    Toggle(connectionToEdit != nil ? "View Connection String" : "Use Connection String", isOn: Binding(
                         get: { inputMode == .connectionString },
                         set: { newValue in
                             let oldMode = inputMode
@@ -368,13 +368,14 @@ struct ConnectionFormView: View {
                         .font(.system(.body, design: .monospaced))
                         .frame(height: 80)
                         .padding(4)
-                        .background(Color(nsColor: connectionToEdit != nil ? .controlBackgroundColor : .textBackgroundColor))
+                        .background(Color(nsColor: connectionToEdit != nil ? .controlBackgroundColor : .textBackgroundColor).opacity(connectionToEdit != nil ? 0.6 : 1.0))
                         .cornerRadius(4)
                         .overlay(
                             RoundedRectangle(cornerRadius: 4)
                                 .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
                         )
                         .disabled(connectionToEdit != nil)
+                        .foregroundColor(connectionToEdit != nil ? .secondary : .primary)
                         .onChange(of: connectionString) { _, _ in
                             validateConnectionString()
                         }
