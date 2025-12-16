@@ -107,23 +107,46 @@ struct RowEditorView: View {
     private func formRow(columnName: String) -> some View {
         let column = columnInfo.first { $0.name == columnName }
         let isNullable = column?.isNullable ?? true
+        let currentValue = textValues[columnName] ?? ""
+        let shouldUseTextEditor = currentValue.count > 50
 
         return VStack(alignment: .leading, spacing: 4) {
             Text(columnName)
                 .foregroundColor(.secondary)
                 .font(.subheadline)
 
-            HStack(alignment: .center, spacing: 8) {
-                TextField("", text: Binding(
-                    get: {
-                        textValues[columnName] ?? ""
-                    },
-                    set: { newValue in
-                        textValues[columnName] = newValue
+            HStack(alignment: .top, spacing: 8) {
+                Group {
+                    if shouldUseTextEditor {
+                        TextEditor(text: Binding(
+                            get: {
+                                textValues[columnName] ?? ""
+                            },
+                            set: { newValue in
+                                textValues[columnName] = newValue
+                            }
+                        ))
+                        .frame(minHeight: 100)
+                        .padding(4)
+                        .background(Color(nsColor: .textBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 5)
+                                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+                        )
+                        .disabled(nullFlags[columnName] ?? false)
+                    } else {
+                        TextField("", text: Binding(
+                            get: {
+                                textValues[columnName] ?? ""
+                            },
+                            set: { newValue in
+                                textValues[columnName] = newValue
+                            }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                        .disabled(nullFlags[columnName] ?? false)
                     }
-                ))
-                .textFieldStyle(.roundedBorder)
-                .disabled(nullFlags[columnName] ?? false)
+                }
 
                 if isNullable {
                     Toggle("NULL", isOn: Binding(
@@ -135,6 +158,7 @@ struct RowEditorView: View {
                         }
                     ))
                     .toggleStyle(.checkbox)
+                    .padding(.top, shouldUseTextEditor ? 4 : 0)
                 }
             }
         }
