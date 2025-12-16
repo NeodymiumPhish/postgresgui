@@ -157,7 +157,7 @@ struct ConnectionFormView: View {
             }
             .navigationTitle(connectionToEdit == nil ? "Create New Connection" : "Edit Connection")
         }
-        .frame(width: 500, height: 400)
+        .frame(width: 500, height: 440)
         .alert(alertTitle, isPresented: $showTestResultAlert) {
             Button("OK") {
                 showTestResultAlert = false
@@ -207,8 +207,16 @@ struct ConnectionFormView: View {
             }
 
             formRow(label: "Host") {
-                TextField("localhost", text: $host)
-                    .textFieldStyle(.roundedBorder)
+                TextEditor(text: $host)
+                    .font(.body)
+                    .frame(height: 40)
+                    .padding(4)
+                    .background(Color(nsColor: connectionToEdit != nil ? .controlBackgroundColor : .textBackgroundColor))
+                    .cornerRadius(4)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+                    )
             }
 
             formRow(label: "Port") {
