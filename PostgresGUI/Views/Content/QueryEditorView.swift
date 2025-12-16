@@ -55,14 +55,12 @@ struct QueryEditorView: View {
             .padding(Constants.Spacing.small)
             .background(Color(NSColor.controlBackgroundColor))
 
-            // Text editor
-            TextEditor(text: Binding(
+            // Syntax highlighted editor
+            SyntaxHighlightedEditor(text: Binding(
                 get: { appState.queryText },
                 set: { appState.queryText = $0 }
             ))
-            .font(.system(.body, design: .monospaced))
             .frame(minHeight: 150)
-            .padding(4)
         }
     }
 
