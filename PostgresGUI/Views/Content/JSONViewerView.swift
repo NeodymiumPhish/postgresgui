@@ -7,16 +7,11 @@
 
 import SwiftUI
 import AppKit
-import CodeEditorView
-import LanguageSupport
 
 struct JSONViewerView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
     let selectedRowIDs: Set<UUID>
-    @State private var position: CodeEditor.Position = CodeEditor.Position()
-    @State private var messages: Set<TextLocated<Message>> = Set()
     
     private var selectedRows: [TableRow] {
         appState.queryResults.filter { selectedRowIDs.contains($0.id) }
@@ -44,19 +39,11 @@ struct JSONViewerView: View {
     
     var body: some View {
         NavigationStack {
-            CodeEditor(
-                text: Binding(
-                    get: { jsonString },
-                    set: { _ in } // Read-only
-                ),
-                position: $position,
-                messages: $messages
-            )
-            .environment(\.codeEditorLayoutConfiguration,
-                CodeEditor.LayoutConfiguration(showMinimap: false, wrapText: true)
-            )
-            .environment(\.codeEditorTheme,
-                         colorScheme == .dark ? Theme.defaultDark : Theme.defaultLight)
+            TextEditor(text: Binding(
+                get: { jsonString },
+                set: { _ in } // Read-only
+            ))
+            .font(.system(.body, design: .monospaced))
             .navigationTitle("JSON View")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -71,6 +58,7 @@ struct JSONViewerView: View {
                     }
                 }
             }
+            .padding(4)
         }
         .frame(minWidth: 600, minHeight: 500)
     }
