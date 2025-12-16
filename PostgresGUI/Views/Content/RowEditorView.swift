@@ -136,6 +136,22 @@ struct RowEditorView: View {
                             RoundedRectangle(cornerRadius: 5)
                                 .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
                         )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 5)
+                                .stroke(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color.black.opacity(0.1),
+                                            Color.clear
+                                        ]),
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    ),
+                                    lineWidth: 1
+                                )
+                                .blendMode(.multiply)
+                        )
+                        .shadow(color: Color.black.opacity(0.05), radius: 1, x: 0, y: 1)
                         .disabled(isDisabled)
                         .opacity(isDisabled ? 0.6 : 1.0)
                     } else {
@@ -150,6 +166,22 @@ struct RowEditorView: View {
                         .textFieldStyle(.roundedBorder)
                         .disabled(nullFlags[columnName] ?? false)
                         .frame(maxWidth: 380)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 5)
+                                .stroke(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color.black.opacity(0.1),
+                                            Color.clear
+                                        ]),
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    ),
+                                    lineWidth: 1
+                                )
+                                .blendMode(.multiply)
+                        )
+                        .shadow(color: Color.black.opacity(0.05), radius: 1, x: 0, y: 1)
                     }
                 }
 
