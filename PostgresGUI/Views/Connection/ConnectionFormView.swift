@@ -47,6 +47,7 @@ struct ConnectionFormView: View {
     @State private var inputMode: ConnectionInputMode = .individual
     @State private var connectionString: String = ""
     @State private var connectionStringWarnings: [String] = []
+    @State private var copyButtonLabel: String = "Copy"
 
     enum ConnectionInputMode {
         case individual
@@ -387,10 +388,15 @@ struct ConnectionFormView: View {
                             Spacer()
                             
                             Button(action: {
+                                copyButtonLabel = "Copied!"
                                 copyConnectionStringToClipboard()
+                                Task {
+                                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                                    copyButtonLabel = "Copy"
+                                }
                             }) {
                                 Label {
-                                    Text("Copy")
+                                    Text(copyButtonLabel)
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 } icon: {
