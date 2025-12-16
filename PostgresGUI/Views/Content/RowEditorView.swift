@@ -108,10 +108,10 @@ struct RowEditorView: View {
         let column = columnInfo.first { $0.name == columnName }
         let isNullable = column?.isNullable ?? true
 
-        return HStack(alignment: .center, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 4) {
             Text(columnName)
-                .frame(width: 120, alignment: .trailing)
                 .foregroundColor(.secondary)
+                .font(.subheadline)
 
             HStack(alignment: .center, spacing: 8) {
                 TextField("", text: Binding(
@@ -137,7 +137,6 @@ struct RowEditorView: View {
                     .toggleStyle(.checkbox)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, 6)
     }
