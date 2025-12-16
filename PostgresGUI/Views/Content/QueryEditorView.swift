@@ -21,7 +21,6 @@ struct QueryEditorView: View {
                             .font(.system(size: 11, weight: .medium))
                     }
                 }
-                .disabled(appState.isExecutingQuery || appState.queryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .buttonStyle(.glass)
                 .tint(.primary)
                 .clipShape(Capsule())
