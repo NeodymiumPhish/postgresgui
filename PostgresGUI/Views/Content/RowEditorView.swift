@@ -118,22 +118,26 @@ struct RowEditorView: View {
             HStack(alignment: .top, spacing: 8) {
                 Group {
                     if shouldUseTextEditor {
+                        let isDisabled = nullFlags[columnName] ?? false
                         TextEditor(text: Binding(
                             get: {
                                 textValues[columnName] ?? ""
                             },
                             set: { newValue in
-                                textValues[columnName] = newValue
+                                if !isDisabled {
+                                    textValues[columnName] = newValue
+                                }
                             }
                         ))
                         .frame(minHeight: 100)
                         .padding(4)
-                        .background(Color(nsColor: .textBackgroundColor))
+                        .background(isDisabled ? Color(nsColor: .controlBackgroundColor) : Color(nsColor: .textBackgroundColor))
                         .overlay(
                             RoundedRectangle(cornerRadius: 5)
                                 .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
                         )
-                        .disabled(nullFlags[columnName] ?? false)
+                        .disabled(isDisabled)
+                        .opacity(isDisabled ? 0.6 : 1.0)
                     } else {
                         TextField("", text: Binding(
                             get: {
