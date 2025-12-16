@@ -81,4 +81,3 @@ PostgresGUI is built on the shoulders of giants. Special thanks to:
 
 - The [PostgresNIO](https://github.com/vapor/postgres-nio) team for the excellent PostgreSQL client library
 - The [Swift NIO](https://github.com/apple/swift-nio) project for the networking foundation
-- The [CodeEditorView](https://github.com/mchakravarty/CodeEditorView) project for syntax highlighting capabilities
