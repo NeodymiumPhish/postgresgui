@@ -115,7 +115,7 @@ struct RowEditorView: View {
                 .foregroundColor(.secondary)
                 .font(.subheadline)
 
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: shouldUseTextEditor ? .top : .center, spacing: 8) {
                 Group {
                     if shouldUseTextEditor {
                         let isDisabled = nullFlags[columnName] ?? false
@@ -149,6 +149,7 @@ struct RowEditorView: View {
                         ))
                         .textFieldStyle(.roundedBorder)
                         .disabled(nullFlags[columnName] ?? false)
+                        .frame(maxWidth: 380)
                     }
                 }
 
