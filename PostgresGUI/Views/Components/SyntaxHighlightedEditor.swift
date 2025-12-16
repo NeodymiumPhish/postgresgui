@@ -49,19 +49,21 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? NSTextView else { return }
         
-        // Update color scheme
+        let colorSchemeChanged = context.coordinator.lastColorScheme != colorScheme
         context.coordinator.colorScheme = colorScheme
+        context.coordinator.lastColorScheme = colorScheme
         
-        // Only update if text actually changed (avoid infinite loop)
+        // Only update text if it changed from external source (not from user typing)
+        // If the user is typing, textDidChange handles the update
         let currentText = textView.string
-        if currentText != text {
+        if currentText != text && !context.coordinator.isUpdatingFromUserInput {
             let selectedRange = textView.selectedRange()
             textView.string = text
             textView.setSelectedRange(selectedRange)
-            context.coordinator.applySyntaxHighlighting(to: textView)
-        } else {
-            // Re-apply highlighting if color scheme changed
-            context.coordinator.applySyntaxHighlighting(to: textView)
+            context.coordinator.applySyntaxHighlighting(to: textView, preserveSelection: true)
+        } else if colorSchemeChanged {
+            // Only re-apply highlighting if color scheme changed
+            context.coordinator.applySyntaxHighlighting(to: textView, preserveSelection: true)
         }
     }
     
@@ -73,6 +75,8 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
         var parent: SyntaxHighlightedEditor
         weak var textView: NSTextView?
         var colorScheme: ColorScheme = .light
+        var isUpdatingFromUserInput: Bool = false
+        var lastColorScheme: ColorScheme = .light
         
         // Cached regex patterns for performance
         private let keywordPattern: NSRegularExpression
@@ -86,6 +90,7 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
         init(_ parent: SyntaxHighlightedEditor) {
             self.parent = parent
             self.colorScheme = parent.colorScheme
+            self.lastColorScheme = parent.colorScheme
             
             // Compile regex patterns
             do {
@@ -138,18 +143,155 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = textView else { return }
             
-            // Update parent binding
+            // Mark that we're updating from user input to prevent updateNSView from interfering
+            isUpdatingFromUserInput = true
+            
+            // Update parent binding immediately
             parent.text = textView.string
             
-            // Apply syntax highlighting asynchronously
+            // Apply syntax highlighting incrementally without replacing the entire string
+            // This preserves cursor position and doesn't interfere with typing
             DispatchQueue.main.async { [weak self] in
-                self?.applySyntaxHighlighting(to: textView)
+                guard let self = self, let textView = self.textView else { return }
+                self.applySyntaxHighlightingIncremental(to: textView)
+                // Reset flag after highlighting is applied
+                self.isUpdatingFromUserInput = false
             }
         }
         
-        func applySyntaxHighlighting(to textView: NSTextView) {
+        func applySyntaxHighlightingIncremental(to textView: NSTextView) {
+            guard let textStorage = textView.textStorage else { return }
+            let text = textStorage.string
+            guard !text.isEmpty else { return }
+            
+            let fullRange = NSRange(location: 0, length: text.utf16.count)
+            
+            // Color scheme colors
+            let keywordColor = colorScheme == .dark
+                ? NSColor.systemBlue
+                : NSColor(red: 0.0, green: 0.0, blue: 0.8, alpha: 1.0)
+            
+            let stringColor = colorScheme == .dark
+                ? NSColor.systemGreen
+                : NSColor(red: 0.0, green: 0.6, blue: 0.0, alpha: 1.0)
+            
+            let numberColor = colorScheme == .dark
+                ? NSColor.systemOrange
+                : NSColor(red: 0.8, green: 0.4, blue: 0.0, alpha: 1.0)
+            
+            let commentColor = colorScheme == .dark
+                ? NSColor.systemGray
+                : NSColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1.0)
+            
+            let operatorColor = colorScheme == .dark
+                ? NSColor.systemPink
+                : NSColor(red: 0.8, green: 0.0, blue: 0.4, alpha: 1.0)
+            
+            let functionColor = colorScheme == .dark
+                ? NSColor.systemCyan
+                : NSColor(red: 0.0, green: 0.5, blue: 0.8, alpha: 1.0)
+            
+            let defaultColor = NSColor.textColor
+            
+            // Track ranges that have been highlighted to avoid overlaps
+            var highlightedRanges: [NSRange] = []
+            
+            // Update attributes incrementally instead of replacing the entire string
+            // This preserves cursor position and doesn't interfere with typing
+            textStorage.beginEditing()
+            
+            // Ensure font is set
+            let font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            textStorage.addAttribute(.font, value: font, range: fullRange)
+            
+            // Reset all colors to default first
+            textStorage.removeAttribute(.foregroundColor, range: fullRange)
+            textStorage.addAttribute(.foregroundColor, value: defaultColor, range: fullRange)
+            
+            // Apply highlighting in order of priority (comments first, then strings, then others)
+            
+            // 1. Multi-line comments (highest priority)
+            multiLineCommentPattern.enumerateMatches(in: text, options: [], range: fullRange) { match, _, _ in
+                guard let match = match else { return }
+                textStorage.addAttribute(.foregroundColor, value: commentColor, range: match.range)
+                highlightedRanges.append(match.range)
+            }
+            
+            // 2. Single-line comments
+            singleLineCommentPattern.enumerateMatches(in: text, options: [], range: fullRange) { match, _, _ in
+                guard let match = match else { return }
+                if !highlightedRanges.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) {
+                    textStorage.addAttribute(.foregroundColor, value: commentColor, range: match.range)
+                    highlightedRanges.append(match.range)
+                }
+            }
+            
+            // 3. Strings (high priority)
+            stringPattern.enumerateMatches(in: text, options: [], range: fullRange) { match, _, _ in
+                guard let match = match else { return }
+                if !highlightedRanges.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) {
+                    textStorage.addAttribute(.foregroundColor, value: stringColor, range: match.range)
+                    highlightedRanges.append(match.range)
+                }
+            }
+            
+            // 4. Numbers
+            numberPattern.enumerateMatches(in: text, options: [], range: fullRange) { match, _, _ in
+                guard let match = match else { return }
+                if !highlightedRanges.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) {
+                    textStorage.addAttribute(.foregroundColor, value: numberColor, range: match.range)
+                    highlightedRanges.append(match.range)
+                }
+            }
+            
+            // 5. Keywords
+            keywordPattern.enumerateMatches(in: text, options: [], range: fullRange) { match, _, _ in
+                guard let match = match else { return }
+                if !highlightedRanges.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) {
+                    textStorage.addAttribute(.foregroundColor, value: keywordColor, range: match.range)
+                    highlightedRanges.append(match.range)
+                }
+            }
+            
+            // 6. Functions
+            functionPattern.enumerateMatches(in: text, options: [], range: fullRange) { match, _, _ in
+                guard let match = match else { return }
+                let functionRange = NSRange(location: match.range.location, length: match.range.length - 1)
+                if !highlightedRanges.contains(where: { NSIntersectionRange($0, functionRange).length > 0 }) {
+                    textStorage.addAttribute(.foregroundColor, value: functionColor, range: functionRange)
+                    highlightedRanges.append(functionRange)
+                }
+            }
+            
+            // 7. Operators (lowest priority)
+            operatorPattern.enumerateMatches(in: text, options: [], range: fullRange) { match, _, _ in
+                guard let match = match else { return }
+                if !highlightedRanges.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) {
+                    textStorage.addAttribute(.foregroundColor, value: operatorColor, range: match.range)
+                }
+            }
+            
+            textStorage.endEditing()
+        }
+        
+        func applySyntaxHighlighting(to textView: NSTextView, preserveSelection: Bool = false) {
             let text = textView.string
             guard !text.isEmpty else { return }
+            
+            // Save selection range before applying highlighting
+            let selectedRange: NSRange
+            if preserveSelection {
+                let currentRange = textView.selectedRange()
+                // Ensure the range is valid for the current text
+                let maxLocation = text.utf16.count
+                if currentRange.location > maxLocation {
+                    selectedRange = NSRange(location: maxLocation, length: 0)
+                } else {
+                    selectedRange = currentRange
+                }
+            } else {
+                selectedRange = NSRange(location: text.utf16.count, length: 0)
+            }
             
             let attributedString = NSMutableAttributedString(string: text)
             let fullRange = NSRange(location: 0, length: text.utf16.count)
@@ -259,8 +401,31 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
                 }
             }
             
-            // Apply the attributed string
-            textView.textStorage?.setAttributedString(attributedString)
+            // Apply the attributed string while preserving selection
+            let textStorage = textView.textStorage
+            let wasFirstResponder = textView.window?.firstResponder === textView
+            
+            textStorage?.beginEditing()
+            textStorage?.setAttributedString(attributedString)
+            textStorage?.endEditing()
+            
+            // Restore selection if we were preserving it
+            if preserveSelection {
+                // Ensure the selected range is valid for the new text
+                let maxLocation = text.utf16.count
+                let validLocation = min(selectedRange.location, maxLocation)
+                let validLength = min(selectedRange.length, maxLocation - validLocation)
+                let validRange = NSRange(location: validLocation, length: validLength)
+                
+                // Restore selection on the next run loop to ensure text storage update is complete
+                DispatchQueue.main.async {
+                    textView.setSelectedRange(validRange)
+                    // Ensure text view remains first responder if it was before
+                    if wasFirstResponder {
+                        textView.window?.makeFirstResponder(textView)
+                    }
+                }
+            }
         }
     }
 }
