@@ -37,11 +37,12 @@ struct ConnectionFormView: View {
     @State private var testResultColor: Color = .primary
     @State private var isConnecting: Bool = false
     
-    // Alert state for test results
-    @State private var showTestResultAlert: Bool = false
-    @State private var alertTitle: String = ""
-    @State private var alertMessage: String = ""
-    @State private var isSuccessAlert: Bool = false
+    // Connection test status for inline banner
+    @State private var connectionTestStatus: ConnectionTestStatus = .idle
+    
+    // Alert state for keychain errors (separate from connection test)
+    @State private var showKeychainAlert: Bool = false
+    @State private var keychainAlertMessage: String = ""
 
     @State private var inputMode: ConnectionInputMode = .individual
     @State private var connectionString: String = ""
@@ -67,6 +68,20 @@ struct ConnectionFormView: View {
                             individualFieldsView
                         } else {
                             connectionStringView
+                        }
+                        
+                        // Connection status banner
+                        if connectionTestStatus != .idle {
+                            VStack(spacing: 0) {
+                                Spacer()
+                                    .frame(height: 16)
+                                
+                                // Align banner with form field content (label width 120 + spacing 12 = 132px)
+                                ConnectionStatusBanner(status: connectionTestStatus) {
+                                    connectionTestStatus = .idle
+                                }
+                                .padding(.leading, 132)
+                            }
                         }
                     }
                     .padding(20)
@@ -142,12 +157,12 @@ struct ConnectionFormView: View {
             .navigationTitle(connectionToEdit == nil ? "Create New Connection" : "Edit Connection")
         }
         .frame(width: 500, height: 440)
-        .alert(alertTitle, isPresented: $showTestResultAlert) {
+        .alert("Keychain Access Denied", isPresented: $showKeychainAlert) {
             Button("OK") {
-                showTestResultAlert = false
+                showKeychainAlert = false
             }
         } message: {
-            Text(alertMessage)
+            Text(keychainAlertMessage)
         }
     }
 
@@ -271,10 +286,9 @@ struct ConnectionFormView: View {
                                 } catch {
                                     // Keychain access failed (denied or other error)
                                     keychainAccessError = "Unable to access keychain. Grant permission in System Settings > Privacy & Security."
-                                    alertTitle = "Keychain Access Failed"
-                                    alertMessage = "Unable to retrieve password from keychain. You may need to grant access in System Settings > Privacy & Security."
-                                    isSuccessAlert = false
-                                    showTestResultAlert = true
+                                    connectionTestStatus = .error(
+                                        message: "Unable to retrieve password from keychain. You may need to grant access in System Settings > Privacy & Security."
+                                    )
                                     return  // Don't toggle showPassword if we failed to load
                                 }
                             }
@@ -429,7 +443,7 @@ struct ConnectionFormView: View {
         // No automatic sync - each tab maintains its own state independently
         // Clear any previous errors when switching tabs
         testResult = nil
-        showTestResultAlert = false
+        connectionTestStatus = .idle
         connectionStringWarnings.removeAll()
         
         // If switching to connection string mode in edit mode, populate the connection string
@@ -463,11 +477,112 @@ struct ConnectionFormView: View {
         }
     }
 
+    // MARK: - Error Parsing
+    
+    /// Parse connection error and return user-friendly message with suggestions
+    private func parseConnectionError(_ error: Error) -> (message: String, suggestions: [String]) {
+        let errorMessage = error.localizedDescription.lowercased()
+        let nsError = error as NSError
+        
+        // Connection refused errors
+        if errorMessage.contains("connection refused") ||
+           errorMessage.contains("could not connect") ||
+           nsError.domain.contains("NIOConnectionError") {
+            return (
+                message: "Could not connect to server",
+                suggestions: [
+                    "Check if PostgreSQL is running",
+                    "Verify host and port are correct",
+                    "Check firewall settings"
+                ]
+            )
+        }
+        
+        // Timeout errors
+        if errorMessage.contains("timeout") ||
+           errorMessage.contains("timed out") {
+            return (
+                message: "Connection timeout",
+                suggestions: [
+                    "Check your network connection",
+                    "Verify firewall settings",
+                    "Try increasing connection timeout"
+                ]
+            )
+        }
+        
+        // Authentication errors
+        if errorMessage.contains("password") ||
+           errorMessage.contains("authentication") ||
+           errorMessage.contains("invalid credentials") {
+            return (
+                message: "Authentication failed",
+                suggestions: [
+                    "Verify username and password",
+                    "Check user permissions in PostgreSQL",
+                    "Ensure the user exists and has access to the database"
+                ]
+            )
+        }
+        
+        // Database not found errors
+        if errorMessage.contains("database") && (errorMessage.contains("does not exist") || errorMessage.contains("not found")) {
+            return (
+                message: "Database not found",
+                suggestions: [
+                    "Check database name spelling",
+                    "Verify database exists on server",
+                    "Ensure you have permission to access the database"
+                ]
+            )
+        }
+        
+        // SSL errors
+        if errorMessage.contains("ssl") ||
+           errorMessage.contains("tls") ||
+           errorMessage.contains("certificate") {
+            return (
+                message: "SSL connection failed",
+                suggestions: [
+                    "Check SSL mode setting",
+                    "Verify server SSL configuration",
+                    "Try changing SSL mode to 'disable' or 'prefer'"
+                ]
+            )
+        }
+        
+        // Host resolution errors
+        if errorMessage.contains("could not resolve") ||
+           errorMessage.contains("host") && errorMessage.contains("not found") {
+            return (
+                message: "Could not resolve host",
+                suggestions: [
+                    "Check host address spelling",
+                    "Verify network connectivity",
+                    "Try using IP address instead of hostname"
+                ]
+            )
+        }
+        
+        // Generic error
+        return (
+            message: error.localizedDescription,
+            suggestions: [
+                "Check your connection settings",
+                "Verify PostgreSQL server is running",
+                "Review error details above"
+            ]
+        )
+    }
+    
     private func testConnection() async {
         isConnecting = true
         testResult = nil
-        showTestResultAlert = false
         connectionStringWarnings.removeAll()
+        
+        // Set testing status and record start time for minimum display duration
+        let testStartTime = Date()
+        connectionTestStatus = .testing
 
         // Log test context
         DebugLog.print("🧪 [ConnectionFormView] ========== Starting Connection Test ==========")
@@ -541,10 +656,16 @@ struct ConnectionFormView: View {
 
                 guard let portInt = Int(port), portInt > 0 && portInt <= 65535 else {
                     DebugLog.print("   ❌ Validation failed: Invalid port number '\(port)'")
-                    alertTitle = "Connection Error"
-                    alertMessage = "Invalid port number"
-                    isSuccessAlert = false
-                    showTestResultAlert = true
+                    
+                    // Ensure testing state is visible for at least 150ms
+                    let elapsedSinceTestStart = Date().timeIntervalSince(testStartTime)
+                    let minDisplayDuration: TimeInterval = 0.15 // 150ms
+                    if elapsedSinceTestStart < minDisplayDuration {
+                        let remainingTime = minDisplayDuration - elapsedSinceTestStart
+                        try? await Task.sleep(nanoseconds: UInt64(remainingTime * 1_000_000_000))
+                    }
+                    
+                    connectionTestStatus = .error(message: "Invalid port number")
                     isConnecting = false
                     return
                 }
@@ -627,20 +748,26 @@ struct ConnectionFormView: View {
             let duration = Date().timeIntervalSince(startTime)
             DebugLog.print("   ⏱️  Connection attempt took \(String(format: "%.2f", duration))s")
 
+            // Ensure testing state is visible for at least 150ms
+            let elapsedSinceTestStart = Date().timeIntervalSince(testStartTime)
+            let minDisplayDuration: TimeInterval = 0.15 // 150ms
+            if elapsedSinceTestStart < minDisplayDuration {
+                let remainingTime = minDisplayDuration - elapsedSinceTestStart
+                try? await Task.sleep(nanoseconds: UInt64(remainingTime * 1_000_000_000))
+            }
+
             if success {
                 DebugLog.print("   ✅ Connection test successful!")
                 DebugLog.print("🧪 [ConnectionFormView] ========== Connection Test PASSED ==========")
-                alertTitle = "Connection Successful"
-                alertMessage = "The connection test was successful."
-                isSuccessAlert = true
-                showTestResultAlert = true
+                
+                // Set success status
+                connectionTestStatus = .success
             } else {
                 DebugLog.print("   ❌ Connection test failed (returned false)")
                 DebugLog.print("🧪 [ConnectionFormView] ========== Connection Test FAILED ==========")
-                alertTitle = "Connection Failed"
-                alertMessage = "The connection test failed. Please check your connection settings."
-                isSuccessAlert = false
-                showTestResultAlert = true
+                
+                // Set error status
+                connectionTestStatus = .error(message: "Could not connect to \(connectionDetails.host):\(connectionDetails.port)")
             }
         } catch {
             DebugLog.print("   ❌ Exception during connection test:")
@@ -654,10 +781,18 @@ struct ConnectionFormView: View {
             }
             DebugLog.print("      Full error: \(String(reflecting: error))")
             DebugLog.print("🧪 [ConnectionFormView] ========== Connection Test ERROR ==========")
-            alertTitle = "Connection Error"
-            alertMessage = error.localizedDescription
-            isSuccessAlert = false
-            showTestResultAlert = true
+            
+            // Ensure testing state is visible for at least 150ms
+            let elapsedSinceTestStart = Date().timeIntervalSince(testStartTime)
+            let minDisplayDuration: TimeInterval = 0.15 // 150ms
+            if elapsedSinceTestStart < minDisplayDuration {
+                let remainingTime = minDisplayDuration - elapsedSinceTestStart
+                try? await Task.sleep(nanoseconds: UInt64(remainingTime * 1_000_000_000))
+            }
+            
+            // Parse error and set error status
+            let (errorMessage, _) = parseConnectionError(error)
+            connectionTestStatus = .error(message: errorMessage)
         }
 
         isConnecting = false
@@ -764,10 +899,8 @@ struct ConnectionFormView: View {
                         } catch {
                             DebugLog.print("   ❌ Keychain save failed: \(error)")
                             // Keychain access denied - show error
-                            alertTitle = "Keychain Access Denied"
-                            alertMessage = "Unable to save password securely in the keychain. Please grant access in System Settings > Privacy & Security."
-                            isSuccessAlert = false
-                            showTestResultAlert = true
+                            keychainAlertMessage = "Unable to save password securely in the keychain. Please grant access in System Settings > Privacy & Security."
+                            showKeychainAlert = true
                             isConnecting = false
                             return
                         }
@@ -814,10 +947,8 @@ struct ConnectionFormView: View {
                     } catch {
                         DebugLog.print("   ❌ Keychain save failed: \(error)")
                         // Keychain access denied - show error
-                        alertTitle = "Keychain Access Denied"
-                        alertMessage = "Unable to save password securely in the keychain. Please grant access in System Settings > Privacy & Security."
-                        isSuccessAlert = false
-                        showTestResultAlert = true
+                        keychainAlertMessage = "Unable to save password securely in the keychain. Please grant access in System Settings > Privacy & Security."
+                        showKeychainAlert = true
                         isConnecting = false
                         return
                     }
