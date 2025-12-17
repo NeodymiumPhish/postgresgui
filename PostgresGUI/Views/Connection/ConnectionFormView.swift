@@ -830,6 +830,15 @@ struct ConnectionFormView: View {
                 // Save profile to SwiftData
                 modelContext.insert(profile)
                 try modelContext.save()
+                
+                // If this is the first connection, auto-connect
+                let descriptor = FetchDescriptor<ConnectionProfile>()
+                let allConnections = try modelContext.fetch(descriptor)
+                
+                if allConnections.count == 1 {
+                    DebugLog.print("🔌 [ConnectionFormView] First connection detected - auto-connecting...")
+                    await autoConnect(to: profile, password: connectionDetails.password)
+                }
             }
 
             DebugLog.print("✅ [ConnectionFormView] Connection profile saved successfully")
@@ -852,6 +861,40 @@ struct ConnectionFormView: View {
         } catch {
             testResult = "Connected but failed to load databases: \(error.localizedDescription)"
             testResultColor = .orange
+        }
+    }
+    
+    /// Automatically connect to a newly saved connection (used when it's the first connection)
+    private func autoConnect(to connection: ConnectionProfile, password: String) async {
+        do {
+            DebugLog.print("🔌 [ConnectionFormView] Auto-connecting to: \(connection.displayName)")
+            
+            // Connect to database
+            try await appState.databaseService.connect(
+                host: connection.host,
+                port: connection.port,
+                username: connection.username,
+                password: password,
+                database: connection.database,
+                sslMode: connection.sslModeEnum
+            )
+            
+            // Update app state
+            appState.currentConnection = connection
+            appState.isConnected = true
+            appState.isShowingWelcomeScreen = false
+            
+            // Save last connection ID
+            UserDefaults.standard.set(connection.id.uuidString, forKey: Constants.UserDefaultsKeys.lastConnectionId)
+            
+            // Load databases
+            await loadDatabases()
+            
+            DebugLog.print("✅ [ConnectionFormView] Auto-connect successful")
+        } catch {
+            DebugLog.print("❌ [ConnectionFormView] Auto-connect failed: \(error)")
+            // Don't show error to user - they can manually connect later
+            // Just log the error
         }
     }
     
