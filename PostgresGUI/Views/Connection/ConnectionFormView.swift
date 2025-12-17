@@ -121,6 +121,10 @@ struct ConnectionFormView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
+                        // If editing, show connections list after dismissing
+                        if connectionToEdit != nil {
+                            appState.showConnectionsList()
+                        }
                     }
                 }
 
@@ -976,6 +980,11 @@ struct ConnectionFormView: View {
 
             // Dismiss the form
             dismiss()
+            
+            // If editing, show connections list after dismissing
+            if connectionToEdit != nil {
+                appState.showConnectionsList()
+            }
 
         } catch {
             DebugLog.print("❌ [ConnectionFormView] Connection error: \(error)")
