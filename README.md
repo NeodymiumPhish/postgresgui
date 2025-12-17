@@ -3,7 +3,6 @@
 ![Hero](screenshots/PostgresGUI-Query_Result_View-1440x900.jpg)
 
 [![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)](https://postgresgui.com)
-[![License](https://img.shields.io/badge/license-GPL--3.0-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos)
 
 
