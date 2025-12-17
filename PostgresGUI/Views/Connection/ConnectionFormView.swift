@@ -339,7 +339,7 @@ struct ConnectionFormView: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: "info.circle")
                                         .font(.caption)
-                                    Text("macOS will request permission when you save")
+                                    Text("macOS might request permission when you save")
                                         .font(.caption)
                                 }
                                 .foregroundColor(.orange)
@@ -492,7 +492,7 @@ struct ConnectionFormView: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: "info.circle")
                                         .font(.caption)
-                                    Text("macOS will request permission when you save")
+                                    Text("macOS might request permission when you save")
                                         .font(.caption)
                                 }
                                 .foregroundColor(.orange)
