@@ -981,10 +981,8 @@ struct ConnectionFormView: View {
             // Dismiss the form
             dismiss()
             
-            // If editing, show connections list after dismissing
-            if connectionToEdit != nil {
-                appState.showConnectionsList()
-            }
+            // Show connections list after dismissing (for both creating and editing)
+            appState.showConnectionsList()
 
         } catch {
             DebugLog.print("❌ [ConnectionFormView] Connection error: \(error)")
