@@ -10,6 +10,7 @@ import Security
 
 enum KeychainService {
     private static let serviceName = "com.postgresgui.connections"
+    private static let accessGroup = "75KGPEX6ZF.com.postgresgui.connections"
 
     // Save password to Keychain
     static func savePassword(_ password: String, for connectionId: UUID) throws {
@@ -24,7 +25,8 @@ enum KeychainService {
             kSecAttrService as String: serviceName,
             kSecAttrAccount as String: account,
             kSecValueData as String: passwordData,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+            kSecAttrAccessGroup as String: accessGroup
         ]
 
         let status = SecItemAdd(query as CFDictionary, nil)
@@ -43,7 +45,8 @@ enum KeychainService {
             kSecAttrService as String: serviceName,
             kSecAttrAccount as String: account,
             kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecAttrAccessGroup as String: accessGroup
         ]
 
         var result: AnyObject?
@@ -72,7 +75,8 @@ enum KeychainService {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,
-            kSecAttrAccount as String: account
+            kSecAttrAccount as String: account,
+            kSecAttrAccessGroup as String: accessGroup
         ]
 
         let status = SecItemDelete(query as CFDictionary)

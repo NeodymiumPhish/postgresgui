@@ -8,7 +8,7 @@
 	<true/>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)com.postgresgui.connections</string>
+		<string>75KGPEX6ZF.com.postgresgui.connections</string>
 	</array>
 </dict>
 </plist>
