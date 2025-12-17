@@ -74,13 +74,8 @@ struct ConnectionPickerView: View {
     
     private func connect(to connection: ConnectionProfile) async {
         do {
-            // Get password based on storage method
-            let password: String
-            if connection.saveInKeychain {
-                password = try KeychainService.getPassword(for: connection.id) ?? ""
-            } else {
-                password = connection.password ?? ""
-            }
+            // Get password from keychain
+            let password = try KeychainService.getPassword(for: connection.id) ?? ""
 
             // Connect
             try await appState.databaseService.connect(

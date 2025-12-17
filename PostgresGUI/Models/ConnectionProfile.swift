@@ -19,7 +19,6 @@ final class ConnectionProfile: Identifiable {
     var isFavorite: Bool
     var sslMode: String
     var password: String?
-    var saveInKeychain: Bool
 
     init(
         id: UUID = UUID(),
@@ -30,8 +29,7 @@ final class ConnectionProfile: Identifiable {
         database: String = Constants.PostgreSQL.defaultDatabase,
         isFavorite: Bool = false,
         sslMode: SSLMode = .default,
-        password: String? = nil,
-        saveInKeychain: Bool = false
+        password: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -42,7 +40,6 @@ final class ConnectionProfile: Identifiable {
         self.isFavorite = isFavorite
         self.sslMode = sslMode.rawValue
         self.password = password
-        self.saveInKeychain = saveInKeychain
     }
 }
 
@@ -64,11 +61,7 @@ extension ConnectionProfile {
     func toConnectionString(includePassword: Bool = false) -> String {
         let password: String?
         if includePassword {
-            if saveInKeychain {
-                password = try? KeychainService.getPassword(for: id)
-            } else {
-                password = self.password
-            }
+            password = try? KeychainService.getPassword(for: id)
         } else {
             password = nil
         }

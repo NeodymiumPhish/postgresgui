@@ -32,8 +32,6 @@ struct ConnectionFormView: View {
     @State private var hasStoredPassword: Bool = false
     @State private var actualStoredPassword: String = ""
     @State private var passwordModified: Bool = false
-    @State private var saveInKeychain: Bool = false
-    @State private var originalSaveInKeychain: Bool = false
 
     @State private var testResult: String?
     @State private var testResultColor: Color = .primary
@@ -85,27 +83,14 @@ struct ConnectionFormView: View {
                     username = connection.username
                     database = connection.database
 
-                    // Set the saveInKeychain flag from the connection
-                    saveInKeychain = connection.saveInKeychain
-                    originalSaveInKeychain = connection.saveInKeychain
-
-                    // Load password based on storage method
-                    if connection.saveInKeychain {
-                        // Password is stored in Keychain
-                        // Don't access keychain on form load (UX improvement - avoid passive popup)
-                        // Just indicate that a password exists, will load on-demand when user shows password
-                        hasStoredPassword = true
-                        actualStoredPassword = ""  // Will be loaded when user clicks "Show Password"
-                        passwordModified = false
-                        // Show asterisks to indicate password exists (password is hidden by default)
-                        password = String(repeating: "•", count: 8)
-                    } else {
-                        // Password is stored in plain text in the model
-                        hasStoredPassword = true  // Password exists in model
-                        actualStoredPassword = connection.password ?? ""  // Store from model
-                        passwordModified = false
-                        password = connection.password ?? ""
-                    }
+                    // Password is always stored in Keychain
+                    // Don't access keychain on form load (UX improvement - avoid passive popup)
+                    // Just indicate that a password exists, will load on-demand when user shows password
+                    hasStoredPassword = true
+                    actualStoredPassword = ""  // Will be loaded when user clicks "Show Password"
+                    passwordModified = false
+                    // Show asterisks to indicate password exists (password is hidden by default)
+                    password = String(repeating: "•", count: 8)
 
                     // Show name fields when editing only if name is not nil
                     showIndividualNameField = connection.name != nil
@@ -272,7 +257,7 @@ struct ConnectionFormView: View {
                     Button(action: {
                         // Load from keychain on-demand when user first shows password
                         if !showPassword && hasStoredPassword && actualStoredPassword.isEmpty {
-                            if let connection = connectionToEdit, connection.saveInKeychain {
+                            if let connection = connectionToEdit {
                                 // Load password from keychain now (with user context - they clicked show)
                                 do {
                                     if let keychainPassword = try KeychainService.getPassword(for: connection.id) {
@@ -307,59 +292,6 @@ struct ConnectionFormView: View {
             formRow(label: "Database") {
                 TextField("postgres", text: $database)
                     .textFieldStyle(.roundedBorder)
-            }
-            
-            Spacer()
-            
-            HStack {
-                Spacer()
-                    .frame(width: 132)
-                
-                HStack(alignment: .top, spacing: 6) {
-                    Toggle("", isOn: $saveInKeychain)
-                        .labelsHidden()
-                        .toggleStyle(.checkbox)
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 4) {
-                            Text("Save Password in Keychain")
-                                .font(.body)
-                            Image(systemName: "lock.shield")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        Text("Storing passwords in the system Keychain provides enhanced security by encrypting credentials and restricting access to this application only.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-
-                        if saveInKeychain {
-                            // Show warning for new connections or when switching from plain to keychain
-                            if connectionToEdit == nil || (!originalSaveInKeychain && saveInKeychain) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "info.circle")
-                                        .font(.caption)
-                                    Text("macOS might request permission when you save")
-                                        .font(.caption)
-                                }
-                                .foregroundColor(.orange)
-                                .padding(.top, 2)
-                            }
-                        }
-                    }
-
-                    Spacer()
-                }
-                .padding(12)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 1)
-                )
-                .contentShape(RoundedRectangle(cornerRadius: 6))
-                .onTapGesture {
-                    saveInKeychain.toggle()
-                }
             }
         }
     }
@@ -459,59 +391,6 @@ struct ConnectionFormView: View {
                                 .font(.caption)
                         }
                     }
-                }
-            }
-            
-            Spacer()
-            
-            HStack {
-                Spacer()
-                    .frame(width: 132)
-                
-                HStack(alignment: .top, spacing: 6) {
-                    Toggle("", isOn: $saveInKeychain)
-                        .labelsHidden()
-                        .toggleStyle(.checkbox)
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 4) {
-                            Text("Save Password in Keychain")
-                                .font(.body)
-                            Image(systemName: "lock.shield")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        Text("Storing passwords in the system Keychain provides enhanced security by encrypting credentials and restricting access to this application only.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-
-                        if saveInKeychain {
-                            // Show warning for new connections or when switching from plain to keychain
-                            if connectionToEdit == nil || (!originalSaveInKeychain && saveInKeychain) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "info.circle")
-                                        .font(.caption)
-                                    Text("macOS might request permission when you save")
-                                        .font(.caption)
-                                }
-                                .foregroundColor(.orange)
-                                .padding(.top, 2)
-                            }
-                        }
-                    }
-
-                    Spacer()
-                }
-                .padding(12)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 1)
-                )
-                .contentShape(RoundedRectangle(cornerRadius: 6))
-                .onTapGesture {
-                    saveInKeychain.toggle()
                 }
             }
         }
@@ -627,24 +506,14 @@ struct ConnectionFormView: View {
                 var passwordSource: String
 
                 // When testing an existing connection, if password is "YOUR_PASSWORD" placeholder,
-                // replace it with the actual password from storage
+                // replace it with the actual password from keychain
                 if let connection = connectionToEdit, parsedPassword == "YOUR_PASSWORD" {
-                    if connection.saveInKeychain {
-                        if let keychainPassword = try? KeychainService.getPassword(for: connection.id), !keychainPassword.isEmpty {
-                            DebugLog.print("   🔑 Detected 'YOUR_PASSWORD' placeholder, replacing with keychain password")
-                            parsedPassword = keychainPassword
-                            passwordSource = "keychain (replaced YOUR_PASSWORD placeholder)"
-                        } else {
-                            passwordSource = "YOUR_PASSWORD placeholder (no keychain password found)"
-                        }
+                    if let keychainPassword = try? KeychainService.getPassword(for: connection.id), !keychainPassword.isEmpty {
+                        DebugLog.print("   🔑 Detected 'YOUR_PASSWORD' placeholder, replacing with keychain password")
+                        parsedPassword = keychainPassword
+                        passwordSource = "keychain (replaced YOUR_PASSWORD placeholder)"
                     } else {
-                        if let modelPassword = connection.password, !modelPassword.isEmpty {
-                            DebugLog.print("   📝 Detected 'YOUR_PASSWORD' placeholder, replacing with model password")
-                            parsedPassword = modelPassword
-                            passwordSource = "model (replaced YOUR_PASSWORD placeholder)"
-                        } else {
-                            passwordSource = "YOUR_PASSWORD placeholder (no model password found)"
-                        }
+                        passwordSource = "YOUR_PASSWORD placeholder (no keychain password found)"
                     }
                 } else {
                     passwordSource = parsedPassword.isEmpty ? "none (from connection string)" : "from connection string"
@@ -681,27 +550,19 @@ struct ConnectionFormView: View {
                 }
                 DebugLog.print("   ✅ Port validation passed: \(portInt)")
 
-                // Get password based on storage method and modifications
+                // Get password based on modifications
                 let passwordToUse: String
                 let passwordSource: String
                 if let connection = connectionToEdit {
-                    // For existing connections, check storage method
-                    if connection.saveInKeychain {
-                        // Password stored in keychain
-                        if let keychainPassword = try? KeychainService.getPassword(for: connection.id), !keychainPassword.isEmpty {
-                            passwordToUse = passwordModified ? password : keychainPassword
-                            passwordSource = passwordModified ? "user input (modified)" : "keychain (existing connection)"
-                            DebugLog.print("   🔑 Using password from \(passwordModified ? "user input (modified)" : "keychain")")
-                        } else {
-                            passwordToUse = password
-                            passwordSource = "user input (no keychain password)"
-                            DebugLog.print("   ⚠️  No keychain password found, using user input")
-                        }
+                    // For existing connections, always use keychain
+                    if let keychainPassword = try? KeychainService.getPassword(for: connection.id), !keychainPassword.isEmpty {
+                        passwordToUse = passwordModified ? password : keychainPassword
+                        passwordSource = passwordModified ? "user input (modified)" : "keychain (existing connection)"
+                        DebugLog.print("   🔑 Using password from \(passwordModified ? "user input (modified)" : "keychain")")
                     } else {
-                        // Password stored in model
-                        passwordToUse = passwordModified ? password : (connection.password ?? "")
-                        passwordSource = passwordModified ? "user input (modified)" : "model (plain storage)"
-                        DebugLog.print("   📝 Using password from \(passwordModified ? "user input (modified)" : "model (plain storage)")")
+                        passwordToUse = password
+                        passwordSource = "user input (no keychain password)"
+                        DebugLog.print("   ⚠️  No keychain password found, using user input")
                     }
                 } else {
                     // For new connections, use password field
@@ -822,14 +683,10 @@ struct ConnectionFormView: View {
                 var parsedPassword = parsed.password ?? ""
 
                 // When connecting with an existing connection, if password is "YOUR_PASSWORD" placeholder,
-                // replace it with the actual password from storage
+                // replace it with the actual password from keychain
                 if let connection = connectionToEdit, parsedPassword == "YOUR_PASSWORD" {
-                    if connection.saveInKeychain {
-                        if let keychainPassword = try? KeychainService.getPassword(for: connection.id), !keychainPassword.isEmpty {
-                            parsedPassword = keychainPassword
-                        }
-                    } else {
-                        parsedPassword = connection.password ?? ""
+                    if let keychainPassword = try? KeychainService.getPassword(for: connection.id), !keychainPassword.isEmpty {
+                        parsedPassword = keychainPassword
                     }
                 }
 
@@ -884,9 +741,7 @@ struct ConnectionFormView: View {
 
             if let existingConnection = connectionToEdit {
                 // Update existing connection
-                DebugLog.print("🔄 [KEYCHAIN TEST] Editing existing connection")
-                DebugLog.print("   Previous saveInKeychain: \(existingConnection.saveInKeychain)")
-                DebugLog.print("   Current saveInKeychain: \(saveInKeychain)")
+                DebugLog.print("🔄 [ConnectionFormView] Editing existing connection")
                 DebugLog.print("   Password modified: \(passwordModified)")
 
                 profile = existingConnection
@@ -897,54 +752,33 @@ struct ConnectionFormView: View {
                 profile.database = connectionDetails.database
                 profile.sslMode = connectionDetails.sslMode.rawValue
 
-                // Check if storage method changed
-                let storageMethodChanged = existingConnection.saveInKeychain != saveInKeychain
-                DebugLog.print("   Storage method changed: \(storageMethodChanged)")
-
-                // Update password storage based on method and modifications
-                if passwordModified || storageMethodChanged {
-                    if saveInKeychain {
-                        // Moving to or staying in keychain
-                        DebugLog.print("   ✅ ACTION: Migrating password TO keychain")
-                        if !password.isEmpty {
-                            do {
-                                try KeychainService.savePassword(password, for: profile.id)
-                                DebugLog.print("   ✅ Password saved to keychain")
-                            } catch {
-                                DebugLog.print("   ❌ Keychain save failed: \(error)")
-                                // Keychain access denied - fallback to plain text
-                                alertTitle = "Keychain Access Denied"
-                                alertMessage = "Unable to save password securely in the keychain. The password will be saved as plain text instead. To use keychain storage, grant access in System Settings > Privacy & Security."
-                                isSuccessAlert = false
-                                showTestResultAlert = true
-
-                                // Fallback to plain text storage
-                                profile.password = password
-                                profile.saveInKeychain = false
-                                saveInKeychain = false
-                                DebugLog.print("   📝 Fallback: Password saved to model (length: \(password.count))")
-                            }
-                        } else {
-                            // Empty password - keychain flag is set but no password to save
-                            DebugLog.print("   ℹ️  No password to save to keychain (empty password)")
-                        }
-                        if saveInKeychain {
-                            profile.password = nil  // Clear from model only if keychain save succeeded
+                // Update password storage - always save to keychain
+                if passwordModified {
+                    DebugLog.print("   ✅ ACTION: Saving password to keychain")
+                    if !password.isEmpty {
+                        do {
+                            try KeychainService.savePassword(password, for: profile.id)
+                            DebugLog.print("   ✅ Password saved to keychain")
+                            profile.password = nil  // Clear from model
                             DebugLog.print("   ✅ Cleared password from model")
+                        } catch {
+                            DebugLog.print("   ❌ Keychain save failed: \(error)")
+                            // Keychain access denied - show error
+                            alertTitle = "Keychain Access Denied"
+                            alertMessage = "Unable to save password securely in the keychain. Please grant access in System Settings > Privacy & Security."
+                            isSuccessAlert = false
+                            showTestResultAlert = true
+                            isConnecting = false
+                            return
                         }
                     } else {
-                        // Moving to or staying in plain storage
-                        DebugLog.print("   📝 ACTION: Migrating password TO plain storage")
-                        profile.password = password
-                        DebugLog.print("   📝 Password saved to model (length: \(password.count))")
+                        // Empty password - delete from keychain
+                        DebugLog.print("   ℹ️  Empty password - deleting from keychain")
                         try? KeychainService.deletePassword(for: profile.id)
-                        DebugLog.print("   📝 Deleted password from keychain")
+                        profile.password = nil
                     }
-                } else {
-                    DebugLog.print("   ⏭️  No password migration needed")
                 }
-                profile.saveInKeychain = saveInKeychain
-                DebugLog.print("   Final state: saveInKeychain=\(profile.saveInKeychain), model.password=\(profile.password != nil ? "SET(\(profile.password!.count) chars)" : "nil")")
+                DebugLog.print("   Final state: model.password=\(profile.password != nil ? "SET(\(profile.password!.count) chars)" : "nil")")
 
                 // Save changes to SwiftData
                 try modelContext.save()
@@ -956,8 +790,7 @@ struct ConnectionFormView: View {
                 }
             } else {
                 // Create new connection
-                DebugLog.print("✨ [KEYCHAIN TEST] Creating new connection")
-                DebugLog.print("   saveInKeychain: \(saveInKeychain)")
+                DebugLog.print("✨ [ConnectionFormView] Creating new connection")
                 DebugLog.print("   Password length: \(connectionDetails.password.count)")
 
                 profile = ConnectionProfile(
@@ -967,49 +800,32 @@ struct ConnectionFormView: View {
                     username: connectionDetails.username,
                     database: connectionDetails.database,
                     sslMode: connectionDetails.sslMode,
-                    password: nil,
-                    saveInKeychain: saveInKeychain
+                    password: nil
                 )
 
-                // Save password based on storage method
-                if saveInKeychain {
-                    // Save to keychain
-                    DebugLog.print("   ✅ ACTION: Saving password to keychain")
-                    if !connectionDetails.password.isEmpty {
-                        do {
-                            try KeychainService.savePassword(connectionDetails.password, for: profile.id)
-                            DebugLog.print("   ✅ Password saved to keychain")
-                        } catch {
-                            DebugLog.print("   ❌ Keychain save failed: \(error)")
-                            // Keychain access denied - fallback to plain text
-                            alertTitle = "Keychain Access Denied"
-                            alertMessage = "Unable to save password securely in the keychain. The password will be saved as plain text instead. To use keychain storage, grant access in System Settings > Privacy & Security."
-                            isSuccessAlert = false
-                            showTestResultAlert = true
-
-                            // Fallback to plain text storage
-                            profile.password = connectionDetails.password
-                            profile.saveInKeychain = false
-                            saveInKeychain = false
-                            DebugLog.print("   📝 Fallback: Password saved to model (length: \(connectionDetails.password.count))")
-                        }
-                    } else {
-                        // Empty password - keychain flag is set but no password to save
-                        DebugLog.print("   ℹ️  No password to save to keychain (empty password)")
-                    }
-                    if saveInKeychain {
-                        profile.password = nil  // Don't store in model only if keychain save succeeded
+                // Save password to keychain
+                DebugLog.print("   ✅ ACTION: Saving password to keychain")
+                if !connectionDetails.password.isEmpty {
+                    do {
+                        try KeychainService.savePassword(connectionDetails.password, for: profile.id)
+                        DebugLog.print("   ✅ Password saved to keychain")
+                        profile.password = nil  // Don't store in model
                         DebugLog.print("   ✅ Model password set to nil")
+                    } catch {
+                        DebugLog.print("   ❌ Keychain save failed: \(error)")
+                        // Keychain access denied - show error
+                        alertTitle = "Keychain Access Denied"
+                        alertMessage = "Unable to save password securely in the keychain. Please grant access in System Settings > Privacy & Security."
+                        isSuccessAlert = false
+                        showTestResultAlert = true
+                        isConnecting = false
+                        return
                     }
                 } else {
-                    // Save to model
-                    DebugLog.print("   📝 ACTION: Saving password to model (plain text)")
-                    profile.password = connectionDetails.password
-                    DebugLog.print("   📝 Password saved to model (length: \(connectionDetails.password.count))")
-                    // Delete from keychain if it exists
-                    try? KeychainService.deletePassword(for: profile.id)
+                    // Empty password - no password to save
+                    DebugLog.print("   ℹ️  No password to save to keychain (empty password)")
                 }
-                DebugLog.print("   Final state: saveInKeychain=\(profile.saveInKeychain), model.password=\(profile.password != nil ? "SET(\(profile.password!.count) chars)" : "nil")")
+                DebugLog.print("   Final state: model.password=\(profile.password != nil ? "SET(\(profile.password!.count) chars)" : "nil")")
 
                 // Save profile to SwiftData
                 modelContext.insert(profile)
@@ -1043,16 +859,9 @@ struct ConnectionFormView: View {
     /// Returns the password from the field if it's been changed, otherwise returns stored password from keychain
     private func getActualPassword() -> String {
         if let connection = connectionToEdit {
-            if connection.saveInKeychain {
-                // Get from keychain
-                if hasStoredPassword && !passwordModified {
-                    return (try? KeychainService.getPassword(for: connection.id)) ?? ""
-                }
-            } else {
-                // Get from model
-                if !passwordModified {
-                    return connection.password ?? ""
-                }
+            // Always get from keychain
+            if hasStoredPassword && !passwordModified {
+                return (try? KeychainService.getPassword(for: connection.id)) ?? ""
             }
         }
 
@@ -1068,18 +877,15 @@ struct ConnectionFormView: View {
     }
     
     /// Generate a connection string from the current connection being edited
-    /// Uses "YOUR_PASSWORD" as placeholder if password exists, otherwise no password in string
+    /// Uses "YOUR_PASSWORD" as placeholder since passwords are always stored in keychain
     private func generateConnectionStringFromCurrentConnection() -> String {
         guard let connection = connectionToEdit else {
             return ""
         }
 
-        // Check if password exists without accessing keychain (UX improvement)
-        // If saveInKeychain is true OR password exists in model, assume password exists
-        let hasPassword = connection.saveInKeychain || (connection.password != nil && !connection.password!.isEmpty)
-
-        // Use "YOUR_PASSWORD" as placeholder if password exists, otherwise nil
-        let passwordPlaceholder = hasPassword ? "YOUR_PASSWORD" : nil
+        // Always use "YOUR_PASSWORD" placeholder for existing connections
+        // since passwords are always stored in keychain
+        let passwordPlaceholder = hasStoredPassword ? "YOUR_PASSWORD" : nil
 
         return ConnectionStringParser.build(
             username: connection.username,
