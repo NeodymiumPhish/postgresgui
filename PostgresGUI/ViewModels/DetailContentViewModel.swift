@@ -227,6 +227,12 @@ class DetailContentViewModel {
     func refreshQuery() async {
         DebugLog.print("🔄 [DetailContentViewModel] Refresh button clicked")
 
+        // Create query service (will be injected via DI container in Phase 6)
+        let queryService = QueryService(
+            databaseService: appState.databaseService,
+            queryState: appState.query
+        )
+
         // Set loading state FIRST to prevent empty state flicker
         appState.isExecutingQuery = true
         appState.queryError = nil
@@ -236,27 +242,21 @@ class DetailContentViewModel {
         appState.queryColumnNames = nil // Clear previous column names
         appState.selectedRowIDs = [] // Clear selected rows
 
-        let startTime = Date()
+        // Execute query
+        let result = await queryService.executeQuery(appState.queryText)
 
-        do {
-            DebugLog.print("📊 [DetailContentViewModel] Executing query...")
-            let (results, columnNames) = try await appState.databaseService.executeQuery(appState.queryText)
-            appState.queryResults = results
-            appState.queryColumnNames = columnNames.isEmpty ? nil : columnNames
+        // Update state based on result
+        if result.isSuccess {
+            appState.queryResults = result.rows
+            appState.queryColumnNames = result.columnNames.isEmpty ? nil : result.columnNames
             appState.showQueryResults = true
-
-            let endTime = Date()
-            appState.queryExecutionTime = endTime.timeIntervalSince(startTime)
-
+            appState.queryExecutionTime = result.executionTime
             DebugLog.print("✅ [DetailContentViewModel] Query executed successfully, showing results")
-        } catch {
+        } else if let error = result.error {
             appState.queryError = error.localizedDescription
             appState.queryColumnNames = nil
             appState.showQueryResults = true
-
-            let endTime = Date()
-            appState.queryExecutionTime = endTime.timeIntervalSince(startTime)
-
+            appState.queryExecutionTime = result.executionTime
             DebugLog.print("❌ [DetailContentViewModel] Query execution failed: \(error)")
         }
 

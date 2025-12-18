@@ -133,33 +133,21 @@ struct ConnectionsListView: View {
     }
     
     private func connect(to connection: ConnectionProfile) async {
-        do {
-            // Get password from keychain
-            let password = try KeychainService.getPassword(for: connection.id) ?? ""
+        // Create connection service (will be injected via DI container in Phase 6)
+        let connectionService = ConnectionService(
+            appState: appState,
+            keychainService: KeychainServiceImpl()
+        )
 
-            // Connect
-            try await appState.databaseService.connect(
-                host: connection.host,
-                port: connection.port,
-                username: connection.username,
-                password: password,
-                database: connection.database,
-                sslMode: connection.sslModeEnum
-            )
-            
+        let result = await connectionService.connect(to: connection)
+
+        switch result {
+        case .success:
             try? modelContext.save()
-
-            // Update app state
-            appState.currentConnection = connection
-            appState.isShowingWelcomeScreen = false
-            
-            // Load databases
-            await loadDatabases()
-            
-        } catch {
+        case .failure(let error):
             DebugLog.print("Failed to connect: \(error)")
             DebugLog.print("Failed to connect - detailed error: \(String(reflecting: error))")
-            
+
             // Show user-friendly error message
             if let connectionError = error as? ConnectionError {
                 var errorMessage = connectionError.errorDescription ?? "Connection failed."
@@ -171,14 +159,6 @@ struct ConnectionsListView: View {
                 self.connectionError = error.localizedDescription
             }
             showConnectionError = true
-        }
-    }
-    
-    private func loadDatabases() async {
-        do {
-            appState.databases = try await appState.databaseService.fetchDatabases()
-        } catch {
-            DebugLog.print("Failed to load databases: \(error)")
         }
     }
     

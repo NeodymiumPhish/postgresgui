@@ -235,49 +235,25 @@ struct ConnectionsDatabasesSidebar: View {
     }
     
     private func connect(to connection: ConnectionProfile) async {
-        do {
-            // Get password from keychain
-            let password = try KeychainService.getPassword(for: connection.id) ?? ""
+        // Create connection service (will be injected via DI container in Phase 6)
+        let connectionService = ConnectionService(
+            appState: appState,
+            keychainService: KeychainServiceImpl()
+        )
 
-            // Connect
-            try await appState.databaseService.connect(
-                host: connection.host,
-                port: connection.port,
-                username: connection.username,
-                password: password,
-                database: connection.database,
-                sslMode: connection.sslModeEnum
-            )
-            
+        let result = await connectionService.connect(to: connection, saveAsLast: true)
+
+        switch result {
+        case .success:
             try? modelContext.save()
+            // After loading databases, restore last selected database if available
+            await restoreLastDatabase()
 
-            // Update app state
-            appState.currentConnection = connection
-            appState.isShowingWelcomeScreen = false
-            
-            // Save last connection ID
-            UserDefaults.standard.set(connection.id.uuidString, forKey: Constants.UserDefaultsKeys.lastConnectionId)
-            
-            // Load databases
-            await loadDatabases()
-            
-        } catch {
+        case .failure(let error):
             DebugLog.print("Failed to connect: \(error)")
             connectionError = error.localizedDescription
             showConnectionError = true
-            // Reset connection state on error
-            appState.currentConnection = nil
-        }
-    }
-    
-    private func loadDatabases() async {
-        do {
-            appState.databases = try await appState.databaseService.fetchDatabases()
-            
-            // After loading databases, restore last selected database if available
-            await restoreLastDatabase()
-        } catch {
-            DebugLog.print("Failed to load databases: \(error)")
+            // Connection state already reset by ConnectionService
         }
     }
     

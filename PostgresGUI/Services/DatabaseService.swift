@@ -10,9 +10,21 @@ import Logging
 
 @MainActor
 class DatabaseService {
+    // MARK: - Core Dependencies
+
     // Connection manager (actor-isolated)
     private let connectionManager = PostgresConnectionManager()
     private let logger = Logger.debugLogger(label: "com.postgresgui.service")
+
+    // Specialized services (lazy to avoid circular dependencies)
+    private lazy var tableService = TableService(connectionManager: connectionManager)
+    private lazy var metadataService = MetadataService(connectionManager: connectionManager)
+    private lazy var databaseManagementService = DatabaseManagementService(
+        connectionManager: connectionManager,
+        databaseService: self
+    )
+
+    // MARK: - Connection State
 
     // Connection state (tracked synchronously for UI access)
     // NOTE: This is the single source of truth for connection state
@@ -106,7 +118,7 @@ class DatabaseService {
         )
     }
 
-    // MARK: - Database Operations
+    // MARK: - Database Operations (Delegated to DatabaseManagementService)
 
     /// Fetch list of databases
     func fetchDatabases() async throws -> [DatabaseInfo] {
@@ -114,11 +126,7 @@ class DatabaseService {
             throw ConnectionError.notConnected
         }
 
-        logger.debug("Fetching databases")
-
-        return try await connectionManager.withConnection { conn in
-            try await QueryExecutor.fetchDatabases(connection: conn)
-        }
+        return try await metadataService.fetchDatabases()
     }
 
     /// Create a new database
@@ -127,11 +135,7 @@ class DatabaseService {
             throw ConnectionError.notConnected
         }
 
-        logger.info("Creating database: \(name)")
-
-        try await connectionManager.withConnection { conn in
-            try await QueryExecutor.createDatabase(connection: conn, name: name)
-        }
+        try await databaseManagementService.createDatabase(name: name)
     }
 
     /// Delete a database
@@ -140,19 +144,10 @@ class DatabaseService {
             throw ConnectionError.notConnected
         }
 
-        logger.info("Deleting database: \(name)")
-
-        try await connectionManager.withConnection { conn in
-            try await QueryExecutor.dropDatabase(connection: conn, name: name)
-        }
-
-        // If we deleted the current database, disconnect
-        if currentDatabase == name {
-            await disconnect()
-        }
+        try await databaseManagementService.deleteDatabase(name: name)
     }
 
-    // MARK: - Table Operations
+    // MARK: - Table Operations (Delegated to TableService)
 
     /// Fetch list of tables in the connected database
     func fetchTables(database: String) async throws -> [TableInfo] {
@@ -160,11 +155,7 @@ class DatabaseService {
             throw ConnectionError.notConnected
         }
 
-        logger.debug("Fetching tables for database: \(database)")
-
-        return try await connectionManager.withConnection { conn in
-            try await QueryExecutor.fetchTables(connection: conn)
-        }
+        return try await tableService.fetchTables(database: database)
     }
 
     /// Fetch table data with pagination
@@ -178,17 +169,12 @@ class DatabaseService {
             throw ConnectionError.notConnected
         }
 
-        logger.debug("Fetching table data: \(schema).\(table)")
-
-        return try await connectionManager.withConnection { conn in
-            try await QueryExecutor.fetchTableData(
-                connection: conn,
-                schema: schema,
-                table: table,
-                limit: limit,
-                offset: offset
-            )
-        }
+        return try await tableService.fetchTableData(
+            schema: schema,
+            table: table,
+            offset: offset,
+            limit: limit
+        )
     }
 
     /// Delete a table
@@ -197,11 +183,7 @@ class DatabaseService {
             throw ConnectionError.notConnected
         }
 
-        logger.info("Deleting table: \(schema).\(table)")
-
-        try await connectionManager.withConnection { conn in
-            try await QueryExecutor.dropTable(connection: conn, schema: schema, table: table)
-        }
+        try await tableService.deleteTable(schema: schema, table: table)
     }
 
     // MARK: - Query Execution
@@ -220,7 +202,7 @@ class DatabaseService {
         }
     }
 
-    // MARK: - Metadata Operations
+    // MARK: - Metadata Operations (Delegated to MetadataService)
 
     /// Fetch primary key columns for a table
     func fetchPrimaryKeyColumns(schema: String, table: String) async throws -> [String] {
@@ -228,11 +210,7 @@ class DatabaseService {
             throw ConnectionError.notConnected
         }
 
-        logger.debug("Fetching primary keys for \(schema).\(table)")
-
-        return try await connectionManager.withConnection { conn in
-            try await QueryExecutor.fetchPrimaryKeys(connection: conn, schema: schema, table: table)
-        }
+        return try await metadataService.fetchPrimaryKeyColumns(schema: schema, table: table)
     }
 
     /// Fetch column information for a table
@@ -241,11 +219,7 @@ class DatabaseService {
             throw ConnectionError.notConnected
         }
 
-        logger.debug("Fetching column info for \(schema).\(table)")
-
-        return try await connectionManager.withConnection { conn in
-            try await QueryExecutor.fetchColumns(connection: conn, schema: schema, table: table)
-        }
+        return try await metadataService.fetchColumnInfo(schema: schema, table: table)
     }
 
     // MARK: - Row Operations

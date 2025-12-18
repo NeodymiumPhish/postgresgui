@@ -997,45 +997,26 @@ struct ConnectionFormView: View {
         isConnecting = false
     }
 
-    private func loadDatabases() async {
-        do {
-            appState.databases = try await appState.databaseService.fetchDatabases()
-        } catch {
-            testResult = "Connected but failed to load databases: \(error.localizedDescription)"
-            testResultColor = .orange
-        }
-    }
-    
     /// Automatically connect to a newly saved connection (used when it's the first connection)
     private func autoConnect(to connection: ConnectionProfile, password: String) async {
-        do {
-            DebugLog.print("🔌 [ConnectionFormView] Auto-connecting to: \(connection.displayName)")
-            
-            // Connect to database
-            try await appState.databaseService.connect(
-                host: connection.host,
-                port: connection.port,
-                username: connection.username,
-                password: password,
-                database: connection.database,
-                sslMode: connection.sslModeEnum
-            )
-            
-            // Update app state
-            appState.currentConnection = connection
-            appState.isShowingWelcomeScreen = false
-            
-            // Save last connection ID
-            UserDefaults.standard.set(connection.id.uuidString, forKey: Constants.UserDefaultsKeys.lastConnectionId)
-            
-            // Load databases
-            await loadDatabases()
-            
+        // Create connection service (will be injected via DI container in Phase 6)
+        let connectionService = ConnectionService(
+            appState: appState,
+            keychainService: KeychainServiceImpl()
+        )
+
+        let result = await connectionService.connect(
+            to: connection,
+            password: password,
+            saveAsLast: true
+        )
+
+        switch result {
+        case .success:
             DebugLog.print("✅ [ConnectionFormView] Auto-connect successful")
-        } catch {
+        case .failure(let error):
             DebugLog.print("❌ [ConnectionFormView] Auto-connect failed: \(error)")
             // Don't show error to user - they can manually connect later
-            // Just log the error
         }
     }
     

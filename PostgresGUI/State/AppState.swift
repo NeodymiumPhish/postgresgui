@@ -10,150 +10,202 @@ import SwiftUI
 @Observable
 @MainActor
 class AppState {
-    // Navigation
-    var navigationPath: NavigationPath = NavigationPath()
-    
-    // Connection state
-    var currentConnection: ConnectionProfile?
-    // Computed property - single source of truth is databaseService
+    // MARK: - Composed State Managers
+
+    let navigation: NavigationState
+    let connection: ConnectionState
+    let query: QueryState
+
+    // MARK: - Initialization
+
+    init(
+        navigation: NavigationState? = nil,
+        connection: ConnectionState? = nil,
+        query: QueryState? = nil
+    ) {
+        self.navigation = navigation ?? NavigationState()
+        self.connection = connection ?? ConnectionState()
+        self.query = query ?? QueryState()
+    }
+
+    // MARK: - Backwards Compatibility Facade
+    // Computed properties that delegate to sub-states
+    // TODO: Phase 2 - Gradually migrate views to access sub-states directly, then remove this facade
+
+    // Navigation properties
+    var navigationPath: NavigationPath {
+        get { navigation.navigationPath }
+        set { navigation.navigationPath = newValue }
+    }
+
+    var isShowingConnectionForm: Bool {
+        get { navigation.isShowingConnectionForm }
+        set { navigation.isShowingConnectionForm = newValue }
+    }
+
+    var isShowingConnectionsList: Bool {
+        get { navigation.isShowingConnectionsList }
+        set { navigation.isShowingConnectionsList = newValue }
+    }
+
+    var isShowingWelcomeScreen: Bool {
+        get { navigation.isShowingWelcomeScreen }
+        set { navigation.isShowingWelcomeScreen = newValue }
+    }
+
+    var connectionToEdit: ConnectionProfile? {
+        get { navigation.connectionToEdit }
+        set { navigation.connectionToEdit = newValue }
+    }
+
+    // Connection properties
+    var currentConnection: ConnectionProfile? {
+        get { connection.currentConnection }
+        set { connection.currentConnection = newValue }
+    }
+
     var isConnected: Bool {
-        databaseService.isConnected
+        connection.isConnected
     }
-    var databaseService = DatabaseService()
-    
-    // Current selections
-    var selectedDatabase: DatabaseInfo?
-    var selectedTable: TableInfo?
-    
-    // Data caches (populated by DatabaseService)
-    var databases: [DatabaseInfo] = []
-    var tables: [TableInfo] = []
 
-    // UI state
-    var isShowingConnectionForm: Bool = false
-    var isShowingConnectionsList: Bool = false
-    var connectionToEdit: ConnectionProfile? = nil
-    var isShowingWelcomeScreen: Bool = true
-    var currentPage: Int = 0
-    var rowsPerPage: Int = Constants.Pagination.defaultRowsPerPage
-    var isLoadingTables: Bool = false
+    var databaseService: DatabaseService {
+        connection.databaseService
+    }
 
-    // Query editor state
-    var queryText: String = ""
-    var queryResults: [TableRow] = []
-    var queryColumnNames: [String]? = nil
-    var isExecutingQuery: Bool = false
-    var queryError: String? = nil
-    var showQueryResults: Bool = false
-    var queryExecutionTime: TimeInterval? = nil
-    var selectedRowIDs: Set<UUID> = []
-    
-    // Sheet management helpers - ensure only one sheet is shown at a time
+    var selectedDatabase: DatabaseInfo? {
+        get { connection.selectedDatabase }
+        set { connection.selectedDatabase = newValue }
+    }
+
+    var selectedTable: TableInfo? {
+        get { connection.selectedTable }
+        set { connection.selectedTable = newValue }
+    }
+
+    var databases: [DatabaseInfo] {
+        get { connection.databases }
+        set { connection.databases = newValue }
+    }
+
+    var tables: [TableInfo] {
+        get { connection.tables }
+        set { connection.tables = newValue }
+    }
+
+    var isLoadingTables: Bool {
+        get { connection.isLoadingTables }
+        set { connection.isLoadingTables = newValue }
+    }
+
+    // Query properties
+    var queryText: String {
+        get { query.queryText }
+        set { query.queryText = newValue }
+    }
+
+    var queryResults: [TableRow] {
+        get { query.queryResults }
+        set { query.queryResults = newValue }
+    }
+
+    var queryColumnNames: [String]? {
+        get { query.queryColumnNames }
+        set { query.queryColumnNames = newValue }
+    }
+
+    var isExecutingQuery: Bool {
+        get { query.isExecutingQuery }
+        set { query.isExecutingQuery = newValue }
+    }
+
+    var queryError: String? {
+        get { query.queryError }
+        set { query.queryError = newValue }
+    }
+
+    var showQueryResults: Bool {
+        get { query.showQueryResults }
+        set { query.showQueryResults = newValue }
+    }
+
+    var queryExecutionTime: TimeInterval? {
+        get { query.queryExecutionTime }
+        set { query.queryExecutionTime = newValue }
+    }
+
+    var selectedRowIDs: Set<UUID> {
+        get { query.selectedRowIDs }
+        set { query.selectedRowIDs = newValue }
+    }
+
+    var currentPage: Int {
+        get { query.currentPage }
+        set { query.currentPage = newValue }
+    }
+
+    var rowsPerPage: Int {
+        get { query.rowsPerPage }
+        set { query.rowsPerPage = newValue }
+    }
+
+    // MARK: - Delegated Methods
+
     func showConnectionForm() {
-        isShowingConnectionsList = false
-        isShowingConnectionForm = true
+        navigation.showConnectionForm()
     }
-    
-    func showConnectionsList() {
-        isShowingConnectionForm = false
-        isShowingConnectionsList = true
-    }
-    
-    // Centralized query execution to prevent race conditions when rapidly switching tables
-    private var currentQueryTask: Task<Void, Never>? = nil
-    private var queryCounter: Int = 0
 
+    func showConnectionsList() {
+        navigation.showConnectionsList()
+    }
+
+    // Centralized query execution to prevent race conditions when rapidly switching tables
     @MainActor
     func executeTableQuery(for table: TableInfo) async {
-        // Cancel any existing query task
-        currentQueryTask?.cancel()
-        currentQueryTask = nil
+        // Create query service (will be injected via DI container in Phase 6)
+        let queryService = QueryService(
+            databaseService: connection.databaseService,
+            queryState: query
+        )
 
-        // Increment counter to track which query is active
-        queryCounter += 1
-        let thisQueryID = queryCounter
+        // Set loading state
+        query.isExecutingQuery = true
+        query.queryError = nil
+        query.queryExecutionTime = nil
 
-        DebugLog.print("🔍 [AppState] Auto-generating query for table: \(table.schema).\(table.name) (ID: \(thisQueryID))")
+        // Execute query
+        let result = await queryService.executeTableQuery(
+            for: table,
+            limit: query.rowsPerPage,
+            offset: 0
+        )
 
-        isExecutingQuery = true
-        queryError = nil
-        queryExecutionTime = nil
-
-        let query = "SELECT * FROM \(table.schema).\(table.name) LIMIT \(rowsPerPage);"
-        DebugLog.print("📝 [AppState] Generated query: \(query) (ID: \(thisQueryID))")
-
-        let startTime = Date()
-
-        // Create and store the task
-        currentQueryTask = Task { @MainActor in
-            do {
-                DebugLog.print("📊 [AppState] Executing query... (ID: \(thisQueryID))")
-                let (results, columnNames) = try await databaseService.executeQuery(query)
-
-                // Check if task was cancelled or a newer query has started
-                guard !Task.isCancelled, thisQueryID == queryCounter else {
-                    DebugLog.print("⚠️ [AppState] Query was cancelled or superseded (ID: \(thisQueryID), current: \(queryCounter))")
-                    return
-                }
-
-                // Update results atomically
-                queryResults = results
-                queryColumnNames = columnNames.isEmpty ? nil : columnNames
-                showQueryResults = true
-
-                let endTime = Date()
-                queryExecutionTime = endTime.timeIntervalSince(startTime)
-
-                DebugLog.print("✅ [AppState] Query executed successfully - \(results.count) rows (ID: \(thisQueryID))")
-            } catch {
-                // Check if task was cancelled or a newer query has started
-                guard !Task.isCancelled, thisQueryID == queryCounter else {
-                    DebugLog.print("⚠️ [AppState] Query was cancelled or superseded during error handling (ID: \(thisQueryID), current: \(queryCounter))")
-                    return
-                }
-
-                queryError = error.localizedDescription
-                queryColumnNames = nil
-                showQueryResults = true
-
-                let endTime = Date()
-                queryExecutionTime = endTime.timeIntervalSince(startTime)
-
-                DebugLog.print("❌ [AppState] Query execution failed: \(error) (ID: \(thisQueryID))")
-            }
-
-            // Only clear isExecutingQuery if this is still the current query
-            if thisQueryID == queryCounter {
-                isExecutingQuery = false
-            }
-
-            if currentQueryTask?.isCancelled == false {
-                currentQueryTask = nil
-            }
+        // Update state based on result
+        if result.isSuccess {
+            query.queryResults = result.rows
+            query.queryColumnNames = result.columnNames.isEmpty ? nil : result.columnNames
+            query.showQueryResults = true
+            query.queryExecutionTime = result.executionTime
+        } else if let error = result.error {
+            query.queryError = error.localizedDescription
+            query.queryColumnNames = nil
+            query.showQueryResults = true
+            query.queryExecutionTime = result.executionTime
         }
 
-        // Don't await - let it run in the background and get cancelled if needed
+        query.isExecutingQuery = false
     }
 
     /// Clean up resources when window is closing
     func cleanupOnWindowClose() async {
-        guard isConnected else { return }
+        guard connection.isConnected else { return }
 
-        DebugLog.print("🧹 Window closing, cleaning up connection...")
+        DebugLog.print("🧹 Window closing, cleaning up...")
 
         // Cancel any pending queries
-        currentQueryTask?.cancel()
-        currentQueryTask = nil
+        query.cleanup()
 
-        // Disconnect database (awaits proper shutdown)
-        await databaseService.disconnect()
-
-        // Reset state
-        currentConnection = nil
-        selectedDatabase = nil
-        selectedTable = nil
-        databases = []
-        tables = []
+        // Disconnect and reset connection state
+        await connection.cleanupOnWindowClose()
 
         DebugLog.print("✅ Cleanup completed")
     }
