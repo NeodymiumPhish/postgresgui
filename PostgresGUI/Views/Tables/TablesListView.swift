@@ -7,17 +7,44 @@
 
 import SwiftUI
 
+// Legacy wrapper - kept for compatibility
 struct TablesListView: View {
     @Environment(AppState.self) private var appState
-    @State private var selectedTableID: TableInfo.ID?
 
     var body: some View {
+        @Bindable var appState = appState
+
+        TablesListIsolated(
+            tables: appState.tables,
+            selectedTable: $appState.selectedTable,
+            isLoadingTables: appState.isLoadingTables,
+            selectedDatabase: appState.selectedDatabase,
+            refreshTablesAction: {
+                await refreshTables(appState: appState)
+            }
+        )
+    }
+}
+
+// Isolated view that only depends on explicit parameters, not AppState environment
+struct TablesListIsolated: View {
+    let tables: [TableInfo]
+    @Binding var selectedTable: TableInfo?
+    let isLoadingTables: Bool
+    let selectedDatabase: DatabaseInfo?
+    
+    // Use a closure to access appState only when needed, avoiding observation of AppState
+    // This prevents the view from recomputing when query-related state changes
+    let refreshTablesAction: () async -> Void
+
+    var body: some View {
+        // Debug: Log when isLoadingTables changes
+        let _ = {
+            DebugLog.print("🔍 [TablesListView] Body computed - isLoadingTables: \(isLoadingTables), tablesCount: \(tables.count), selectedTable: \(selectedTable?.name ?? "nil")")
+        }()
+        
         Group {
-            if appState.isLoadingTables {
-                ProgressView()
-                    .scaleEffect(0.8)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if appState.tables.isEmpty {
+            if tables.isEmpty {
                 ContentUnavailableView {
                     Label {
                         Text("No tables found")
@@ -25,132 +52,60 @@ struct TablesListView: View {
                             .fontWeight(.regular)
                     } icon: { }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(selection: Binding<TableInfo.ID?>(
-                    get: { selectedTableID },
-                    set: { newID in
-                        guard let unwrappedID = newID else {
-                            selectedTableID = nil
-                            appState.selectedTable = nil
-                            appState.showQueryResults = false
-                            appState.queryText = ""
-                            appState.queryResults = []
-                            DebugLog.print("🔴 [TablesListView] Table selection cleared")
-                            return
-                        }
-                        selectedTableID = unwrappedID
-                        DebugLog.print("🟢 [TablesListView] selectedTableID changed to \(unwrappedID)")
-
-                        // Find the table object from the ID
-                        let table = appState.tables.first { $0.id == unwrappedID }
-
-                        DebugLog.print("🔵 [TablesListView] Updating selectedTable to: \(table?.name ?? "nil")")
-                        appState.selectedTable = table
-
-                        if let table = table {
-                            DebugLog.print("🟠 [TablesListView] Generating and executing query for: \(table.schema).\(table.name)")
-                            Task {
-                                await populateAndExecuteQuery(for: table)
-                            }
-                        }
+                List(tables, selection: $selectedTable) { table in
+                    HStack(spacing: 8) {
+                        Image(systemName: "tablecells")
+                            .foregroundColor(.secondary)
+                        Text(table.name)
+                            .font(.headline)
+                        Spacer()
                     }
-                )) {
-                    ForEach(appState.tables) { table in
-                        TableRowView(table: table)
-                    }
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 6)
+                    .tag(table)
+                }
+                .onChange(of: selectedTable?.id) { oldValue, newValue in
+                    DebugLog.print("🔍 [TablesListView] selectedTable changed - old: \(oldValue ?? "nil"), new: \(newValue ?? "nil")")
+                }
+                .onChange(of: isLoadingTables) { oldValue, newValue in
+                    DebugLog.print("🔍 [TablesListView] isLoadingTables changed - old: \(oldValue), new: \(newValue)")
+                }
+                .onChange(of: tables.count) { oldValue, newValue in
+                    DebugLog.print("🔍 [TablesListView] tables.count changed - old: \(oldValue), new: \(newValue)")
                 }
                 .contextMenu {
                     Button {
                         Task {
-                            await refreshTables()
+                            await refreshTablesAction()
                         }
                     } label: {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
-                    .disabled(appState.isLoadingTables || appState.selectedDatabase == nil)
+                    .disabled(isLoadingTables || selectedDatabase == nil)
                 }
             }
         }
-        .navigationTitle("Tables")
-        .onChange(of: appState.selectedTable) { oldValue, newValue in
-            // Clear local selection when selectedTable is cleared (e.g., when database changes)
-            if newValue == nil {
-                selectedTableID = nil
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .automatic) {
-                Button(action: {
-                    Task {
-                        await refreshTables()
-                    }
-                }) {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .disabled(appState.isLoadingTables || appState.selectedDatabase == nil)
-                .keyboardShortcut(.init("r"), modifiers: [.command])
-            }
-        }
+        // .toolbar {
+        //     // ToolbarItem(placement: .automatic) {
+        //     //     Button(action: {
+        //     //         Task {
+        //     //             await refreshTables()
+        //     //         }
+        //     //     }) {
+        //     //         Image(systemName: "arrow.clockwise")
+        //     //     }
+        //     //     .disabled(appState.isLoadingTables || appState.selectedDatabase == nil)
+        //     //     .keyboardShortcut(.init("r"), modifiers: [.command])
+        //     // }
+        // }
     }
+}
 
-    private func generateTableQuery(for table: TableInfo) -> String {
-        return "SELECT * FROM \(table.schema).\(table.name) LIMIT \(appState.rowsPerPage);"
-    }
-
-    @MainActor
-    private func populateAndExecuteQuery(for table: TableInfo) async {
-        DebugLog.print("🔍 [TablesListView] Auto-generating query for table: \(table.schema).\(table.name)")
-
-        // Set loading state FIRST to prevent empty state flicker
-        appState.isExecutingQuery = true
-        appState.queryError = nil
-        appState.queryExecutionTime = nil
-        appState.showQueryResults = false // Hide results view during loading
-        
-        // Clear existing state to prevent rendering issues
-        appState.queryResults = []
-        appState.queryColumnNames = nil
-
-        // Generate SELECT query with pagination
-        let query = generateTableQuery(for: table)
-        DebugLog.print("📝 [TablesListView] Generated query: \(query)")
-
-        // Update query text in editor
-        appState.queryText = query
-
-        // Ensure loading state is still set (in case it was cleared during column fetch)
-        appState.isExecutingQuery = true
-        appState.queryColumnNames = nil // Clear previous column names
-
-        let startTime = Date()
-
-        do {
-            DebugLog.print("📊 [TablesListView] Executing query...")
-            let (results, columnNames) = try await appState.databaseService.executeQuery(query)
-            appState.queryResults = results
-            appState.queryColumnNames = columnNames.isEmpty ? nil : columnNames
-            appState.showQueryResults = true
-
-            let endTime = Date()
-            appState.queryExecutionTime = endTime.timeIntervalSince(startTime)
-
-            DebugLog.print("✅ [TablesListView] Query executed successfully - \(appState.queryResults.count) rows")
-        } catch {
-            appState.queryError = error.localizedDescription
-            appState.queryColumnNames = nil
-            appState.showQueryResults = true
-
-            let endTime = Date()
-            appState.queryExecutionTime = endTime.timeIntervalSince(startTime)
-
-            DebugLog.print("❌ [TablesListView] Query execution failed: \(error)")
-        }
-
-        appState.isExecutingQuery = false
-    }
-    
-    @MainActor
-    private func refreshTables() async {
+// Helper function to refresh tables - extracted to avoid observing AppState in the view
+@MainActor
+func refreshTables(appState: AppState) async {
         DebugLog.print("🔄 [TablesListView] Refresh tables START")
         
         guard let database = appState.selectedDatabase else {
@@ -189,20 +144,25 @@ struct TablesListView: View {
             DebugLog.print("✅ [TablesListView] Refreshed \(appState.tables.count) tables")
             
             // Update selectedTable reference if it still exists in the refreshed list
+            // Only update if the table object has actually changed (e.g., primaryKeyColumns or columnInfo updated)
+            // This prevents unnecessary refreshes when the table is the same
             if let selectedTable = appState.selectedTable,
                let refreshedTable = appState.tables.first(where: { $0.id == selectedTable.id }) {
-                appState.selectedTable = refreshedTable
+                // Only update if the table has actually changed (e.g., metadata was added)
+                if refreshedTable != selectedTable {
+                    DebugLog.print("🔄 [TablesListView] Updating selectedTable with refreshed metadata")
+                    appState.selectedTable = refreshedTable
+                } else {
+                    DebugLog.print("🔄 [TablesListView] selectedTable unchanged, skipping update")
+                }
+            } else if appState.selectedTable != nil {
+                // Clear selection if the table no longer exists
+                DebugLog.print("🔄 [TablesListView] Selected table no longer exists, clearing selection")
+                appState.selectedTable = nil
             }
         } catch {
             DebugLog.print("❌ [TablesListView] Error refreshing tables: \(error)")
             DebugLog.print("❌ [TablesListView] Error details: \(String(describing: error))")
             // Keep existing tables on error
         }
-        
-        // Refresh query results if a table is selected
-        if let selectedTable = appState.selectedTable {
-            DebugLog.print("🔄 [TablesListView] Refreshing query results for table: \(selectedTable.schema).\(selectedTable.name)")
-            await populateAndExecuteQuery(for: selectedTable)
-        }
-    }
 }

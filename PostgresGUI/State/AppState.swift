@@ -55,4 +55,80 @@ class AppState {
         isShowingConnectionForm = false
         isShowingConnectionsList = true
     }
+    
+    // Centralized query execution to prevent race conditions when rapidly switching tables
+    private var currentQueryTask: Task<Void, Never>? = nil
+    private var queryCounter: Int = 0
+
+    @MainActor
+    func executeTableQuery(for table: TableInfo) async {
+        // Cancel any existing query task
+        currentQueryTask?.cancel()
+        currentQueryTask = nil
+
+        // Increment counter to track which query is active
+        queryCounter += 1
+        let thisQueryID = queryCounter
+
+        DebugLog.print("🔍 [AppState] Auto-generating query for table: \(table.schema).\(table.name) (ID: \(thisQueryID))")
+
+        isExecutingQuery = true
+        queryError = nil
+        queryExecutionTime = nil
+
+        let query = "SELECT * FROM \(table.schema).\(table.name) LIMIT \(rowsPerPage);"
+        DebugLog.print("📝 [AppState] Generated query: \(query) (ID: \(thisQueryID))")
+
+        let startTime = Date()
+
+        // Create and store the task
+        currentQueryTask = Task { @MainActor in
+            do {
+                DebugLog.print("📊 [AppState] Executing query... (ID: \(thisQueryID))")
+                let (results, columnNames) = try await databaseService.executeQuery(query)
+
+                // Check if task was cancelled or a newer query has started
+                guard !Task.isCancelled, thisQueryID == queryCounter else {
+                    DebugLog.print("⚠️ [AppState] Query was cancelled or superseded (ID: \(thisQueryID), current: \(queryCounter))")
+                    return
+                }
+
+                // Update results atomically
+                queryResults = results
+                queryColumnNames = columnNames.isEmpty ? nil : columnNames
+                showQueryResults = true
+
+                let endTime = Date()
+                queryExecutionTime = endTime.timeIntervalSince(startTime)
+
+                DebugLog.print("✅ [AppState] Query executed successfully - \(results.count) rows (ID: \(thisQueryID))")
+            } catch {
+                // Check if task was cancelled or a newer query has started
+                guard !Task.isCancelled, thisQueryID == queryCounter else {
+                    DebugLog.print("⚠️ [AppState] Query was cancelled or superseded during error handling (ID: \(thisQueryID), current: \(queryCounter))")
+                    return
+                }
+
+                queryError = error.localizedDescription
+                queryColumnNames = nil
+                showQueryResults = true
+
+                let endTime = Date()
+                queryExecutionTime = endTime.timeIntervalSince(startTime)
+
+                DebugLog.print("❌ [AppState] Query execution failed: \(error) (ID: \(thisQueryID))")
+            }
+
+            // Only clear isExecutingQuery if this is still the current query
+            if thisQueryID == queryCounter {
+                isExecutingQuery = false
+            }
+
+            if currentQueryTask?.isCancelled == false {
+                currentQueryTask = nil
+            }
+        }
+
+        // Don't await - let it run in the background and get cancelled if needed
+    }
 }

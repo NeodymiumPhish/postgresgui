@@ -542,11 +542,20 @@ private struct DatabaseRowView: View {
             DebugLog.print("✅ [DatabaseRowView] Refreshed \(appState.tables.count) tables")
             
             // Update selectedTable reference if it still exists in the refreshed list
+            // Only update if the table object has actually changed (e.g., primaryKeyColumns or columnInfo updated)
+            // This prevents unnecessary refreshes when the table is the same
             if let selectedTable = appState.selectedTable,
                let refreshedTable = appState.tables.first(where: { $0.id == selectedTable.id }) {
-                appState.selectedTable = refreshedTable
+                // Only update if the table has actually changed (e.g., metadata was added)
+                if refreshedTable != selectedTable {
+                    DebugLog.print("🔄 [DatabaseRowView] Updating selectedTable with refreshed metadata")
+                    appState.selectedTable = refreshedTable
+                } else {
+                    DebugLog.print("🔄 [DatabaseRowView] selectedTable unchanged, skipping update")
+                }
             } else if appState.selectedTable != nil {
                 // Clear selection if the table no longer exists
+                DebugLog.print("🔄 [DatabaseRowView] Selected table no longer exists, clearing selection")
                 appState.selectedTable = nil
                 appState.showQueryResults = false
                 appState.queryText = ""

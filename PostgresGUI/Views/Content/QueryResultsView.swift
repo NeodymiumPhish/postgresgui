@@ -91,6 +91,7 @@ struct TableRowComparator: SortComparator, Hashable {
 struct QueryResultsView: View {
     @Environment(AppState.self) private var appState
     @State private var sortOrder: [TableRowComparator] = []
+    @State private var lastExecutedTableID: String? = nil
     var onDeleteKeyPressed: (() -> Void)?
     var onSpaceKeyPressed: (() -> Void)?
 
@@ -112,7 +113,11 @@ struct QueryResultsView: View {
                         .padding()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if appState.queryResults.isEmpty && !appState.isExecutingQuery {
+            } else if appState.isExecutingQuery {
+                // Show loading state while query executes
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if appState.queryResults.isEmpty {
                 // Show empty table with headers if column names are available
                 if let columnNames = getColumnNames(), !columnNames.isEmpty {
                     // Empty table with overlay empty state message
@@ -138,6 +143,28 @@ struct QueryResultsView: View {
                 resultsTable
             }
         }
+        .onChange(of: appState.selectedTable?.id) { oldValue, newValue in
+            // Clear results immediately when table changes (prevents column mismatch crashes)
+            if oldValue != newValue {
+                appState.queryResults = []
+                appState.queryColumnNames = nil
+                appState.queryError = nil
+                sortOrder = []
+            }
+
+            // Execute query when a table is selected
+            if let table = appState.selectedTable, table.id != lastExecutedTableID {
+                lastExecutedTableID = table.id
+                Task { @MainActor in
+                    await appState.executeTableQuery(for: table)
+                }
+            } else if newValue == nil {
+                // Clear query results when table selection is cleared
+                lastExecutedTableID = nil
+                appState.queryText = ""
+                appState.showQueryResults = false
+            }
+        }
     }
 
     @ViewBuilder
@@ -156,6 +183,7 @@ struct QueryResultsView: View {
                     .width(min: Constants.ColumnWidth.tableColumnMin)
                 }
             }
+            .id(appState.selectedTable?.id)
             .onDeleteCommand {
                 if !appState.selectedRowIDs.isEmpty {
                     onDeleteKeyPressed?()
@@ -183,6 +211,7 @@ struct QueryResultsView: View {
                 .width(min: Constants.ColumnWidth.tableColumnMin)
             }
         }
+        .id(appState.selectedTable?.id)
     }
 
     private var sortedResults: [TableRow] {

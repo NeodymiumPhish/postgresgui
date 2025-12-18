@@ -59,26 +59,24 @@ struct QueryEditorView: View {
                 get: { appState.queryText },
                 set: { appState.queryText = $0 }
             ))
-            .frame(minHeight: 150)
         }
     }
 
     private func executeQuery() {
         DebugLog.print("🎬 [QueryEditorView] Execute button clicked")
         Task {
-            // Set loading state FIRST to prevent empty state flicker
+            // Set loading state - but keep previous results visible to prevent flicker
             appState.isExecutingQuery = true
             appState.queryError = nil
             appState.queryExecutionTime = nil
-            appState.showQueryResults = false // Hide results view during loading
-            appState.queryResults = [] // Clear previous results
-            appState.queryColumnNames = nil // Clear previous column names
+            // Keep showQueryResults true and don't clear results - show previous results until new ones arrive
 
             let startTime = Date()
 
             do {
                 DebugLog.print("📊 [QueryEditorView] Executing query...")
                 let (results, columnNames) = try await appState.databaseService.executeQuery(appState.queryText)
+                // Update results atomically - this prevents empty state flash
                 appState.queryResults = results
                 appState.queryColumnNames = columnNames.isEmpty ? nil : columnNames
                 appState.showQueryResults = true
@@ -91,6 +89,7 @@ struct QueryEditorView: View {
                 appState.queryError = error.localizedDescription
                 appState.queryColumnNames = nil
                 appState.showQueryResults = true
+                // Don't clear results on error - keep previous results visible
                 
                 let endTime = Date()
                 appState.queryExecutionTime = endTime.timeIntervalSince(startTime)

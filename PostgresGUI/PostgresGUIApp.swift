@@ -11,7 +11,10 @@ import AppKit
 
 @main
 struct PostgresGUIApp: App {
-    @State private var appState = AppState()
+    init() {
+        // Enable automatic window tabbing
+        NSWindow.allowsAutomaticWindowTabbing = true
+    }
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -60,10 +63,16 @@ struct PostgresGUIApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
-                .environment(appState)
         }
         .modelContainer(sharedModelContainer)
         .commands {
+            CommandGroup(after: .newItem) {
+                Button(action: openNewTab) {
+                    Text("New Tab")
+                }
+                .keyboardShortcut("t", modifiers: [.command])
+            }
+
             CommandGroup(after: .appInfo) {
                 Button(action: {
                     if let url = URL(string: "https://postgresgui.com/support") {
@@ -72,6 +81,17 @@ struct PostgresGUIApp: App {
                 }) {
                     Label("Help and Support...", systemImage: "questionmark.circle")
                 }
+            }
+        }
+    }
+
+    private func openNewTab() {
+        if let currentWindow = NSApp.keyWindow,
+           let windowController = currentWindow.windowController
+        {
+            windowController.newWindowForTab(nil)
+            if let newWindow = NSApp.keyWindow, currentWindow != newWindow {
+                currentWindow.addTabbedWindow(newWindow, ordered: .above)
             }
         }
     }

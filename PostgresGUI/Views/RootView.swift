@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftData
 
 struct RootView: View {
-    @Environment(AppState.self) private var appState
+    @State private var appState = AppState()
     @Query private var connections: [ConnectionProfile]
     @Environment(\.modelContext) private var modelContext
     
@@ -17,8 +17,10 @@ struct RootView: View {
         Group {
             if appState.isShowingWelcomeScreen && connections.isEmpty {
                 WelcomeView()
+                    .environment(appState)
             } else {
                 MainSplitView()
+                    .environment(appState)
             }
         }
         .sheet(isPresented: Binding(
@@ -36,6 +38,7 @@ struct RootView: View {
             }
         )) {
             ConnectionFormView(connectionToEdit: appState.connectionToEdit)
+                .environment(appState)
         }
         .sheet(isPresented: Binding(
             get: { appState.isShowingConnectionsList },
@@ -48,6 +51,7 @@ struct RootView: View {
             }
         )) {
             ConnectionsListView()
+                .environment(appState)
         }
     }
 }
