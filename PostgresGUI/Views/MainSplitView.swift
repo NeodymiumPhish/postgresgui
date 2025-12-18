@@ -10,6 +10,7 @@ import SwiftUI
 struct MainSplitView: View {
     @Environment(AppState.self) private var appState
     @State private var searchText: String = ""
+    @State private var viewModel: DetailContentViewModel?
 
     var body: some View {
         @Bindable var appState = appState
@@ -37,15 +38,58 @@ struct MainSplitView: View {
                     )
                     .frame(minWidth: 250)
 
-                    // Column 2: Query results
-                    QueryResultsView()
-                        .frame(minWidth: 300)
+                    // Column 2: Query results with toolbar
+                    VStack(spacing: 0) {
+                        if let viewModel = viewModel {
+                            QueryResultsView(
+                                onDeleteKeyPressed: {
+                                    viewModel.deleteSelectedRows()
+                                },
+                                onSpaceKeyPressed: {
+                                    viewModel.openJSONView()
+                                }
+                            )
+                        } else {
+                            QueryResultsView()
+                        }
+                    }
+                    .frame(minWidth: 300)
                 }.frame(minHeight: 400)
 
                 QueryEditorView()
                     .frame(minHeight: 250)
             }
-        }.searchable(text: $searchText, prompt: "Search")
+            .toolbar {
+                if let viewModel = viewModel {
+                    DetailContentToolbar(viewModel: viewModel)
+                }
+            }
+            .onAppear {
+                if viewModel == nil {
+                    let rowOperations = RowOperationsService()
+                    viewModel = DetailContentViewModel(
+                        appState: appState,
+                        rowOperations: rowOperations
+                    )
+                }
+            }
+        }
+        .searchable(text: $searchText, prompt: "Search")
+        .modifier(DetailContentModalsWrapper(viewModel: viewModel))
+    }
+}
+
+// Wrapper to handle optional viewModel for modals
+struct DetailContentModalsWrapper: ViewModifier {
+    var viewModel: DetailContentViewModel?
+    @Environment(AppState.self) private var appState
+
+    func body(content: Content) -> some View {
+        if let vm = viewModel {
+            content.modifier(DetailContentModals(viewModel: vm))
+        } else {
+            content
+        }
     }
 }
 
@@ -109,6 +153,8 @@ private func refreshTablesInMainSplitView(appState: AppState) async {
     } catch {
         DebugLog.print("❌ [MainSplitView] Error refreshing tables: \(error)")
         DebugLog.print("❌ [MainSplitView] Error details: \(String(describing: error))")
-        // Keep existing tables on error
+        // Clear tables and selection on error to prevent stale data
+        appState.tables = []
+        appState.selectedTable = nil
     }
 }

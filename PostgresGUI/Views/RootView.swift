@@ -12,6 +12,7 @@ struct RootView: View {
     @State private var appState = AppState()
     @Query private var connections: [ConnectionProfile]
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     
     var body: some View {
         Group {
@@ -52,6 +53,14 @@ struct RootView: View {
         )) {
             ConnectionsListView()
                 .environment(appState)
+        }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .background {
+                // Window is closing - cleanup connection
+                Task { @MainActor in
+                    await appState.cleanupOnWindowClose()
+                }
+            }
         }
     }
 }

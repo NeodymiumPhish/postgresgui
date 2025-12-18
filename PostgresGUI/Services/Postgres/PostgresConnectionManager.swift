@@ -34,29 +34,30 @@ actor PostgresConnectionManager {
     }
 
     deinit {
-        // Capture connection and event loop group to close them
         let conn = connection
         let elg = eventLoopGroup
         let logger = self.logger
 
-        // If we have an active connection or event loop group, clean them up
         if conn != nil || elg != nil {
-            logger.warning("PostgresConnectionManager deallocated with active connection - cleaning up")
+            logger.warning("⚠️ PostgresConnectionManager deinit with active resources - cleanup should have been explicit!")
 
-            // Spawn detached task to close connection and shutdown event loop
+            // Fallback cleanup (fire-and-forget)
+            // This should rarely run if explicit cleanup is working
             Task.detached {
                 if let conn = conn {
-                    logger.debug("Closing connection in deinit")
+                    logger.debug("Closing connection in deinit (fallback)")
                     try? await conn.close()
                 }
 
                 if let elg = elg {
-                    logger.debug("Shutting down EventLoopGroup in deinit")
+                    logger.debug("Shutting down EventLoopGroup in deinit (fallback)")
                     try? await elg.shutdownGracefully()
                 }
 
-                logger.info("PostgresConnectionManager cleanup completed")
+                logger.info("Fallback cleanup completed")
             }
+        } else {
+            logger.debug("PostgresConnectionManager deinit - resources already cleaned up ✅")
         }
     }
 
@@ -88,8 +89,10 @@ actor PostgresConnectionManager {
 
         // Create EventLoopGroup if not exists
         if eventLoopGroup == nil {
-            logger.debug("Creating EventLoopGroup")
-            eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
+            let threadCount = System.coreCount
+            logger.debug("Creating EventLoopGroup with \(threadCount) threads")
+            eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: threadCount)
+            logger.info("✅ EventLoopGroup created successfully")
         }
 
         guard let elg = eventLoopGroup else {
@@ -111,9 +114,11 @@ actor PostgresConnectionManager {
             do {
                 let sslContext = try NIOSSLContext(configuration: tlsConfig)
                 config.tls = .require(sslContext)
+                logger.debug("SSL context created successfully")
             } catch {
                 logger.error("Failed to create SSL context: \(error)")
-                config.tls = .disable
+                // FAIL instead of fallback - security requirement
+                throw ConnectionError.sslContextCreationFailed(error.localizedDescription)
             }
         }
 
@@ -156,11 +161,15 @@ actor PostgresConnectionManager {
         // Shutdown EventLoopGroup
         if let elg = eventLoopGroup {
             logger.debug("Shutting down EventLoopGroup")
+
             do {
                 try await elg.shutdownGracefully()
+                logger.info("✅ EventLoopGroup shutdown completed")
             } catch {
-                logger.error("Error shutting down EventLoopGroup: \(error)")
+                logger.error("❌ Error shutting down EventLoopGroup: \(error)")
+                // Even if shutdown fails, clear reference to prevent reuse
             }
+
             eventLoopGroup = nil
         }
 
@@ -229,9 +238,12 @@ actor PostgresConnectionManager {
             do {
                 let sslContext = try NIOSSLContext(configuration: tlsConfig)
                 config.tls = .require(sslContext)
+                logger.debug("SSL context created successfully for test")
             } catch {
-                logger.error("Failed to create SSL context: \(error)")
-                config.tls = .disable
+                logger.error("Failed to create SSL context for test: \(error)")
+                // Cleanup ELG before throwing
+                try? await elg.shutdownGracefully()
+                throw ConnectionError.sslContextCreationFailed(error.localizedDescription)
             }
         }
 
@@ -246,9 +258,12 @@ actor PostgresConnectionManager {
 
             // Close immediately
             try await connection.close()
+            logger.debug("Test connection closed")
 
             // Shutdown event loop group
+            logger.debug("Shutting down test EventLoopGroup")
             try await elg.shutdownGracefully()
+            logger.info("✅ Test EventLoopGroup shutdown completed")
 
             logger.info("Connection test successful")
             return true

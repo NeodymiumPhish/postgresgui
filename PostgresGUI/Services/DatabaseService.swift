@@ -15,11 +15,17 @@ class DatabaseService {
     private let logger = Logger.debugLogger(label: "com.postgresgui.service")
 
     // Connection state (tracked synchronously for UI access)
+    // NOTE: This is the single source of truth for connection state
+    // AppState.isConnected is a computed property that reads from this
     private var currentDatabase: String?
     private var _isConnected: Bool = false
 
     var isConnected: Bool {
         _isConnected
+    }
+
+    var connectedDatabase: String? {
+        currentDatabase
     }
 
     init() {

@@ -15,6 +15,7 @@ enum ConnectionError: LocalizedError, Equatable {
     case timeout
     case networkUnreachable
     case notConnected
+    case sslContextCreationFailed(String)
     case unknownError(Error)
     case invalidConnectionString(ConnectionStringParser.ParseError)
     case unsupportedParameters([String])
@@ -35,6 +36,8 @@ enum ConnectionError: LocalizedError, Equatable {
             return "Network unreachable. Please check your connection settings."
         case .notConnected:
             return "Not connected to database."
+        case .sslContextCreationFailed(let message):
+            return "Failed to initialize SSL/TLS context: \(message). Secure connection cannot be established."
         case .unknownError(let error):
             // Try to get detailed error information
             let nsError = error as NSError
@@ -81,6 +84,8 @@ enum ConnectionError: LocalizedError, Equatable {
             return "Verify your network connection and firewall settings."
         case .notConnected:
             return "Please connect to a database first."
+        case .sslContextCreationFailed:
+            return "Check that your SSL certificates are valid and properly configured. If you want to connect without SSL, select 'Disable' or 'Prefer' mode."
         case .unknownError:
             return "Please try again or check the server logs for more details."
         case .invalidConnectionString(let parseError):
@@ -108,6 +113,8 @@ enum ConnectionError: LocalizedError, Equatable {
             return true
         case (.notConnected, .notConnected):
             return true
+        case (.sslContextCreationFailed(let lhs), .sslContextCreationFailed(let rhs)):
+            return lhs == rhs
         case (.unknownError, .unknownError):
             // For unknownError, we can't easily compare the underlying errors
             // In tests, we should use specific error types instead

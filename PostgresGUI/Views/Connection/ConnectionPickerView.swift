@@ -88,10 +88,7 @@ struct ConnectionPickerView: View {
             )
             
             try? modelContext.save()
-            
-            // Update app state
-            appState.isConnected = true
-            
+
             // Save last connection ID
             UserDefaults.standard.set(connection.id.uuidString, forKey: Constants.UserDefaultsKeys.lastConnectionId)
             

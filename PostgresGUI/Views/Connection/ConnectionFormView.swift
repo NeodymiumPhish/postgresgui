@@ -923,7 +923,11 @@ struct ConnectionFormView: View {
                 // If this is the current connection, disconnect and reconnect
                 if appState.currentConnection?.id == profile.id {
                     await appState.databaseService.disconnect()
-                    appState.isConnected = false
+                    appState.currentConnection = nil
+                    appState.selectedDatabase = nil
+                    appState.selectedTable = nil
+                    appState.tables = []
+                    appState.databases = []
                 }
             } else {
                 // Create new connection
@@ -1019,7 +1023,6 @@ struct ConnectionFormView: View {
             
             // Update app state
             appState.currentConnection = connection
-            appState.isConnected = true
             appState.isShowingWelcomeScreen = false
             
             // Save last connection ID

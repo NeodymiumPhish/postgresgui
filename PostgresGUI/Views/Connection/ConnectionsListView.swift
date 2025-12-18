@@ -148,10 +148,9 @@ struct ConnectionsListView: View {
             )
             
             try? modelContext.save()
-            
+
             // Update app state
             appState.currentConnection = connection
-            appState.isConnected = true
             appState.isShowingWelcomeScreen = false
             
             // Load databases
@@ -199,7 +198,6 @@ struct ConnectionsListView: View {
             // Disconnect if this is the active connection
             if isActiveConnection {
                 await appState.databaseService.disconnect()
-                appState.isConnected = false
                 appState.currentConnection = nil
                 appState.selectedDatabase = nil
                 appState.tables = []

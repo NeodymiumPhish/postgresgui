@@ -15,7 +15,10 @@ class AppState {
     
     // Connection state
     var currentConnection: ConnectionProfile?
-    var isConnected: Bool = false
+    // Computed property - single source of truth is databaseService
+    var isConnected: Bool {
+        databaseService.isConnected
+    }
     var databaseService = DatabaseService()
     
     // Current selections
@@ -130,5 +133,28 @@ class AppState {
         }
 
         // Don't await - let it run in the background and get cancelled if needed
+    }
+
+    /// Clean up resources when window is closing
+    func cleanupOnWindowClose() async {
+        guard isConnected else { return }
+
+        DebugLog.print("🧹 Window closing, cleaning up connection...")
+
+        // Cancel any pending queries
+        currentQueryTask?.cancel()
+        currentQueryTask = nil
+
+        // Disconnect database (awaits proper shutdown)
+        await databaseService.disconnect()
+
+        // Reset state
+        currentConnection = nil
+        selectedDatabase = nil
+        selectedTable = nil
+        databases = []
+        tables = []
+
+        DebugLog.print("✅ Cleanup completed")
     }
 }

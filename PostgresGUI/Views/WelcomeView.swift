@@ -79,9 +79,8 @@ struct WelcomeView: View {
             // Success - save profile and connect
             modelContext.insert(localhostProfile)
             try? modelContext.save()
-            
+
             appState.currentConnection = localhostProfile
-            appState.isConnected = true
             appState.isShowingWelcomeScreen = false
             
             // Load databases

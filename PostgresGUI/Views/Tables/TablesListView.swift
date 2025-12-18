@@ -163,6 +163,8 @@ func refreshTables(appState: AppState) async {
         } catch {
             DebugLog.print("❌ [TablesListView] Error refreshing tables: \(error)")
             DebugLog.print("❌ [TablesListView] Error details: \(String(describing: error))")
-            // Keep existing tables on error
+            // Clear tables and selection on error to prevent stale data
+            appState.tables = []
+            appState.selectedTable = nil
         }
 }

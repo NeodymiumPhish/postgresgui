@@ -163,11 +163,6 @@ struct ConnectionsDatabasesSidebar: View {
                 Text(error)
             }
         }
-        .onChange(of: appState.isConnected) { oldValue, newValue in
-            if newValue {
-                refreshDatabases()
-            }
-        }
         .onChange(of: appState.currentConnection) { oldValue, newValue in
             // Clear saved database when connection changes (databases are connection-specific)
             if oldValue != nil && newValue != oldValue {
@@ -216,9 +211,9 @@ struct ConnectionsDatabasesSidebar: View {
             return
         }
         
-        // Set the connection and connect
-        // Note: Setting currentConnection programmatically doesn't trigger the picker's setter
-        appState.currentConnection = lastConnection
+        // Connect to the last connection
+        // Note: connect() will set appState.currentConnection itself (line 260)
+        // Don't set it here as it would trigger the Picker's binding and cause a duplicate connection
         await connect(to: lastConnection)
     }
     
@@ -255,10 +250,9 @@ struct ConnectionsDatabasesSidebar: View {
             )
             
             try? modelContext.save()
-            
+
             // Update app state
             appState.currentConnection = connection
-            appState.isConnected = true
             appState.isShowingWelcomeScreen = false
             
             // Save last connection ID
@@ -273,7 +267,6 @@ struct ConnectionsDatabasesSidebar: View {
             showConnectionError = true
             // Reset connection state on error
             appState.currentConnection = nil
-            appState.isConnected = false
         }
     }
     
@@ -336,29 +329,34 @@ struct ConnectionsDatabasesSidebar: View {
         }
 
         do {
-            // Reconnect to the selected database
+            // Check if we need to reconnect to a different database
             guard let connection = appState.currentConnection else {
                 DebugLog.print("❌ [loadTables] ERROR: No current connection")
                 return
             }
             DebugLog.print("✅ [loadTables] Current connection: \(connection.displayName)")
 
-            // Get password from keychain
-            DebugLog.print("🔑 [loadTables] Getting password from Keychain for connection: \(connection.id)")
-            let password = try KeychainService.getPassword(for: connection.id) ?? ""
-            DebugLog.print("✅ [loadTables] Password retrieved (length: \(password.count))")
+            // Only reconnect if we're not already connected to the target database
+            if appState.databaseService.connectedDatabase != database.name {
+                // Get password from keychain
+                DebugLog.print("🔑 [loadTables] Getting password from Keychain for connection: \(connection.id)")
+                let password = try KeychainService.getPassword(for: connection.id) ?? ""
+                DebugLog.print("✅ [loadTables] Password retrieved (length: \(password.count))")
 
-            // Reconnect to the selected database
-            DebugLog.print("🔌 [loadTables] Connecting to database: \(database.name) at \(connection.host):\(connection.port)")
-            try await appState.databaseService.connect(
-                host: connection.host,
-                port: connection.port,
-                username: connection.username,
-                password: password,
-                database: database.name,
-                sslMode: connection.sslModeEnum
-            )
-            DebugLog.print("✅ [loadTables] Connected successfully to \(database.name)")
+                // Reconnect to the selected database
+                DebugLog.print("🔌 [loadTables] Switching database: \(appState.databaseService.connectedDatabase ?? "none") -> \(database.name)")
+                try await appState.databaseService.connect(
+                    host: connection.host,
+                    port: connection.port,
+                    username: connection.username,
+                    password: password,
+                    database: database.name,
+                    sslMode: connection.sslModeEnum
+                )
+                DebugLog.print("✅ [loadTables] Connected successfully to \(database.name)")
+            } else {
+                DebugLog.print("ℹ️  [loadTables] Already connected to \(database.name), skipping reconnect")
+            }
 
             // Now fetch tables from the newly connected database
             DebugLog.print("📊 [loadTables] Fetching tables from database: \(database.name)")
@@ -371,6 +369,7 @@ struct ConnectionsDatabasesSidebar: View {
             DebugLog.print("❌ [loadTables] ERROR: \(error)")
             DebugLog.print("❌ [loadTables] Error details: \(String(describing: error))")
             appState.tables = []
+            appState.selectedTable = nil
         }
     }
     
