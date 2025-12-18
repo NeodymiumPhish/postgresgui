@@ -33,6 +33,33 @@ actor PostgresConnectionManager {
         logger.info("PostgresConnectionManager initialized")
     }
 
+    deinit {
+        // Capture connection and event loop group to close them
+        let conn = connection
+        let elg = eventLoopGroup
+        let logger = self.logger
+
+        // If we have an active connection or event loop group, clean them up
+        if conn != nil || elg != nil {
+            logger.warning("PostgresConnectionManager deallocated with active connection - cleaning up")
+
+            // Spawn detached task to close connection and shutdown event loop
+            Task.detached {
+                if let conn = conn {
+                    logger.debug("Closing connection in deinit")
+                    try? await conn.close()
+                }
+
+                if let elg = elg {
+                    logger.debug("Shutting down EventLoopGroup in deinit")
+                    try? await elg.shutdownGracefully()
+                }
+
+                logger.info("PostgresConnectionManager cleanup completed")
+            }
+        }
+    }
+
     // MARK: - Connection Management
 
     /// Connect to PostgreSQL database
