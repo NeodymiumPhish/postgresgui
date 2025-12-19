@@ -89,6 +89,12 @@ struct PostgresGUIApp: App {
     }
 
     private func openNewTab() {
+        // Capture current connection/database for new tab (read from UserDefaults)
+        if let idString = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.lastConnectionId) {
+            Constants.TabContext.pendingConnectionId = UUID(uuidString: idString)
+            Constants.TabContext.pendingDatabaseName = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
+        }
+
         if let currentWindow = NSApp.keyWindow,
            let windowController = currentWindow.windowController
         {

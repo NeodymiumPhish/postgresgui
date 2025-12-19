@@ -175,7 +175,14 @@ struct ConnectionsDatabasesSidebar: View {
             }
         }
         .task {
-            // Restore last connection on app launch
+            // First, check if this tab should inherit context from another tab
+            if await restoreInheritedContext() {
+                // Successfully restored from inherited context, skip default restore
+                hasRestoredConnection = true
+                return
+            }
+
+            // Otherwise, restore last connection on app launch
             await restoreLastConnection()
         }
         .alert("Connection Failed", isPresented: $showConnectionError) {
@@ -189,6 +196,28 @@ struct ConnectionsDatabasesSidebar: View {
         }
     }
     
+    /// Restore connection/database inherited from another tab via Cmd+T
+    private func restoreInheritedContext() async -> Bool {
+        // Check for pending context and clear it
+        guard let connectionId = Constants.TabContext.pendingConnectionId else { return false }
+        let databaseName = Constants.TabContext.pendingDatabaseName
+        Constants.TabContext.pendingConnectionId = nil
+        Constants.TabContext.pendingDatabaseName = nil
+
+        // Wait for SwiftData connections to load
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        guard let connection = connections.first(where: { $0.id == connectionId }) else { return false }
+
+        // Set database name in UserDefaults so restoreLastDatabase() picks it up
+        if let databaseName = databaseName {
+            UserDefaults.standard.set(databaseName, forKey: Constants.UserDefaultsKeys.lastDatabaseName)
+        }
+
+        await connect(to: connection)
+        return true
+    }
+
     private func restoreLastConnection() async {
         // Only restore once per app session (not for new tabs) and if no connection is currently selected
         guard !hasRestoredConnection,
