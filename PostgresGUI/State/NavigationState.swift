@@ -14,6 +14,9 @@ class NavigationState {
     // Navigation
     var navigationPath: NavigationPath = NavigationPath()
 
+    // Sidebar view mode
+    var sidebarViewMode: SidebarViewMode = .connections
+
     // Modal/Sheet state
     var isShowingConnectionForm: Bool = false
     var isShowingConnectionsList: Bool = false

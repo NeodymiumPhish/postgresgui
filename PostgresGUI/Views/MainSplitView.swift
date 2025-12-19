@@ -22,6 +22,25 @@ struct MainSplitView: View {
                     ideal: Constants.ColumnWidth.sidebarIdeal,
                     max: Constants.ColumnWidth.sidebarMax
                 )
+                .toolbar {
+                    ToolbarItem(placement: .navigation) {
+                        ControlGroup {
+                            HStack(spacing: 2) {
+                                Button {
+                                    appState.sidebarViewMode = .connections
+                                } label: {
+                                    Image(systemName: "cylinder.split.1x2.fill")
+                                }
+                                Button {
+                                    appState.sidebarViewMode = .queries
+                                } label: {
+                                    Image(systemName: "text.document")
+                                }
+                            }
+                        }
+                        Spacer()
+                    }
+                }
         } detail: {
             VSplitView {
                 // Row 1: 2 resizable columns

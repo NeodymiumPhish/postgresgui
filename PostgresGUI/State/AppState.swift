@@ -38,6 +38,11 @@ class AppState {
         set { navigation.navigationPath = newValue }
     }
 
+    var sidebarViewMode: SidebarViewMode {
+        get { navigation.sidebarViewMode }
+        set { navigation.sidebarViewMode = newValue }
+    }
+
     var isShowingConnectionForm: Bool {
         get { navigation.isShowingConnectionForm }
         set { navigation.isShowingConnectionForm = newValue }

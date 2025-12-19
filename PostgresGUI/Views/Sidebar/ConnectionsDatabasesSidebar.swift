@@ -8,6 +8,11 @@
 import SwiftUI
 import SwiftData
 
+enum SidebarViewMode: String, CaseIterable {
+    case connections
+    case queries
+}
+
 struct ConnectionsDatabasesSidebar: View {
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
@@ -28,119 +33,12 @@ struct ConnectionsDatabasesSidebar: View {
     }
 
     var body: some View {
-        List(selection: Binding<DatabaseInfo.ID?>(
-            get: { selectedDatabaseID },
-            set: { newID in
-                guard let unwrappedID = newID else {
-                    selectedDatabaseID = nil
-                    appState.selectedDatabase = nil
-                    appState.tables = []
-                    appState.isLoadingTables = false
-                    DebugLog.print("🔴 [ConnectionsDatabasesSidebar] Selection cleared")
-                    return
-                }
-                selectedDatabaseID = unwrappedID
-                DebugLog.print("🟢 [ConnectionsDatabasesSidebar] selectedDatabaseID changed to \(unwrappedID)")
-
-                // Find the database object from the ID
-                let database = appState.databases.first { $0.id == unwrappedID }
-
-                DebugLog.print("🔵 [ConnectionsDatabasesSidebar] Updating selectedDatabase to: \(database?.name ?? "nil")")
-                appState.selectedDatabase = database
-
-                // Clear tables immediately and show loading state
-                appState.tables = []
-                appState.isLoadingTables = true
-                DebugLog.print("🟡 [ConnectionsDatabasesSidebar] Cleared tables, isLoadingTables=true")
-
-                // Clear table selection and all query-related state
-                appState.selectedTable = nil
-                appState.queryText = ""
-                appState.queryResults = []
-                appState.queryColumnNames = nil
-                appState.showQueryResults = false
-                appState.queryError = nil
-                appState.queryExecutionTime = nil
-                DebugLog.print("🧹 [ConnectionsDatabasesSidebar] Cleared table selection and query state")
-
-                if let database = database {
-                    // Save last selected database name
-                    UserDefaults.standard.set(database.name, forKey: Constants.UserDefaultsKeys.lastDatabaseName)
-                    
-                    DebugLog.print("🟠 [ConnectionsDatabasesSidebar] Starting loadTables for: \(database.name)")
-                    Task {
-                        await loadTables(for: database)
-                    }
-                } else {
-                    // Clear saved database when selection is cleared
-                    UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
-                    DebugLog.print("🔴 [ConnectionsDatabasesSidebar] No database selected, stopping loading")
-                    appState.isLoadingTables = false
-                }
-            }
-        )) {
-            Section("Connection") {
-                HStack {
-                    Picker("Connection", selection: Binding(
-                        get: { appState.currentConnection },
-                        set: { newConnection in
-                            if let connection = newConnection {
-                                Task {
-                                    await connect(to: connection)
-                                }
-                            }
-                        }
-                    )) {
-                        if appState.currentConnection == nil {
-                            Text("Select Connection").tag(nil as ConnectionProfile?)
-                        }
-                        ForEach(sortedConnections) { connection in
-                            Text(connection.displayName).tag(connection as ConnectionProfile?)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                                    
-                    Button {
-                        appState.showConnectionsList()
-                    } label: {
-                        Image(systemName: "gearshape")
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        appState.connectionToEdit = nil
-                        appState.showConnectionForm()
-                    } label: {
-                        Image(systemName: "plus.circle")
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            Section("Databases") {
-                if appState.databases.isEmpty {
-                    Text("No databases")
-                        .foregroundColor(.secondary)
-                        .italic()
-                } else {
-                    ForEach(appState.databases) { database in
-                        DatabaseRowView(database: database)
-                    }
-                }
-            }
-        }
-        .safeAreaInset(edge: .bottom) {
-            if appState.isConnected {
-                Button {
-                    showCreateDatabaseForm = true
-                } label: {
-                    Label("Create Database", systemImage: "plus")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 4) // increased y padding
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 100, style: .continuous))
-                .padding()
+        Group {
+            switch appState.sidebarViewMode {
+            case .connections:
+                connectionsView
+            case .queries:
+                savedQueriesView
             }
         }
         .alert("Create Database", isPresented: $showCreateDatabaseForm) {
@@ -192,6 +90,140 @@ struct ConnectionsDatabasesSidebar: View {
         } message: {
             if let error = connectionError {
                 Text(error)
+            }
+        }
+    }
+
+    // MARK: - Connections View
+
+    private var connectionsView: some View {
+        List(selection: Binding<DatabaseInfo.ID?>(
+            get: { selectedDatabaseID },
+            set: { newID in
+                guard let unwrappedID = newID else {
+                    selectedDatabaseID = nil
+                    appState.selectedDatabase = nil
+                    appState.tables = []
+                    appState.isLoadingTables = false
+                    DebugLog.print("🔴 [ConnectionsDatabasesSidebar] Selection cleared")
+                    return
+                }
+                selectedDatabaseID = unwrappedID
+                DebugLog.print("🟢 [ConnectionsDatabasesSidebar] selectedDatabaseID changed to \(unwrappedID)")
+
+                // Find the database object from the ID
+                let database = appState.databases.first { $0.id == unwrappedID }
+
+                DebugLog.print("🔵 [ConnectionsDatabasesSidebar] Updating selectedDatabase to: \(database?.name ?? "nil")")
+                appState.selectedDatabase = database
+
+                // Clear tables immediately and show loading state
+                appState.tables = []
+                appState.isLoadingTables = true
+                DebugLog.print("🟡 [ConnectionsDatabasesSidebar] Cleared tables, isLoadingTables=true")
+
+                // Clear table selection and all query-related state
+                appState.selectedTable = nil
+                appState.queryText = ""
+                appState.queryResults = []
+                appState.queryColumnNames = nil
+                appState.showQueryResults = false
+                appState.queryError = nil
+                appState.queryExecutionTime = nil
+                DebugLog.print("🧹 [ConnectionsDatabasesSidebar] Cleared table selection and query state")
+
+                if let database = database {
+                    // Save last selected database name
+                    UserDefaults.standard.set(database.name, forKey: Constants.UserDefaultsKeys.lastDatabaseName)
+
+                    DebugLog.print("🟠 [ConnectionsDatabasesSidebar] Starting loadTables for: \(database.name)")
+                    Task {
+                        await loadTables(for: database)
+                    }
+                } else {
+                    // Clear saved database when selection is cleared
+                    UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
+                    DebugLog.print("🔴 [ConnectionsDatabasesSidebar] No database selected, stopping loading")
+                    appState.isLoadingTables = false
+                }
+            }
+        )) {
+            Section("Connection") {
+                HStack {
+                    Picker("Connection", selection: Binding(
+                        get: { appState.currentConnection },
+                        set: { newConnection in
+                            if let connection = newConnection {
+                                Task {
+                                    await connect(to: connection)
+                                }
+                            }
+                        }
+                    )) {
+                        if appState.currentConnection == nil {
+                            Text("Select Connection").tag(nil as ConnectionProfile?)
+                        }
+                        ForEach(sortedConnections) { connection in
+                            Text(connection.displayName).tag(connection as ConnectionProfile?)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+
+                    Button {
+                        appState.showConnectionsList()
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        appState.connectionToEdit = nil
+                        appState.showConnectionForm()
+                    } label: {
+                        Image(systemName: "plus.circle")
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Section("Databases") {
+                if appState.databases.isEmpty {
+                    Text("No databases")
+                        .foregroundColor(.secondary)
+                        .italic()
+                } else {
+                    ForEach(appState.databases) { database in
+                        DatabaseRowView(database: database)
+                    }
+                }
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if appState.isConnected {
+                Button {
+                    showCreateDatabaseForm = true
+                } label: {
+                    Label("Create Database", systemImage: "plus")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 4)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 100, style: .continuous))
+                .padding()
+            }
+        }
+    }
+
+    // MARK: - Saved Queries View
+
+    private var savedQueriesView: some View {
+        List {
+            Section("Saved Queries") {
+                ContentUnavailableView {
+                    Label("No Saved Queries", systemImage: "doc.text")
+                } description: {
+                    Text("Save queries from the editor to access them here.")
+                }
             }
         }
     }
