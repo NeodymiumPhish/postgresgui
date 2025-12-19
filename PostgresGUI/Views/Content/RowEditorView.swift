@@ -107,8 +107,8 @@ struct RowEditorView: View {
     private func formRow(columnName: String) -> some View {
         let column = columnInfo.first { $0.name == columnName }
         let isNullable = column?.isNullable ?? true
-        let currentValue = textValues[columnName] ?? ""
-        let shouldUseTextEditor = currentValue.count > 50
+        let dataType = column?.dataType.lowercased() ?? ""
+        let shouldUseTextEditor = dataType == "text" || dataType == "json" || dataType == "jsonb" || dataType == "xml" || dataType.contains("[]")
 
         return VStack(alignment: .leading, spacing: 4) {
             Text(columnName)
