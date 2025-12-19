@@ -237,18 +237,22 @@ struct ConnectionsDatabasesSidebar: View {
         // Get last connection ID from UserDefaults
         guard let lastConnectionIdString = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.lastConnectionId),
               let lastConnectionId = UUID(uuidString: lastConnectionIdString) else {
+            // No last connection saved - auto-select if only one connection exists
+            if connections.count == 1, let onlyConnection = connections.first {
+                await connect(to: onlyConnection)
+            }
             return
         }
-        
+
         // Find the connection in the list
         guard let lastConnection = connections.first(where: { $0.id == lastConnectionId }) else {
             // Connection not found, clear the stored ID
             UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastConnectionId)
             return
         }
-        
+
         // Connect to the last connection
-        // Note: connect() will set appState.currentConnection itself (line 260)
+        // Note: connect() will set appState.currentConnection itself
         // Don't set it here as it would trigger the Picker's binding and cause a duplicate connection
         await connect(to: lastConnection)
     }
@@ -282,8 +286,12 @@ struct ConnectionsDatabasesSidebar: View {
         switch result {
         case .success:
             try? modelContext.save()
-            // After loading databases, restore last selected database if available
-            await restoreLastDatabase()
+            // Retry loading databases if cancelled during connection (race with view updates)
+            if appState.databases.isEmpty {
+                await refreshDatabasesAsync()
+            } else {
+                await restoreLastDatabase()
+            }
 
         case .failure(let error):
             DebugLog.print("Failed to connect: \(error)")
