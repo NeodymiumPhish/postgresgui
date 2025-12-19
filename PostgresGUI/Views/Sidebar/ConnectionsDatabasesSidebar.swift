@@ -41,6 +41,10 @@ struct ConnectionsDatabasesSidebar: View {
                 savedQueriesView
             }
         }
+        .padding(.top, 8)
+        .overlay(alignment: .top) {
+            Divider()
+        }
         .alert("Create Database", isPresented: $showCreateDatabaseForm) {
             TextField("Database Name", text: $newDatabaseName)
             Button("Create") {
