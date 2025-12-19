@@ -14,10 +14,12 @@ import Foundation
 class ConnectionService: ConnectionServiceProtocol {
     private let appState: AppState
     private let keychainService: KeychainServiceProtocol
+    private let userDefaults: UserDefaultsProtocol
 
-    init(appState: AppState, keychainService: KeychainServiceProtocol) {
+    init(appState: AppState, keychainService: KeychainServiceProtocol, userDefaults: UserDefaultsProtocol = UserDefaultsWrapper()) {
         self.appState = appState
         self.keychainService = keychainService
+        self.userDefaults = userDefaults
     }
 
     /// Connect to a database using a connection profile
@@ -53,7 +55,7 @@ class ConnectionService: ConnectionServiceProtocol {
 
             // Save last connection ID if requested
             if saveAsLast {
-                UserDefaults.standard.set(
+                userDefaults.set(
                     connection.id.uuidString,
                     forKey: Constants.UserDefaultsKeys.lastConnectionId
                 )

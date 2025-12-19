@@ -12,8 +12,12 @@ import Foundation
 class ViewModelFactory {
     private let services: ServiceContainer
 
-    init(services: ServiceContainer = .shared) {
+    init(services: ServiceContainer) {
         self.services = services
+    }
+
+    convenience init() {
+        self.init(services: .shared)
     }
 
     // MARK: - ViewModel Creation
@@ -52,7 +56,8 @@ class ViewModelFactory {
     func makeDetailContentViewModel() -> DetailContentViewModel {
         DetailContentViewModel(
             appState: services.appState,
-            rowOperations: services.rowOperationsService
+            rowOperations: services.rowOperationsService,
+            queryService: services.queryService
         )
     }
 }

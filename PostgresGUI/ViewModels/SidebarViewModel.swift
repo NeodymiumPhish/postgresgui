@@ -14,6 +14,7 @@ import SwiftData
 class SidebarViewModel {
     private let appState: AppState
     private let connectionService: ConnectionServiceProtocol
+    private let userDefaults: UserDefaultsProtocol
 
     // UI State
     var selectedDatabaseID: DatabaseInfo.ID?
@@ -22,18 +23,19 @@ class SidebarViewModel {
     var connectionError: String?
     var showConnectionError = false
 
-    init(appState: AppState, connectionService: ConnectionServiceProtocol) {
+    init(appState: AppState, connectionService: ConnectionServiceProtocol, userDefaults: UserDefaultsProtocol = UserDefaultsWrapper()) {
         self.appState = appState
         self.connectionService = connectionService
+        self.userDefaults = userDefaults
     }
 
     /// Connect to a database
-    func connect(to connection: ConnectionProfile, modelContext: ModelContext) async {
+    func connect(to connection: ConnectionProfile, persistenceContext: PersistenceContextProtocol) async {
         let result = await connectionService.connect(to: connection, password: nil, saveAsLast: true)
 
         switch result {
         case .success:
-            try? modelContext.save()
+            try? persistenceContext.save()
             // After loading databases, restore last selected database if available
             await restoreLastDatabase()
 
@@ -130,12 +132,12 @@ class SidebarViewModel {
     }
 
     /// Restore the last connected connection on app start
-    func restoreLastConnection(connections: [ConnectionProfile], modelContext: ModelContext) async {
+    func restoreLastConnection(connections: [ConnectionProfile], persistenceContext: PersistenceContextProtocol) async {
         // Only restore if not already connected and we have connections
         guard !appState.isConnected, !connections.isEmpty else { return }
 
         // Get last connection ID from UserDefaults
-        guard let lastConnectionIdString = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.lastConnectionId),
+        guard let lastConnectionIdString = userDefaults.string(forKey: Constants.UserDefaultsKeys.lastConnectionId),
               let lastConnectionId = UUID(uuidString: lastConnectionIdString) else {
             return
         }
@@ -143,14 +145,14 @@ class SidebarViewModel {
         // Find the connection in the list
         guard let lastConnection = connections.first(where: { $0.id == lastConnectionId }) else {
             // Connection not found, clear the stored ID
-            UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastConnectionId)
+            userDefaults.removeObject(forKey: Constants.UserDefaultsKeys.lastConnectionId)
             return
         }
 
         DebugLog.print("🔄 [SidebarViewModel] Restoring last connection: \(lastConnection.displayName)")
 
         // Connect to the last connection
-        await connect(to: lastConnection, modelContext: modelContext)
+        await connect(to: lastConnection, persistenceContext: persistenceContext)
     }
 
     // MARK: - Private Helpers
@@ -160,7 +162,7 @@ class SidebarViewModel {
         guard appState.selectedDatabase == nil, !appState.databases.isEmpty else { return }
 
         // Get last database name from UserDefaults
-        guard let lastDatabaseName = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.lastDatabaseName),
+        guard let lastDatabaseName = userDefaults.string(forKey: Constants.UserDefaultsKeys.lastDatabaseName),
               !lastDatabaseName.isEmpty else {
             return
         }
@@ -168,7 +170,7 @@ class SidebarViewModel {
         // Find the database in the list
         guard let lastDatabase = appState.databases.first(where: { $0.name == lastDatabaseName }) else {
             // Database not found, clear the stored name
-            UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
+            userDefaults.removeObject(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
             return
         }
 

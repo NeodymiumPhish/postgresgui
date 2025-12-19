@@ -14,7 +14,7 @@ import Logging
 
 /// Actor-isolated manager for PostgresNIO connections
 /// Handles connection lifecycle, EventLoopGroup management, and async/await bridging
-actor PostgresConnectionManager {
+actor PostgresConnectionManager: ConnectionManagerProtocol {
 
     // MARK: - Properties
 

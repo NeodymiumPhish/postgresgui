@@ -66,6 +66,9 @@ struct PostgresGUIApp: App {
         }
         .modelContainer(sharedModelContainer)
         .commands {
+            // Remove Settings menu item (Cmd+,)
+            CommandGroup(replacing: .appSettings) { }
+
             CommandGroup(after: .newItem) {
                 Button(action: openNewTab) {
                     Text("New Tab")

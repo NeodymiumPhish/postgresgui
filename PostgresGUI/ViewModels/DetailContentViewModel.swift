@@ -17,6 +17,7 @@ class DetailContentViewModel {
 
     private let appState: AppState
     private let rowOperations: RowOperationsServiceProtocol
+    private let queryService: QueryServiceProtocol
 
     // MARK: - Modal State
 
@@ -37,9 +38,10 @@ class DetailContentViewModel {
 
     // MARK: - Initialization
 
-    init(appState: AppState, rowOperations: RowOperationsServiceProtocol) {
+    init(appState: AppState, rowOperations: RowOperationsServiceProtocol, queryService: QueryServiceProtocol) {
         self.appState = appState
         self.rowOperations = rowOperations
+        self.queryService = queryService
     }
 
     // MARK: - JSON Viewer
@@ -226,12 +228,6 @@ class DetailContentViewModel {
 
     func refreshQuery() async {
         DebugLog.print("🔄 [DetailContentViewModel] Refresh button clicked")
-
-        // Create query service (will be injected via DI container in Phase 6)
-        let queryService = QueryService(
-            databaseService: appState.databaseService,
-            queryState: appState.query
-        )
 
         // Set loading state FIRST to prevent empty state flicker
         appState.isExecutingQuery = true

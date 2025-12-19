@@ -15,10 +15,16 @@ struct DetailContentView: View {
 
     init() {
         // Initialize ViewModel with dependencies
+        let appState = AppState()  // Will be updated via .onAppear
         let rowOperations = RowOperationsService()
+        let queryService = QueryService(
+            databaseService: appState.databaseService,
+            queryState: appState.query
+        )
         _viewModel = State(initialValue: DetailContentViewModel(
-            appState: AppState(),  // Will be updated via .onAppear
-            rowOperations: rowOperations
+            appState: appState,
+            rowOperations: rowOperations,
+            queryService: queryService
         ))
     }
 
@@ -81,9 +87,14 @@ struct DetailContentView: View {
     private func updateViewModelAppState() {
         // Re-initialize ViewModel with the correct AppState from environment
         let rowOperations = RowOperationsService()
+        let queryService = QueryService(
+            databaseService: appState.databaseService,
+            queryState: appState.query
+        )
         viewModel = DetailContentViewModel(
             appState: appState,
-            rowOperations: rowOperations
+            rowOperations: rowOperations,
+            queryService: queryService
         )
     }
 }

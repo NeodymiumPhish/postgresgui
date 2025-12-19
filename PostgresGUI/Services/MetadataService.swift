@@ -11,10 +11,10 @@ import Logging
 /// Service for database metadata operations
 @MainActor
 class MetadataService: MetadataServiceProtocol {
-    private let connectionManager: PostgresConnectionManager
+    private let connectionManager: ConnectionManagerProtocol
     private let logger = Logger.debugLogger(label: "com.postgresgui.metadataservice")
 
-    init(connectionManager: PostgresConnectionManager) {
+    init(connectionManager: ConnectionManagerProtocol) {
         self.connectionManager = connectionManager
     }
 

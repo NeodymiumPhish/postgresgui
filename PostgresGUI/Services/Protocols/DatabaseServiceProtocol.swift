@@ -9,7 +9,15 @@ import Foundation
 
 /// Protocol defining the interface for database operations
 @MainActor
-protocol DatabaseServiceProtocol {
+protocol DatabaseServiceProtocol: AnyObject {
+    // MARK: - Connection State
+
+    /// The currently connected database name, if any
+    var connectedDatabase: String? { get }
+
+    /// Disconnect from the current database
+    func disconnect() async
+
     // MARK: - Query Execution
 
     /// Execute arbitrary SQL query and return results along with column names

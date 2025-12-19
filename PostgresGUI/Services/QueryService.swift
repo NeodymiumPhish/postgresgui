@@ -13,19 +13,21 @@ import Foundation
 class QueryService: QueryServiceProtocol {
     private let databaseService: DatabaseServiceProtocol
     private let queryState: QueryState
+    private let clock: ClockProtocol
 
-    init(databaseService: DatabaseServiceProtocol, queryState: QueryState) {
+    init(databaseService: DatabaseServiceProtocol, queryState: QueryState, clock: ClockProtocol = SystemClock()) {
         self.databaseService = databaseService
         self.queryState = queryState
+        self.clock = clock
     }
 
     /// Execute a SQL query
     func executeQuery(_ sql: String) async -> QueryResult {
-        let startTime = Date()
+        let startTime = clock.now()
 
         do {
             let (rows, columnNames) = try await databaseService.executeQuery(sql)
-            let endTime = Date()
+            let endTime = clock.now()
             let executionTime = endTime.timeIntervalSince(startTime)
 
             return .success(
@@ -34,7 +36,7 @@ class QueryService: QueryServiceProtocol {
                 executionTime: executionTime
             )
         } catch {
-            let endTime = Date()
+            let endTime = clock.now()
             let executionTime = endTime.timeIntervalSince(startTime)
             return .failure(error: error, executionTime: executionTime)
         }
@@ -43,7 +45,7 @@ class QueryService: QueryServiceProtocol {
     /// Execute a table query with automatic SQL generation and race condition prevention
     func executeTableQuery(
         for table: TableInfo,
-        limit: Int = Constants.Pagination.defaultRowsPerPage,
+        limit: Int = 100,
         offset: Int = 0
     ) async -> QueryResult {
         // Cancel any existing query task
@@ -59,7 +61,7 @@ class QueryService: QueryServiceProtocol {
         let query = "SELECT * FROM \(table.schema).\(table.name) LIMIT \(limit) OFFSET \(offset);"
         DebugLog.print("📝 [QueryService] Generated query: \(query) (ID: \(thisQueryID))")
 
-        let startTime = Date()
+        let startTime = clock.now()
 
         // Create result that will be returned
         var result: QueryResult?
@@ -76,7 +78,7 @@ class QueryService: QueryServiceProtocol {
                     return
                 }
 
-                let endTime = Date()
+                let endTime = clock.now()
                 let executionTime = endTime.timeIntervalSince(startTime)
 
                 result = .success(
@@ -93,7 +95,7 @@ class QueryService: QueryServiceProtocol {
                     return
                 }
 
-                let endTime = Date()
+                let endTime = clock.now()
                 let executionTime = endTime.timeIntervalSince(startTime)
 
                 result = .failure(error: error, executionTime: executionTime)
@@ -113,7 +115,7 @@ class QueryService: QueryServiceProtocol {
         // Return result or a default failure if somehow nil
         return result ?? .failure(
             error: NSError(domain: "QueryService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Query was cancelled"]),
-            executionTime: Date().timeIntervalSince(startTime)
+            executionTime: clock.now().timeIntervalSince(startTime)
         )
     }
 

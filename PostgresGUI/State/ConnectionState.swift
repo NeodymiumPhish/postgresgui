@@ -19,8 +19,16 @@ class ConnectionState {
         databaseService.isConnected
     }
 
-    // Database service dependency
-    var databaseService = DatabaseService()
+    // Database service dependency - injected for testability
+    var databaseService: DatabaseService
+
+    init(databaseService: DatabaseService) {
+        self.databaseService = databaseService
+    }
+
+    convenience init() {
+        self.init(databaseService: DatabaseService())
+    }
 
     // Current selections
     var selectedDatabase: DatabaseInfo?

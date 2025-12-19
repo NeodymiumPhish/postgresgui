@@ -11,10 +11,10 @@ import Logging
 /// Service for table operations
 @MainActor
 class TableService: TableServiceProtocol {
-    private let connectionManager: PostgresConnectionManager
+    private let connectionManager: ConnectionManagerProtocol
     private let logger = Logger.debugLogger(label: "com.postgresgui.tableservice")
 
-    init(connectionManager: PostgresConnectionManager) {
+    init(connectionManager: ConnectionManagerProtocol) {
         self.connectionManager = connectionManager
     }
 

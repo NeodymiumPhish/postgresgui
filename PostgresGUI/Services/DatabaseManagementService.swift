@@ -11,13 +11,13 @@ import Logging
 /// Service for database management operations
 @MainActor
 class DatabaseManagementService: DatabaseManagementServiceProtocol {
-    private let connectionManager: PostgresConnectionManager
+    private let connectionManager: ConnectionManagerProtocol
     private let logger = Logger.debugLogger(label: "com.postgresgui.dbmanagementservice")
 
     // Reference to database service to check if we're deleting the current database
-    private weak var databaseService: DatabaseService?
+    private weak var databaseService: (any DatabaseServiceProtocol)?
 
-    init(connectionManager: PostgresConnectionManager, databaseService: DatabaseService? = nil) {
+    init(connectionManager: ConnectionManagerProtocol, databaseService: (any DatabaseServiceProtocol)? = nil) {
         self.connectionManager = connectionManager
         self.databaseService = databaseService
     }

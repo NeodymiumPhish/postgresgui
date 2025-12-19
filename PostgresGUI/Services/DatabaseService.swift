@@ -12,8 +12,8 @@ import Logging
 class DatabaseService {
     // MARK: - Core Dependencies
 
-    // Connection manager (actor-isolated)
-    private let connectionManager = PostgresConnectionManager()
+    // Connection manager (actor-isolated) - protocol for testability
+    private let connectionManager: ConnectionManagerProtocol
     private let logger = Logger.debugLogger(label: "com.postgresgui.service")
 
     // Specialized services (lazy to avoid circular dependencies)
@@ -40,7 +40,8 @@ class DatabaseService {
         currentDatabase
     }
 
-    init() {
+    init(connectionManager: ConnectionManagerProtocol = PostgresConnectionManager()) {
+        self.connectionManager = connectionManager
         logger.info("DatabaseService initialized")
     }
 

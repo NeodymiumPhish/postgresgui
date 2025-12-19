@@ -67,9 +67,14 @@ struct MainSplitView: View {
             .onAppear {
                 if viewModel == nil {
                     let rowOperations = RowOperationsService()
+                    let queryService = QueryService(
+                        databaseService: appState.databaseService,
+                        queryState: appState.query
+                    )
                     viewModel = DetailContentViewModel(
                         appState: appState,
-                        rowOperations: rowOperations
+                        rowOperations: rowOperations,
+                        queryService: queryService
                     )
                 }
             }
