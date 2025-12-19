@@ -13,18 +13,27 @@ struct QueryEditorView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Toolbar with execute button and stats
-            HStack {
+            HStack(spacing: 16) {
                 Button(action: executeQuery) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "play.circle.fill")
+                    Label {
                         Text("Run Query")
-                            .font(.system(size: 11, weight: .medium))
+                    } icon: {
+                        Image(systemName: "play.circle.fill")
                     }
                 }
                 .buttonStyle(.glass)
-                .tint(.primary)
-                .clipShape(Capsule())
+                .tint(.green)
                 .keyboardShortcut(.return, modifiers: [.command])
+
+                Button(action: saveQuery) {
+                    Label {
+                        Text("Save Query")
+                    } icon: {
+                        Image(systemName: "square.and.arrow.down")
+                    }
+                }
+                .buttonStyle(.borderless)
+                .keyboardShortcut("s", modifiers: [.command])
 
                 Spacer()
 
@@ -60,6 +69,11 @@ struct QueryEditorView: View {
                 set: { appState.queryText = $0 }
             ))
         }
+    }
+
+    private func saveQuery() {
+        DebugLog.print("💾 [QueryEditorView] Save button clicked")
+        // TODO: Present SaveQuerySheet
     }
 
     private func executeQuery() {
