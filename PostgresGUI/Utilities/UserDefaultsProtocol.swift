@@ -22,11 +22,12 @@ protocol UserDefaultsProtocol {
 }
 
 /// Wrapper for standard UserDefaults
+@MainActor
 class UserDefaultsWrapper: UserDefaultsProtocol {
     private let defaults: UserDefaults
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(defaults: UserDefaults? = nil) {
+        self.defaults = defaults ?? .standard
     }
 
     func string(forKey key: String) -> String? {

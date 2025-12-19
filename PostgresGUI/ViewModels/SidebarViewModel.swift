@@ -23,10 +23,10 @@ class SidebarViewModel {
     var connectionError: String?
     var showConnectionError = false
 
-    init(appState: AppState, connectionService: ConnectionServiceProtocol, userDefaults: UserDefaultsProtocol = UserDefaultsWrapper()) {
+    init(appState: AppState, connectionService: ConnectionServiceProtocol, userDefaults: UserDefaultsProtocol? = nil) {
         self.appState = appState
         self.connectionService = connectionService
-        self.userDefaults = userDefaults
+        self.userDefaults = userDefaults ?? UserDefaultsWrapper()
     }
 
     /// Connect to a database

@@ -20,6 +20,9 @@ struct ConnectionsDatabasesSidebar: View {
     @State private var createDatabaseError: String?
     @State private var hasRestoredConnection = false
 
+    /// Static flag to ensure auto-restore only happens once per app session (not for new tabs)
+    private static var hasRestoredConnectionGlobally = false
+
     private var sortedConnections: [ConnectionProfile] {
         connections.sorted { $0.displayName < $1.displayName }
     }
@@ -187,16 +190,20 @@ struct ConnectionsDatabasesSidebar: View {
     }
     
     private func restoreLastConnection() async {
-        // Only restore once and if no connection is currently selected
-        guard !hasRestoredConnection, appState.currentConnection == nil else { return }
-        
+        // Only restore once per app session (not for new tabs) and if no connection is currently selected
+        guard !hasRestoredConnection,
+              !Self.hasRestoredConnectionGlobally,
+              appState.currentConnection == nil else { return }
+
+        // Set flags immediately to prevent race condition with rapid tab creation
+        hasRestoredConnection = true
+        Self.hasRestoredConnectionGlobally = true
+
         // Wait a bit for connections to load from SwiftData
         try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-        
+
         // Check again after waiting
         guard !connections.isEmpty else { return }
-        
-        hasRestoredConnection = true
         
         // Get last connection ID from UserDefaults
         guard let lastConnectionIdString = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.lastConnectionId),

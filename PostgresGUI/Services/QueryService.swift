@@ -15,10 +15,10 @@ class QueryService: QueryServiceProtocol {
     private let queryState: QueryState
     private let clock: ClockProtocol
 
-    init(databaseService: DatabaseServiceProtocol, queryState: QueryState, clock: ClockProtocol = SystemClock()) {
+    init(databaseService: DatabaseServiceProtocol, queryState: QueryState, clock: ClockProtocol? = nil) {
         self.databaseService = databaseService
         self.queryState = queryState
-        self.clock = clock
+        self.clock = clock ?? SystemClock()
     }
 
     /// Execute a SQL query

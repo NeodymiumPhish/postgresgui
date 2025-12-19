@@ -16,7 +16,10 @@ protocol ClockProtocol {
 }
 
 /// System clock implementation using real time
+@MainActor
 class SystemClock: ClockProtocol {
+    init() {}
+
     func now() -> Date {
         Date()
     }

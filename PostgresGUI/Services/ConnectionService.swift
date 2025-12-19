@@ -16,10 +16,10 @@ class ConnectionService: ConnectionServiceProtocol {
     private let keychainService: KeychainServiceProtocol
     private let userDefaults: UserDefaultsProtocol
 
-    init(appState: AppState, keychainService: KeychainServiceProtocol, userDefaults: UserDefaultsProtocol = UserDefaultsWrapper()) {
+    init(appState: AppState, keychainService: KeychainServiceProtocol, userDefaults: UserDefaultsProtocol? = nil) {
         self.appState = appState
         self.keychainService = keychainService
-        self.userDefaults = userDefaults
+        self.userDefaults = userDefaults ?? UserDefaultsWrapper()
     }
 
     /// Connect to a database using a connection profile
