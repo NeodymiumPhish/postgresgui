@@ -239,11 +239,9 @@ struct ConnectionsDatabasesSidebar: View {
         List(selection: $selectedQueryID) {
             Section("Saved Queries") {
                 if savedQueries.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Saved Queries", systemImage: "doc.text")
-                    } description: {
-                        Text("Save queries from the editor to access them here.")
-                    }
+                    Text("No saved queries")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 } else {
                     ForEach(savedQueries) { query in
                         SavedQueryRowView(
@@ -630,15 +628,29 @@ private struct DatabaseRowView: View {
     
     private func deleteDatabase(_ database: DatabaseInfo) async {
         DebugLog.print("🗑️  [DatabaseRowView] Deleting database: \(database.name)")
-        
+
         do {
             // Get connection details
-            guard appState.currentConnection != nil else {
+            guard let connection = appState.currentConnection else {
                 DebugLog.print("❌ [DatabaseRowView] No current connection")
                 return
             }
-            
-            // Delete the database (DatabaseService uses stored connection details)
+
+            // If we're connected to the database we want to delete, switch to postgres first
+            if appState.databaseService.connectedDatabase == database.name {
+                DebugLog.print("🔄 [DatabaseRowView] Switching to postgres before deleting \(database.name)")
+                let password = try KeychainService.getPassword(for: connection.id) ?? ""
+                try await appState.databaseService.connect(
+                    host: connection.host,
+                    port: connection.port,
+                    username: connection.username,
+                    password: password,
+                    database: "postgres",
+                    sslMode: connection.sslModeEnum
+                )
+            }
+
+            // Delete the database
             try await appState.databaseService.deleteDatabase(name: database.name)
             
             // Remove from databases list
