@@ -50,7 +50,7 @@ struct WelcomeView: View {
                 .controlSize(.large)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(minWidth: 500, maxWidth: .infinity, minHeight: 500, maxHeight: .infinity)
         .padding(.horizontal)
         .padding(.vertical)
         .padding(.bottom, 24)
