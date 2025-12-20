@@ -67,6 +67,7 @@ struct MainSplitView: View {
                         VStack(spacing: 0) {
                             if let viewModel = viewModel {
                                 QueryResultsView(
+                                    searchText: searchText,
                                     onDeleteKeyPressed: {
                                         viewModel.deleteSelectedRows()
                                     },
@@ -75,7 +76,7 @@ struct MainSplitView: View {
                                     }
                                 )
                             } else {
-                                QueryResultsView()
+                                QueryResultsView(searchText: searchText)
                             }
                         }
                         .frame(minWidth: 300)
@@ -105,7 +106,7 @@ struct MainSplitView: View {
                 }
             }
         }
-        .searchable(text: $searchText, prompt: "Search")
+        .searchable(text: $searchText, prompt: "Filter results")
         .modifier(DetailContentModalsWrapper(viewModel: viewModel))
     }
 }

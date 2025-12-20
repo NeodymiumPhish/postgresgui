@@ -78,6 +78,7 @@ struct QueryResultsView: View {
     @Environment(AppState.self) private var appState
     @State private var sortOrder: [TableRowComparator] = []
     @State private var lastExecutedTableID: String? = nil
+    var searchText: String = ""
     var onDeleteKeyPressed: (() -> Void)?
     var onSpaceKeyPressed: (() -> Void)?
 
@@ -200,8 +201,19 @@ struct QueryResultsView: View {
         .id(appState.selectedTable?.id)
     }
 
+    private var filteredResults: [TableRow] {
+        guard !searchText.isEmpty else { return appState.queryResults }
+        let lowercasedSearch = searchText.lowercased()
+        return appState.queryResults.filter { row in
+            row.values.values.contains { value in
+                guard let value = value else { return false }
+                return value.lowercased().contains(lowercasedSearch)
+            }
+        }
+    }
+
     private var sortedResults: [TableRow] {
-        appState.queryResults.sorted(using: sortOrder)
+        filteredResults.sorted(using: sortOrder)
     }
 
     private func getColumnNames() -> [String]? {
