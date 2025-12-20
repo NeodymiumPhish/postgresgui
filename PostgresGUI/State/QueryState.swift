@@ -21,6 +21,10 @@ class QueryState {
     var queryExecutionTime: TimeInterval? = nil
     var selectedRowIDs: Set<UUID> = []
 
+    // Saved query state
+    var currentSavedQueryId: UUID? = nil
+    var lastSavedAt: Date? = nil
+
     // Pagination state
     var currentPage: Int = 0
     var rowsPerPage: Int = Constants.Pagination.defaultRowsPerPage
@@ -47,6 +51,8 @@ class QueryState {
         queryExecutionTime = nil
         selectedRowIDs = []
         currentPage = 0
+        currentSavedQueryId = nil
+        lastSavedAt = nil
     }
 
     /// Clean up when window closes

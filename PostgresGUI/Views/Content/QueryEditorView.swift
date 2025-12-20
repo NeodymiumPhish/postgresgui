@@ -6,9 +6,12 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct QueryEditorView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
+    @State private var showNoDatabaseAlert = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,38 +29,18 @@ struct QueryEditorView: View {
                 .keyboardShortcut(.return, modifiers: [.command])
 
                 Button(action: saveQuery) {
-                    Label {
-                        Text("Save Query")
-                    } icon: {
-                        Image(systemName: "square.and.arrow.down")
-                    }
+                    Text("Save Query")
                 }
                 .buttonStyle(.borderless)
                 .keyboardShortcut("s", modifiers: [.command])
 
                 Spacer()
 
-                // Stats on the right
-                if appState.showQueryResults {
-                    HStack(spacing: 8) {
-                        if appState.queryError != nil {
-                            Label("Error", systemImage: "exclamationmark.triangle")
-                                .foregroundColor(.red)
-                                .font(.subheadline)
-                        } else {
-                            Text("\(appState.queryResults.count) rows")
-                                .foregroundColor(.secondary)
-                                .font(.subheadline)
-                            
-                            if let executionTime = appState.queryExecutionTime {
-                                Text("•")
-                                    .foregroundColor(.secondary)
-                                Text(formatExecutionTime(executionTime))
-                                    .foregroundColor(.secondary)
-                                    .font(.subheadline)
-                            }
-                        }
-                    }
+                // Show saved timestamp on the right
+                if let savedAt = appState.lastSavedAt {
+                    Text("Saved \(savedAt.formatted(date: .omitted, time: .shortened))")
+                        .foregroundColor(.secondary)
+                        .font(.subheadline)
                 }
             }
             .padding(Constants.Spacing.small)
@@ -69,15 +52,73 @@ struct QueryEditorView: View {
                 set: { appState.queryText = $0 }
             ))
         }
+        .alert("No Database Selected", isPresented: $showNoDatabaseAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Select a database from the sidebar before running queries.")
+        }
     }
 
     private func saveQuery() {
-        DebugLog.print("💾 [QueryEditorView] Save button clicked")
-        // TODO: Present SaveQuerySheet
+        let queryText = appState.queryText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Don't save empty queries
+        guard !queryText.isEmpty else {
+            DebugLog.print("💾 [QueryEditorView] Save skipped - empty query")
+            return
+        }
+
+        let now = Date()
+
+        // Check if we're updating an existing saved query
+        if let existingId = appState.currentSavedQueryId {
+            // Update existing query
+            let descriptor = FetchDescriptor<SavedQuery>(
+                predicate: #Predicate { $0.id == existingId }
+            )
+            if let existingQuery = try? modelContext.fetch(descriptor).first {
+                existingQuery.queryText = queryText
+                existingQuery.updatedAt = now
+                DebugLog.print("💾 [QueryEditorView] Updated existing query: \(existingQuery.name)")
+            }
+        } else {
+            // Create new saved query
+            let queryName = SavedQuery.generateName(from: queryText)
+            let savedQuery = SavedQuery(
+                name: queryName,
+                queryText: queryText,
+                connectionId: appState.currentConnection?.id,
+                databaseName: appState.selectedDatabase?.name
+            )
+            modelContext.insert(savedQuery)
+
+            // Update state to track this query
+            appState.currentSavedQueryId = savedQuery.id
+
+            DebugLog.print("💾 [QueryEditorView] Saved new query: \(queryName)")
+        }
+
+        // Update saved timestamp
+        appState.lastSavedAt = now
+
+        // Save context
+        do {
+            try modelContext.save()
+        } catch {
+            DebugLog.print("❌ [QueryEditorView] Failed to save query: \(error)")
+        }
     }
 
     private func executeQuery() {
         DebugLog.print("🎬 [QueryEditorView] Execute button clicked")
+
+        // Check if database is selected
+        guard appState.selectedDatabase != nil else {
+            showNoDatabaseAlert = true
+            DebugLog.print("⚠️ [QueryEditorView] No database selected")
+            return
+        }
+
         Task {
             // Set loading state - but keep previous results visible to prevent flicker
             appState.isExecutingQuery = true
@@ -112,15 +153,6 @@ struct QueryEditorView: View {
             }
 
             appState.isExecutingQuery = false
-        }
-    }
-    
-    private func formatExecutionTime(_ timeInterval: TimeInterval) -> String {
-        if timeInterval >= 1.0 {
-            return String(format: "%.1fs", timeInterval)
-        } else {
-            let milliseconds = timeInterval * 1000
-            return String(format: "%.0fms", milliseconds)
         }
     }
 }

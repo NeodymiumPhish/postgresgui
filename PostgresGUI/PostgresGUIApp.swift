@@ -19,6 +19,7 @@ struct PostgresGUIApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             ConnectionProfile.self,
+            SavedQuery.self,
         ])
 
         let modelConfiguration = ModelConfiguration(

@@ -153,6 +153,16 @@ class AppState {
         set { query.rowsPerPage = newValue }
     }
 
+    var currentSavedQueryId: UUID? {
+        get { query.currentSavedQueryId }
+        set { query.currentSavedQueryId = newValue }
+    }
+
+    var lastSavedAt: Date? {
+        get { query.lastSavedAt }
+        set { query.lastSavedAt = newValue }
+    }
+
     // MARK: - Delegated Methods
 
     func showConnectionForm() {

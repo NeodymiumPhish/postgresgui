@@ -17,6 +17,7 @@ struct ConnectionsDatabasesSidebar: View {
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
     @Query private var connections: [ConnectionProfile]
+    @Query(sort: \SavedQuery.updatedAt, order: .reverse) private var savedQueries: [SavedQuery]
     @State private var selectedDatabaseID: DatabaseInfo.ID?
     @State private var connectionError: String?
     @State private var showConnectionError = false
@@ -24,6 +25,9 @@ struct ConnectionsDatabasesSidebar: View {
     @State private var newDatabaseName = ""
     @State private var createDatabaseError: String?
     @State private var hasRestoredConnection = false
+    @State private var queryToEdit: SavedQuery?
+    @State private var queryToDelete: SavedQuery?
+    @State private var selectedQueryID: SavedQuery.ID?
 
     /// Static flag to ensure auto-restore only happens once per app session (not for new tabs)
     private static var hasRestoredConnectionGlobally = false
@@ -124,17 +128,8 @@ struct ConnectionsDatabasesSidebar: View {
                 // Clear tables immediately and show loading state
                 appState.tables = []
                 appState.isLoadingTables = true
-                DebugLog.print("🟡 [ConnectionsDatabasesSidebar] Cleared tables, isLoadingTables=true")
-
-                // Clear table selection and all query-related state
                 appState.selectedTable = nil
-                appState.queryText = ""
-                appState.queryResults = []
-                appState.queryColumnNames = nil
-                appState.showQueryResults = false
-                appState.queryError = nil
-                appState.queryExecutionTime = nil
-                DebugLog.print("🧹 [ConnectionsDatabasesSidebar] Cleared table selection and query state")
+                DebugLog.print("🟡 [ConnectionsDatabasesSidebar] Cleared tables, isLoadingTables=true")
 
                 if let database = database {
                     // Save last selected database name
@@ -221,15 +216,134 @@ struct ConnectionsDatabasesSidebar: View {
     // MARK: - Saved Queries View
 
     private var savedQueriesView: some View {
-        List {
+        List(selection: $selectedQueryID) {
             Section("Saved Queries") {
-                ContentUnavailableView {
-                    Label("No Saved Queries", systemImage: "doc.text")
-                } description: {
-                    Text("Save queries from the editor to access them here.")
+                if savedQueries.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Saved Queries", systemImage: "doc.text")
+                    } description: {
+                        Text("Save queries from the editor to access them here.")
+                    }
+                } else {
+                    ForEach(savedQueries) { query in
+                        SavedQueryRowView(
+                            query: query,
+                            onEdit: { queryToEdit = query },
+                            onDelete: { queryToDelete = query },
+                            onDuplicate: { duplicateQuery(query) }
+                        )
+                    }
                 }
             }
         }
+        .onChange(of: selectedQueryID) { _, newID in
+            if let newID = newID,
+               let query = savedQueries.first(where: { $0.id == newID }) {
+                loadQuery(query)
+            }
+        }
+        .onChange(of: appState.currentSavedQueryId) { _, newID in
+            selectedQueryID = newID
+        }
+        .safeAreaInset(edge: .bottom) {
+            Button {
+                createNewQuery()
+            } label: {
+                Label("New Query", systemImage: "plus")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 100, style: .continuous))
+            .padding()
+        }
+        .sheet(item: $queryToEdit) { query in
+            EditQuerySheet(query: query)
+        }
+        .confirmationDialog(
+            "Delete Query?",
+            isPresented: Binding(
+                get: { queryToDelete != nil },
+                set: { if !$0 { queryToDelete = nil } }
+            ),
+            presenting: queryToDelete
+        ) { query in
+            Button("Delete", role: .destructive) {
+                deleteQuery(query)
+            }
+            Button("Cancel", role: .cancel) {
+                queryToDelete = nil
+            }
+        } message: { query in
+            Text("Are you sure you want to delete \"\(query.name)\"? This action cannot be undone.")
+        }
+    }
+
+    private func createNewQuery() {
+        // Clear selection
+        selectedQueryID = nil
+
+        // Clear current query state
+        appState.queryText = ""
+        appState.currentSavedQueryId = nil
+        appState.lastSavedAt = nil
+        appState.showQueryResults = false
+        appState.queryResults = []
+        appState.queryColumnNames = nil
+        appState.queryError = nil
+        appState.queryExecutionTime = nil
+
+        DebugLog.print("📝 [ConnectionsDatabasesSidebar] Created new query")
+    }
+
+    private func loadQuery(_ query: SavedQuery) {
+        appState.queryText = query.queryText
+        appState.currentSavedQueryId = query.id
+        appState.lastSavedAt = query.updatedAt
+
+        // Clear previous results
+        appState.showQueryResults = false
+        appState.queryResults = []
+        appState.queryColumnNames = nil
+        appState.queryError = nil
+        appState.queryExecutionTime = nil
+
+        DebugLog.print("📂 [ConnectionsDatabasesSidebar] Loaded query: \(query.name)")
+    }
+
+    private func duplicateQuery(_ query: SavedQuery) {
+        let newQuery = SavedQuery(
+            name: "\(query.name) (Copy)",
+            queryText: query.queryText,
+            connectionId: query.connectionId,
+            databaseName: query.databaseName
+        )
+        modelContext.insert(newQuery)
+
+        do {
+            try modelContext.save()
+            DebugLog.print("📋 [ConnectionsDatabasesSidebar] Duplicated query: \(query.name)")
+        } catch {
+            DebugLog.print("❌ [ConnectionsDatabasesSidebar] Failed to duplicate query: \(error)")
+        }
+    }
+
+    private func deleteQuery(_ query: SavedQuery) {
+        // Clear current query reference if this is the loaded query
+        if appState.currentSavedQueryId == query.id {
+            appState.currentSavedQueryId = nil
+            appState.lastSavedAt = nil
+        }
+
+        modelContext.delete(query)
+
+        do {
+            try modelContext.save()
+            DebugLog.print("🗑️ [ConnectionsDatabasesSidebar] Deleted query: \(query.name)")
+        } catch {
+            DebugLog.print("❌ [ConnectionsDatabasesSidebar] Failed to delete query: \(error)")
+        }
+
+        queryToDelete = nil
     }
     
     /// Restore connection/database inherited from another tab via Cmd+T
@@ -358,20 +472,12 @@ struct ConnectionsDatabasesSidebar: View {
         // Note: We set both the local state and appState to ensure consistency
         selectedDatabaseID = lastDatabase.id
         appState.selectedDatabase = lastDatabase
-        
+
         // Clear tables immediately and show loading state
         appState.tables = []
         appState.isLoadingTables = true
-        
-        // Clear table selection and all query-related state
         appState.selectedTable = nil
-        appState.queryText = ""
-        appState.queryResults = []
-        appState.queryColumnNames = nil
-        appState.showQueryResults = false
-        appState.queryError = nil
-        appState.queryExecutionTime = nil
-        
+
         // Load tables for the restored database
         await loadTables(for: lastDatabase)
     }
@@ -612,12 +718,87 @@ private struct DatabaseRowView: View {
                 // Clear selection if the table no longer exists
                 DebugLog.print("🔄 [DatabaseRowView] Selected table no longer exists, clearing selection")
                 appState.selectedTable = nil
-                appState.showQueryResults = false
-                appState.queryText = ""
-                appState.queryResults = []
             }
         } catch {
             DebugLog.print("❌ [DatabaseRowView] Error refreshing tables: \(error)")
+        }
+    }
+}
+
+// MARK: - Saved Query Row View
+
+private struct SavedQueryRowView: View {
+    let query: SavedQuery
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    let onDuplicate: () -> Void
+
+    var body: some View {
+        NavigationLink(value: query.id) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(query.name)
+                    .lineLimit(1)
+
+                Text(query.queryText.prefix(50) + (query.queryText.count > 50 ? "..." : ""))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .contextMenu {
+            Button(action: onEdit) {
+                Label("Rename...", systemImage: "pencil")
+            }
+
+            Button(action: onDuplicate) {
+                Label("Duplicate", systemImage: "doc.on.doc")
+            }
+
+            Divider()
+
+            Button(role: .destructive, action: onDelete) {
+                Label("Delete...", systemImage: "trash")
+            }
+        }
+    }
+}
+
+// MARK: - Edit Query Sheet
+
+private struct EditQuerySheet: View {
+    @Bindable var query: SavedQuery
+    @Environment(\.dismiss) private var dismiss
+    @State private var editedName: String = ""
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Rename Query")
+                .font(.headline)
+
+            TextField("Query Name", text: $editedName)
+                .textFieldStyle(.roundedBorder)
+
+            HStack {
+                Button("Cancel") {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button("Save") {
+                    query.name = editedName
+                    query.updatedAt = Date()
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(editedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding()
+        .frame(width: 300)
+        .onAppear {
+            editedName = query.name
         }
     }
 }
