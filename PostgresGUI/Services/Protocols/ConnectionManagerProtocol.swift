@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import PostgresNIO
 import NIOSSL
 
 /// Protocol defining connection manager operations
@@ -38,8 +37,8 @@ protocol ConnectionManagerProtocol: Actor {
     func disconnect() async
 
     /// Execute an operation with the active connection
-    /// - Parameter operation: Async closure that receives the PostgresConnection
+    /// - Parameter operation: Async closure that receives the abstract DatabaseConnectionProtocol
     /// - Returns: Result of the operation
     /// - Throws: ConnectionError.notConnected if not connected, or operation errors
-    func withConnection<T>(_ operation: @escaping (PostgresConnection) async throws -> T) async throws -> T
+    func withConnection<T>(_ operation: @escaping (DatabaseConnectionProtocol) async throws -> T) async throws -> T
 }

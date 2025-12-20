@@ -14,13 +14,15 @@ class DatabaseService {
 
     // Connection manager (actor-isolated) - protocol for testability
     private let connectionManager: ConnectionManagerProtocol
+    private let queryExecutor: QueryExecutorProtocol
     private let logger = Logger.debugLogger(label: "com.postgresgui.service")
 
     // Specialized services (lazy to avoid circular dependencies)
-    private lazy var tableService = TableService(connectionManager: connectionManager)
-    private lazy var metadataService = MetadataService(connectionManager: connectionManager)
+    private lazy var tableService = TableService(connectionManager: connectionManager, queryExecutor: queryExecutor)
+    private lazy var metadataService = MetadataService(connectionManager: connectionManager, queryExecutor: queryExecutor)
     private lazy var databaseManagementService = DatabaseManagementService(
         connectionManager: connectionManager,
+        queryExecutor: queryExecutor,
         databaseService: self
     )
 
@@ -40,8 +42,12 @@ class DatabaseService {
         currentDatabase
     }
 
-    init(connectionManager: ConnectionManagerProtocol = PostgresConnectionManager()) {
+    init(
+        connectionManager: ConnectionManagerProtocol = PostgresConnectionManager(),
+        queryExecutor: QueryExecutorProtocol? = nil
+    ) {
         self.connectionManager = connectionManager
+        self.queryExecutor = queryExecutor ?? PostgresQueryExecutor.shared
         logger.info("DatabaseService initialized")
     }
 
@@ -199,7 +205,7 @@ class DatabaseService {
         logger.debug("SQL: \(sql.prefix(200))")
 
         return try await connectionManager.withConnection { conn in
-            try await QueryExecutor.executeQuery(connection: conn, sql: sql)
+            try await self.queryExecutor.executeQuery(connection: conn, sql: sql)
         }
     }
 
@@ -243,7 +249,7 @@ class DatabaseService {
         logger.info("Deleting \(rows.count) rows from \(schema).\(table)")
 
         try await connectionManager.withConnection { conn in
-            try await QueryExecutor.deleteRows(
+            try await self.queryExecutor.deleteRows(
                 connection: conn,
                 schema: schema,
                 table: table,
@@ -272,7 +278,7 @@ class DatabaseService {
         logger.info("Updating row in \(schema).\(table)")
 
         try await connectionManager.withConnection { conn in
-            try await QueryExecutor.updateRow(
+            try await self.queryExecutor.updateRow(
                 connection: conn,
                 schema: schema,
                 table: table,

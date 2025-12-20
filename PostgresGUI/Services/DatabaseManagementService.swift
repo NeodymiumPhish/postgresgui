@@ -12,13 +12,19 @@ import Logging
 @MainActor
 class DatabaseManagementService: DatabaseManagementServiceProtocol {
     private let connectionManager: ConnectionManagerProtocol
+    private let queryExecutor: QueryExecutorProtocol
     private let logger = Logger.debugLogger(label: "com.postgresgui.dbmanagementservice")
 
     // Reference to database service to check if we're deleting the current database
     private weak var databaseService: (any DatabaseServiceProtocol)?
 
-    init(connectionManager: ConnectionManagerProtocol, databaseService: (any DatabaseServiceProtocol)? = nil) {
+    init(
+        connectionManager: ConnectionManagerProtocol,
+        queryExecutor: QueryExecutorProtocol,
+        databaseService: (any DatabaseServiceProtocol)? = nil
+    ) {
         self.connectionManager = connectionManager
+        self.queryExecutor = queryExecutor
         self.databaseService = databaseService
     }
 
@@ -27,7 +33,7 @@ class DatabaseManagementService: DatabaseManagementServiceProtocol {
         logger.info("Creating database: \(name)")
 
         try await connectionManager.withConnection { conn in
-            try await QueryExecutor.createDatabase(connection: conn, name: name)
+            try await self.queryExecutor.createDatabase(connection: conn, name: name)
         }
     }
 
@@ -36,7 +42,7 @@ class DatabaseManagementService: DatabaseManagementServiceProtocol {
         logger.info("Deleting database: \(name)")
 
         try await connectionManager.withConnection { conn in
-            try await QueryExecutor.dropDatabase(connection: conn, name: name)
+            try await self.queryExecutor.dropDatabase(connection: conn, name: name)
         }
 
         // If we deleted the current database, disconnect

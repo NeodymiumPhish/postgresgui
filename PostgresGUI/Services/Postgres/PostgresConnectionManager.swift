@@ -20,6 +20,7 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
 
     private var eventLoopGroup: MultiThreadedEventLoopGroup?
     private var connection: PostgresConnection?
+    private var wrappedConnection: PostgresDatabaseConnection?
     private let logger = Logger.debugLogger(label: "com.postgresgui.connection")
 
     /// Check if currently connected
@@ -133,6 +134,7 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
             )
 
             self.connection = newConnection
+            self.wrappedConnection = PostgresDatabaseConnection(connection: newConnection, logger: logger)
             logger.info("Successfully connected to PostgreSQL")
         } catch {
             logger.error("Connection failed: \(error)")
@@ -156,6 +158,7 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
                 logger.error("Error closing connection: \(error)")
             }
             connection = nil
+            wrappedConnection = nil
         }
 
         // Shutdown EventLoopGroup
@@ -179,17 +182,17 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
     // MARK: - Connection Access
 
     /// Execute an operation with the active connection
-    /// - Parameter operation: Async closure that receives the PostgresConnection
+    /// - Parameter operation: Async closure that receives the abstract DatabaseConnectionProtocol
     /// - Returns: Result of the operation
     /// - Throws: ConnectionError.notConnected if not connected, or operation errors
-    func withConnection<T>(_ operation: @escaping (PostgresConnection) async throws -> T) async throws -> T {
-        guard let conn = connection else {
+    func withConnection<T>(_ operation: @escaping (DatabaseConnectionProtocol) async throws -> T) async throws -> T {
+        guard let wrappedConn = wrappedConnection else {
             logger.error("Attempted to use connection while not connected")
             throw ConnectionError.notConnected
         }
 
         do {
-            let result = try await operation(conn)
+            let result = try await operation(wrappedConn)
             return result
         } catch {
             logger.error("Operation failed: \(error)")

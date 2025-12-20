@@ -12,10 +12,12 @@ import Logging
 @MainActor
 class TableService: TableServiceProtocol {
     private let connectionManager: ConnectionManagerProtocol
+    private let queryExecutor: QueryExecutorProtocol
     private let logger = Logger.debugLogger(label: "com.postgresgui.tableservice")
 
-    init(connectionManager: ConnectionManagerProtocol) {
+    init(connectionManager: ConnectionManagerProtocol, queryExecutor: QueryExecutorProtocol) {
         self.connectionManager = connectionManager
+        self.queryExecutor = queryExecutor
     }
 
     /// Fetch list of tables in the connected database
@@ -23,7 +25,7 @@ class TableService: TableServiceProtocol {
         logger.debug("Fetching tables for database: \(database)")
 
         return try await connectionManager.withConnection { conn in
-            try await QueryExecutor.fetchTables(connection: conn)
+            try await self.queryExecutor.fetchTables(connection: conn)
         }
     }
 
@@ -37,7 +39,7 @@ class TableService: TableServiceProtocol {
         logger.debug("Fetching table data: \(schema).\(table)")
 
         return try await connectionManager.withConnection { conn in
-            try await QueryExecutor.fetchTableData(
+            try await self.queryExecutor.fetchTableData(
                 connection: conn,
                 schema: schema,
                 table: table,
@@ -52,7 +54,7 @@ class TableService: TableServiceProtocol {
         logger.info("Deleting table: \(schema).\(table)")
 
         try await connectionManager.withConnection { conn in
-            try await QueryExecutor.dropTable(connection: conn, schema: schema, table: table)
+            try await self.queryExecutor.dropTable(connection: conn, schema: schema, table: table)
         }
     }
 }

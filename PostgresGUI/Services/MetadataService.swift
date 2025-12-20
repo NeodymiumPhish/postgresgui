@@ -12,10 +12,12 @@ import Logging
 @MainActor
 class MetadataService: MetadataServiceProtocol {
     private let connectionManager: ConnectionManagerProtocol
+    private let queryExecutor: QueryExecutorProtocol
     private let logger = Logger.debugLogger(label: "com.postgresgui.metadataservice")
 
-    init(connectionManager: ConnectionManagerProtocol) {
+    init(connectionManager: ConnectionManagerProtocol, queryExecutor: QueryExecutorProtocol) {
         self.connectionManager = connectionManager
+        self.queryExecutor = queryExecutor
     }
 
     /// Fetch list of databases
@@ -23,7 +25,7 @@ class MetadataService: MetadataServiceProtocol {
         logger.debug("Fetching databases")
 
         return try await connectionManager.withConnection { conn in
-            try await QueryExecutor.fetchDatabases(connection: conn)
+            try await self.queryExecutor.fetchDatabases(connection: conn)
         }
     }
 
@@ -32,7 +34,7 @@ class MetadataService: MetadataServiceProtocol {
         logger.debug("Fetching primary keys for \(schema).\(table)")
 
         return try await connectionManager.withConnection { conn in
-            try await QueryExecutor.fetchPrimaryKeys(connection: conn, schema: schema, table: table)
+            try await self.queryExecutor.fetchPrimaryKeys(connection: conn, schema: schema, table: table)
         }
     }
 
@@ -41,7 +43,7 @@ class MetadataService: MetadataServiceProtocol {
         logger.debug("Fetching column info for \(schema).\(table)")
 
         return try await connectionManager.withConnection { conn in
-            try await QueryExecutor.fetchColumns(connection: conn, schema: schema, table: table)
+            try await self.queryExecutor.fetchColumns(connection: conn, schema: schema, table: table)
         }
     }
 }
