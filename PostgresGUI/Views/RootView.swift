@@ -185,25 +185,7 @@ struct RootView: View {
     }
 
     private func loadTables(for database: DatabaseInfo, connection: ConnectionProfile) async {
-        do {
-            // Reconnect to the specific database if needed
-            if appState.databaseService.connectedDatabase != database.name {
-                let password = try KeychainService.getPassword(for: connection.id) ?? ""
-                try await appState.databaseService.connect(
-                    host: connection.host,
-                    port: connection.port,
-                    username: connection.username,
-                    password: password,
-                    database: database.name,
-                    sslMode: connection.sslModeEnum
-                )
-            }
-
-            appState.tables = try await appState.databaseService.fetchTables(database: database.name)
-        } catch {
-            DebugLog.print("Failed to load tables: \(error)")
-            appState.tables = []
-        }
+        await TableRefreshService.loadTables(for: database, connection: connection, appState: appState)
     }
 
     private func handleTabChange(_ tab: TabState?) async {
