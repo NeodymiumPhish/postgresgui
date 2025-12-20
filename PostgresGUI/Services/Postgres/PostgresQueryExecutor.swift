@@ -172,21 +172,21 @@ struct PostgresQueryExecutor: QueryExecutorProtocol {
         JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
         WHERE i.indrelid = ('\(schema).\(table)')::regclass AND i.indisprimary
         """
-        
+
         PostgresQueryExecutor.logger.debug("Fetching primary keys for \(schema).\(table)")
-        
+
         let rows = try await connection.executeQuery(sql)
         var primaryKeys: [String] = []
-        
+
         for try await row in rows {
-            // Decode the primary key column name
-            guard let postgresRow = row as? PostgresDatabaseRow else {
-                throw DatabaseError.unknownError("Expected PostgresDatabaseRow")
+            guard let dbRow = row as? any DatabaseRow else {
+                throw DatabaseError.unknownError("Expected DatabaseRow")
             }
-            let pkColumn = try postgresRow.row.decode(String.self)
+            // Use the protocol's decode method via the "attname" column
+            let pkColumn = try dbRow.decode(String.self, column: "attname")
             primaryKeys.append(pkColumn)
         }
-        
+
         PostgresQueryExecutor.logger.info("Found \(primaryKeys.count) primary key columns for \(schema).\(table)")
         return primaryKeys
     }

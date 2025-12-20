@@ -71,7 +71,7 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
     ///   - username: Username for authentication
     ///   - password: Password for authentication
     ///   - database: Database name to connect to
-    ///   - tlsConfiguration: Optional TLS configuration for encrypted connections
+    ///   - tlsMode: TLS mode for encrypted connections
     /// - Throws: ConnectionError if connection fails
     func connect(
         host: String,
@@ -79,7 +79,7 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
         username: String,
         password: String,
         database: String,
-        tlsConfiguration: TLSConfiguration? = nil
+        tlsMode: DatabaseTLSMode = .disable
     ) async throws {
         logger.info("Connecting to PostgreSQL at \(host):\(port), database: \(database)")
 
@@ -110,8 +110,8 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
             tls: .disable
         )
 
-        // Configure TLS if provided
-        if let tlsConfig = tlsConfiguration {
+        // Configure TLS based on mode
+        if let tlsConfig = Self.makeTLSConfiguration(for: tlsMode) {
             do {
                 let sslContext = try NIOSSLContext(configuration: tlsConfig)
                 config.tls = .require(sslContext)
@@ -142,6 +142,26 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
             try? await eventLoopGroup?.shutdownGracefully()
             eventLoopGroup = nil
             throw PostgresError.mapError(error)
+        }
+    }
+
+    // MARK: - TLS Configuration
+
+    /// Convert abstract DatabaseTLSMode to NIOSSL TLSConfiguration
+    private static func makeTLSConfiguration(for mode: DatabaseTLSMode) -> TLSConfiguration? {
+        switch mode {
+        case .disable:
+            return nil
+        case .require:
+            var config = TLSConfiguration.makeClientConfiguration()
+            config.certificateVerification = .none
+            return config
+        case .verifyCA:
+            var config = TLSConfiguration.makeClientConfiguration()
+            config.certificateVerification = .noHostnameVerification
+            return config
+        case .verifyFull:
+            return TLSConfiguration.makeClientConfiguration()
         }
     }
 
@@ -209,7 +229,7 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
     ///   - username: Username
     ///   - password: Password
     ///   - database: Database name
-    ///   - tlsConfiguration: Optional TLS configuration
+    ///   - tlsMode: TLS mode for encrypted connections
     /// - Returns: True if connection succeeds
     /// - Throws: ConnectionError if connection fails
     static func testConnection(
@@ -218,7 +238,7 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
         username: String,
         password: String,
         database: String,
-        tlsConfiguration: TLSConfiguration? = nil
+        tlsMode: DatabaseTLSMode = .disable
     ) async throws -> Bool {
         let logger = Logger.debugLogger(label: "com.postgresgui.connection.test")
         logger.info("Testing connection to \(host):\(port)")
@@ -236,8 +256,8 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
             tls: .disable
         )
 
-        // Configure TLS if provided
-        if let tlsConfig = tlsConfiguration {
+        // Configure TLS based on mode
+        if let tlsConfig = makeTLSConfiguration(for: tlsMode) {
             do {
                 let sslContext = try NIOSSLContext(configuration: tlsConfig)
                 config.tls = .require(sslContext)

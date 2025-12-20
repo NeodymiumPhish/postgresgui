@@ -7,6 +7,7 @@
 
 import Foundation
 import PostgresNIO
+import NIOCore
 import NIOFoundationCompat
 import Logging
 
@@ -25,11 +26,55 @@ final class PostgresDatabaseConnection: DatabaseConnectionProtocol {
         let rows = try await connection.query(PostgresQuery(unsafeSQL: sql), logger: logger)
         return PostgresDatabaseRowSequence(rows: rows)
     }
-    
+
     func executeQuery(_ sql: String, parameters: [DatabaseParameter]) async throws -> any DatabaseRowSequence {
-        // For now, we'll use unsafeSQL. In the future, we can add parameterized query support
-        // PostgresNIO supports parameterized queries, but we need to map DatabaseParameter to PostgresNIO types
-        let rows = try await connection.query(PostgresQuery(unsafeSQL: sql), logger: logger)
+        // Convert abstract parameters to PostgresNIO bindings
+        var bindings = PostgresBindings()
+        for param in parameters {
+            switch param.type {
+            case .string:
+                if let value = param.value as? String {
+                    bindings.append(value)
+                } else {
+                    bindings.append(String?.none)
+                }
+            case .int:
+                if let value = param.value as? Int {
+                    bindings.append(value)
+                } else if let value = param.value as? Int64 {
+                    bindings.append(value)
+                } else if let value = param.value as? Int32 {
+                    bindings.append(value)
+                } else {
+                    bindings.append(Int?.none)
+                }
+            case .double:
+                if let value = param.value as? Double {
+                    bindings.append(value)
+                } else if let value = param.value as? Float {
+                    bindings.append(Double(value))
+                } else {
+                    bindings.append(Double?.none)
+                }
+            case .bool:
+                if let value = param.value as? Bool {
+                    bindings.append(value)
+                } else {
+                    bindings.append(Bool?.none)
+                }
+            case .data:
+                if let value = param.value as? Data {
+                    bindings.append(ByteBuffer(data: value))
+                } else {
+                    bindings.append(ByteBuffer?.none)
+                }
+            case .null:
+                bindings.append(String?.none)
+            }
+        }
+
+        let query = PostgresQuery(unsafeSQL: sql, binds: bindings)
+        let rows = try await connection.query(query, logger: logger)
         return PostgresDatabaseRowSequence(rows: rows)
     }
 }
@@ -85,10 +130,12 @@ struct PostgresDatabaseRowIterator: AsyncIteratorProtocol {
 struct PostgresDatabaseRow: DatabaseRow {
     typealias Element = DatabaseCell
     typealias Iterator = PostgresDatabaseRowCellIterator
-    
-    /// Expose underlying PostgresRow for PostgresNIO-specific operations
-    /// This is only accessed by PostgresNIO-specific code (ResultMapper, QueryExecutor)
-    let row: PostgresRow
+
+    /// The underlying PostgresNIO row
+    /// - Important: This property is intended for use ONLY within the Postgres/ folder.
+    ///   Code outside the Postgres implementation should use the DatabaseRow protocol methods.
+    ///   Direct access to this property defeats the library-agnostic abstraction.
+    internal let row: PostgresRow
     
     init(row: PostgresRow) {
         self.row = row

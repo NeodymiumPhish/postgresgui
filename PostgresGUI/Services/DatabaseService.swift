@@ -73,8 +73,8 @@ class DatabaseService {
 
         logger.info("Connecting to \(host):\(port), database: \(database)")
 
-        // Get TLS configuration from SSLMode
-        let tlsConfig = sslMode.nioTLSConfiguration
+        // Get abstract TLS mode from SSLMode
+        let tlsMode = sslMode.databaseTLSMode
 
         do {
             try await connectionManager.connect(
@@ -83,7 +83,7 @@ class DatabaseService {
                 username: username,
                 password: password,
                 database: database,
-                tlsConfiguration: tlsConfig
+                tlsMode: tlsMode
             )
 
             currentDatabase = database
@@ -113,7 +113,7 @@ class DatabaseService {
         database: String,
         sslMode: SSLMode = .default
     ) async throws -> Bool {
-        let tlsConfig = sslMode.nioTLSConfiguration
+        let tlsMode = sslMode.databaseTLSMode
 
         return try await PostgresConnectionManager.testConnection(
             host: host,
@@ -121,7 +121,7 @@ class DatabaseService {
             username: username,
             password: password,
             database: database,
-            tlsConfiguration: tlsConfig
+            tlsMode: tlsMode
         )
     }
 
