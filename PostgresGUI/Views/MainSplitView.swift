@@ -9,6 +9,7 @@ import SwiftUI
 
 struct MainSplitView: View {
     @Environment(AppState.self) private var appState
+    @Environment(TabManager.self) private var tabManager
     @State private var searchText: String = ""
     @State private var viewModel: DetailContentViewModel?
 
@@ -42,41 +43,47 @@ struct MainSplitView: View {
                     }
                 }
         } detail: {
-            VSplitView {
-                // Row 1: 2 resizable columns
-                HSplitView {
-                    // Column 1: Table list - isolated from query state
-                    TablesListIsolated(
-                        tables: appState.tables,
-                        selectedTable: $appState.selectedTable,
-                        isLoadingTables: appState.isLoadingTables,
-                        selectedDatabase: appState.selectedDatabase,
-                        refreshTablesAction: {
-                            await refreshTablesInMainSplitView(appState: appState)
-                        }
-                    )
-                    .frame(minWidth: 250)
+            VStack(spacing: 0) {
+                if tabManager.tabs.count > 1 {
+                    TabBarView()
+                }
 
-                    // Column 2: Query results with toolbar
-                    VStack(spacing: 0) {
-                        if let viewModel = viewModel {
-                            QueryResultsView(
-                                onDeleteKeyPressed: {
-                                    viewModel.deleteSelectedRows()
-                                },
-                                onSpaceKeyPressed: {
-                                    viewModel.openJSONView()
-                                }
-                            )
-                        } else {
-                            QueryResultsView()
-                        }
-                    }
-                    .frame(minWidth: 300)
-                }.frame(minHeight: 400)
+                VSplitView {
+                    // Row 1: 2 resizable columns
+                    HSplitView {
+                        // Column 1: Table list - isolated from query state
+                        TablesListIsolated(
+                            tables: appState.tables,
+                            selectedTable: $appState.selectedTable,
+                            isLoadingTables: appState.isLoadingTables,
+                            selectedDatabase: appState.selectedDatabase,
+                            refreshTablesAction: {
+                                await refreshTablesInMainSplitView(appState: appState)
+                            }
+                        )
+                        .frame(minWidth: 250)
 
-                QueryEditorView()
-                    .frame(minHeight: 250)
+                        // Column 2: Query results with toolbar
+                        VStack(spacing: 0) {
+                            if let viewModel = viewModel {
+                                QueryResultsView(
+                                    onDeleteKeyPressed: {
+                                        viewModel.deleteSelectedRows()
+                                    },
+                                    onSpaceKeyPressed: {
+                                        viewModel.openJSONView()
+                                    }
+                                )
+                            } else {
+                                QueryResultsView()
+                            }
+                        }
+                        .frame(minWidth: 300)
+                    }.frame(minHeight: 400)
+
+                    QueryEditorView()
+                        .frame(minHeight: 250)
+                }
             }
             .toolbar {
                 if let viewModel = viewModel {

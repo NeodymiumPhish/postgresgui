@@ -49,13 +49,4 @@ enum Constants {
         static let lastConnectionId = "lastConnectionId"
         static let lastDatabaseName = "lastDatabaseName"
     }
-
-    /// Context to pass to new tabs when opening via Cmd+T
-    @MainActor
-    enum TabContext {
-        /// Connection ID for new tab to inherit (cleared after use)
-        static var pendingConnectionId: UUID?
-        /// Database name for new tab to inherit (cleared after use)
-        static var pendingDatabaseName: String?
-    }
 }

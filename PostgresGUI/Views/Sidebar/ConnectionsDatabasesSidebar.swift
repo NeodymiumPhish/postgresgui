@@ -15,6 +15,8 @@ enum SidebarViewMode: String, CaseIterable {
 
 struct ConnectionsDatabasesSidebar: View {
     @Environment(AppState.self) private var appState
+    @Environment(TabManager.self) private var tabManager
+    @Environment(LoadingState.self) private var loadingState
     @Environment(\.modelContext) private var modelContext
     @Query private var connections: [ConnectionProfile]
     @Query(sort: \SavedQuery.updatedAt, order: .reverse) private var savedQueries: [SavedQuery]
@@ -81,15 +83,33 @@ struct ConnectionsDatabasesSidebar: View {
             }
         }
         .task {
-            // First, check if this tab should inherit context from another tab
-            if await restoreInheritedContext() {
-                // Successfully restored from inherited context, skip default restore
+            // Wait for RootView's initial loading to complete before doing anything
+            // This prevents race conditions with duplicate connection attempts
+            while !loadingState.hasCompletedInitialLoad {
+                try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+            }
+
+            // Skip restoration if RootView already restored from tab state
+            if appState.currentConnection != nil {
                 hasRestoredConnection = true
+                Self.hasRestoredConnectionGlobally = true
+                // Sync selectedDatabaseID with appState
+                if let database = appState.selectedDatabase {
+                    selectedDatabaseID = database.id
+                }
                 return
             }
 
-            // Otherwise, restore last connection on app launch
+            // Restore last connection on app launch (fallback if no tab state)
             await restoreLastConnection()
+        }
+        .onChange(of: appState.currentConnection) { _, newConnection in
+            // Save connection change to active tab
+            tabManager.updateActiveTab(connectionId: newConnection?.id, databaseName: nil, queryText: nil)
+        }
+        .onChange(of: appState.selectedDatabase) { _, newDatabase in
+            // Save database change to active tab
+            tabManager.updateActiveTab(connectionId: nil, databaseName: newDatabase?.name, queryText: nil)
         }
         .alert("Connection Failed", isPresented: $showConnectionError) {
             Button("OK", role: .cancel) {
@@ -346,28 +366,6 @@ struct ConnectionsDatabasesSidebar: View {
         queryToDelete = nil
     }
     
-    /// Restore connection/database inherited from another tab via Cmd+T
-    private func restoreInheritedContext() async -> Bool {
-        // Check for pending context and clear it
-        guard let connectionId = Constants.TabContext.pendingConnectionId else { return false }
-        let databaseName = Constants.TabContext.pendingDatabaseName
-        Constants.TabContext.pendingConnectionId = nil
-        Constants.TabContext.pendingDatabaseName = nil
-
-        // Wait for SwiftData connections to load
-        try? await Task.sleep(nanoseconds: 100_000_000)
-
-        guard let connection = connections.first(where: { $0.id == connectionId }) else { return false }
-
-        // Set database name in UserDefaults so restoreLastDatabase() picks it up
-        if let databaseName = databaseName {
-            UserDefaults.standard.set(databaseName, forKey: Constants.UserDefaultsKeys.lastDatabaseName)
-        }
-
-        await connect(to: connection)
-        return true
-    }
-
     private func restoreLastConnection() async {
         // Only restore once per app session (not for new tabs) and if no connection is currently selected
         guard !hasRestoredConnection,

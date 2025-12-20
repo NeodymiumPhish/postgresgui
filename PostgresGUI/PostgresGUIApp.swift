@@ -12,14 +12,15 @@ import AppKit
 @main
 struct PostgresGUIApp: App {
     init() {
-        // Enable automatic window tabbing
-        NSWindow.allowsAutomaticWindowTabbing = true
+        // Disable automatic window tabbing - we use our own tab bar
+        NSWindow.allowsAutomaticWindowTabbing = false
     }
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             ConnectionProfile.self,
             SavedQuery.self,
+            TabState.self,
         ])
 
         let modelConfiguration = ModelConfiguration(
@@ -70,11 +71,17 @@ struct PostgresGUIApp: App {
             // Remove Settings menu item (Cmd+,)
             CommandGroup(replacing: .appSettings) { }
 
-            CommandGroup(after: .newItem) {
+            // Remove default New Window command
+            CommandGroup(replacing: .newItem) {
                 Button(action: openNewTab) {
                     Text("New Tab")
                 }
                 .keyboardShortcut("t", modifiers: [.command])
+
+                Button(action: closeCurrentTab) {
+                    Text("Close Tab")
+                }
+                .keyboardShortcut("w", modifiers: [.command])
             }
 
             CommandGroup(after: .appInfo) {
@@ -90,19 +97,17 @@ struct PostgresGUIApp: App {
     }
 
     private func openNewTab() {
-        // Capture current connection/database for new tab (read from UserDefaults)
-        if let idString = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.lastConnectionId) {
-            Constants.TabContext.pendingConnectionId = UUID(uuidString: idString)
-            Constants.TabContext.pendingDatabaseName = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
-        }
-
-        if let currentWindow = NSApp.keyWindow,
-           let windowController = currentWindow.windowController
-        {
-            windowController.newWindowForTab(nil)
-            if let newWindow = NSApp.keyWindow, currentWindow != newWindow {
-                currentWindow.addTabbedWindow(newWindow, ordered: .above)
-            }
-        }
+        // Post notification to create a new tab in our custom tab bar
+        NotificationCenter.default.post(name: .createNewTab, object: nil)
     }
+
+    private func closeCurrentTab() {
+        // Post notification to close the current tab
+        NotificationCenter.default.post(name: .closeCurrentTab, object: nil)
+    }
+}
+
+extension Notification.Name {
+    static let createNewTab = Notification.Name("createNewTab")
+    static let closeCurrentTab = Notification.Name("closeCurrentTab")
 }

@@ -10,8 +10,10 @@ import SwiftData
 
 struct QueryEditorView: View {
     @Environment(AppState.self) private var appState
+    @Environment(TabManager.self) private var tabManager
     @Environment(\.modelContext) private var modelContext
     @State private var showNoDatabaseAlert = false
+    @State private var saveTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -56,6 +58,15 @@ struct QueryEditorView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text("Select a database from the sidebar before running queries.")
+        }
+        .onChange(of: appState.queryText) { _, newText in
+            // Debounced save of query text to tab state
+            saveTask?.cancel()
+            saveTask = Task {
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second debounce
+                guard !Task.isCancelled else { return }
+                tabManager.updateActiveTab(connectionId: nil, databaseName: nil, queryText: newText)
+            }
         }
     }
 
