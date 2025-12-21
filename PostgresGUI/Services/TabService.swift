@@ -56,8 +56,9 @@ class TabService: TabServiceProtocol {
         for t in allTabs {
             t.isActive = false
         }
-        // Activate the selected tab
+        // Activate the selected tab and update last accessed time
         tab.isActive = true
+        tab.lastAccessedAt = Date()
         save()
     }
 

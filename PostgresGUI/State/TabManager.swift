@@ -74,11 +74,11 @@ class TabManager {
         tabService.deleteTab(tab)
         tabs = tabService.loadAllTabs()
 
-        // If we closed the active tab, activate another
+        // If we closed the active tab, activate the most recently used one
         if wasActive {
-            if let firstTab = tabs.first {
-                tabService.setActiveTab(firstTab)
-                activeTab = firstTab
+            if let mruTab = tabs.max(by: { $0.lastAccessedAt < $1.lastAccessedAt }) {
+                tabService.setActiveTab(mruTab)
+                activeTab = mruTab
             } else {
                 // No tabs left, create a new one
                 let newTab = tabService.createTab(inheritingFrom: nil)

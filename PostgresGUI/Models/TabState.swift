@@ -17,6 +17,7 @@ final class TabState: Identifiable {
     var isActive: Bool
     var order: Int
     var createdAt: Date
+    var lastAccessedAt: Date
 
     init(
         id: UUID = UUID(),
@@ -25,7 +26,8 @@ final class TabState: Identifiable {
         queryText: String = "",
         isActive: Bool = false,
         order: Int = 0,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        lastAccessedAt: Date = Date()
     ) {
         self.id = id
         self.connectionId = connectionId
@@ -34,5 +36,6 @@ final class TabState: Identifiable {
         self.isActive = isActive
         self.order = order
         self.createdAt = createdAt
+        self.lastAccessedAt = lastAccessedAt
     }
 }
