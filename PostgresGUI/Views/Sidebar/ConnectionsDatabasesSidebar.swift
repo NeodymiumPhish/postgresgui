@@ -155,6 +155,7 @@ struct ConnectionsDatabasesSidebar: View {
 
     // MARK: - Connection
 
+    @MainActor
     private func connect(to connection: ConnectionProfile) async {
         let connectionService = ConnectionService(
             appState: appState,
