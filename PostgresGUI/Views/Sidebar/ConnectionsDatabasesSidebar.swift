@@ -250,6 +250,7 @@ struct ConnectionsDatabasesSidebar: View {
                             onDelete: { queryToDelete = query },
                             onDuplicate: { duplicateQuery(query) }
                         )
+                        .listRowSeparator(.visible)
                     }
                 }
             }
