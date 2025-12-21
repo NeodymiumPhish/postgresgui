@@ -12,23 +12,23 @@ struct SavedQueryRowView: View {
     let onDuplicate: () -> Void
 
     var body: some View {
-        NavigationLink(value: query.id) {
-            HStack {
-                Label {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(query.name)
-                            .lineLimit(1)
-
-                        Text(query.queryText.prefix(50) + (query.queryText.count > 50 ? "..." : ""))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    }
-                } icon: {
-                    Image(systemName: "text.document")
-                }
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "doc.text")
+                .foregroundColor(.secondary)
+                .padding(.top, 2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(query.name)
+                    .lineLimit(1)
+                Text(query.queryText.prefix(50) + (query.queryText.count > 50 ? "..." : ""))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
             }
+            Spacer()
         }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .tag(query.id)
         .contextMenu {
             Button(action: onEdit) {
                 Label("Rename...", systemImage: "pencil")
