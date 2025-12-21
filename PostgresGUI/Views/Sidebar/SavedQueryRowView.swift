@@ -16,23 +16,13 @@ struct SavedQueryRowView: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "doc.text")
-                    .foregroundColor(.secondary)
-                    .padding(.top, 2)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(query.name)
-                        .lineLimit(1)
-                    Text(query.queryText.prefix(50) + (query.queryText.count > 50 ? "..." : ""))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
-            }
+            Image(systemName: "doc.text")
+                .foregroundColor(.secondary)
+            Text(query.name)
+                .lineLimit(1)
             Spacer()
-            if isHovered {
-                menuButton
-            }
+            menuButton
+                .opacity(isHovered ? 1 : 0)
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 6)
