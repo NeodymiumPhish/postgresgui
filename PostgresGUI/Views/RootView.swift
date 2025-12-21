@@ -12,6 +12,7 @@ struct RootView: View {
     @State private var appState = AppState()
     @State private var loadingState = LoadingState()
     @State private var tabManager = TabManager()
+    @State private var initializationError: String?
     @Query private var connections: [ConnectionProfile]
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -111,6 +112,14 @@ struct RootView: View {
                 }
             }
         }
+        .alert("Connection Error", isPresented: .init(
+            get: { initializationError != nil },
+            set: { if !$0 { initializationError = nil } }
+        )) {
+            Button("OK", role: .cancel) { initializationError = nil }
+        } message: {
+            if let error = initializationError { Text(error) }
+        }
     }
 
     private func initializeApp() async {
@@ -155,7 +164,8 @@ struct RootView: View {
 
         let result = await connectionService.connect(to: connection, saveAsLast: true)
 
-        guard case .success = result else {
+        if case .failure(let error) = result {
+            initializationError = PostgresError.extractDetailedMessage(error)
             loadingState.setReady()
             return
         }
@@ -166,6 +176,7 @@ struct RootView: View {
             appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
         } catch {
             DebugLog.print("Failed to load databases: \(error)")
+            initializationError = PostgresError.extractDetailedMessage(error)
             loadingState.setReady()
             return
         }
@@ -219,7 +230,10 @@ struct RootView: View {
             )
 
             let result = await connectionService.connect(to: connection, saveAsLast: false)
-            guard case .success = result else { return }
+            if case .failure(let error) = result {
+                initializationError = PostgresError.extractDetailedMessage(error)
+                return
+            }
         }
 
         // Load databases
@@ -227,6 +241,7 @@ struct RootView: View {
             appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
         } catch {
             DebugLog.print("Failed to load databases: \(error)")
+            initializationError = PostgresError.extractDetailedMessage(error)
             return
         }
 
