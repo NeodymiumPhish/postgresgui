@@ -68,7 +68,7 @@ class ConnectionsListViewModel {
 
         do {
             // Check if this is the currently active connection
-            let isActiveConnection = appState.currentConnection?.id == connection.id
+            let isActiveConnection = appState.connection.currentConnection?.id == connection.id
 
             // Check if this is the last connection before deletion
             let wasLastConnection = connections.count == 1
@@ -96,7 +96,7 @@ class ConnectionsListViewModel {
 
             // If this was the last connection, show welcome screen
             if wasLastConnection {
-                appState.isShowingWelcomeScreen = true
+                appState.navigation.isShowingWelcomeScreen = true
                 UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastConnectionId)
             }
 

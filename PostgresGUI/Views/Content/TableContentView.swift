@@ -30,7 +30,7 @@ struct TableContentView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .automatic) {
                     Button(action: {
-                        let selectedRows = appState.queryResults.filter { appState.selectedRowIDs.contains($0.id) }
+                        let selectedRows = appState.query.queryResults.filter { appState.query.selectedRowIDs.contains($0.id) }
                         guard !selectedRows.isEmpty else {
                             jsonViewError = "No rows selected"
                             return
@@ -39,21 +39,21 @@ struct TableContentView: View {
                     }) {
                         Image(systemName: "doc.text")
                     }
-                    .disabled(appState.selectedRowIDs.isEmpty)
+                    .disabled(appState.query.selectedRowIDs.isEmpty)
 
                     Button(action: {
                         editSelectedRows()
                     }) {
                         Image(systemName: "square.and.pencil")
                     }
-                    .disabled(appState.selectedRowIDs.isEmpty)
-                    
+                    .disabled(appState.query.selectedRowIDs.isEmpty)
+
                     Button(action: {
                         deleteSelectedRows()
                     }) {
                         Image(systemName: "trash")
                     }
-                    .disabled(appState.selectedRowIDs.isEmpty)
+                    .disabled(appState.query.selectedRowIDs.isEmpty)
 
                     Spacer()
 
@@ -62,12 +62,12 @@ struct TableContentView: View {
                     }) {
                         Image(systemName: "arrow.clockwise")
                     }
-                    .disabled(appState.isExecutingQuery || appState.queryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(appState.query.isExecutingQuery || appState.query.queryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .keyboardShortcut(.init("r"), modifiers: [.command])
                 }
             }
             .sheet(isPresented: $showJSONView) {
-                JSONViewerView(selectedRowIDs: appState.selectedRowIDs)
+                JSONViewerView(selectedRowIDs: appState.query.selectedRowIDs)
             }
             .confirmationDialog(
                 "Delete Rows?",
@@ -84,7 +84,7 @@ struct TableContentView: View {
                     showDeleteConfirmation = false
                 }
             } message: {
-                let selectedRowsCount = appState.queryResults.filter { appState.selectedRowIDs.contains($0.id) }.count
+                let selectedRowsCount = appState.query.queryResults.filter { appState.query.selectedRowIDs.contains($0.id) }.count
                 Text("Are you sure you want to delete \(selectedRowsCount) row(s)? This action cannot be undone.")
             }
             .alert("Error Deleting Rows", isPresented: Binding(
@@ -103,9 +103,9 @@ struct TableContentView: View {
                 get: {
                     showRowEditor &&
                     rowToEdit != nil &&
-                    appState.queryColumnNames != nil &&
-                    appState.selectedTable?.name != nil &&
-                    appState.selectedTable?.columnInfo != nil
+                    appState.query.queryColumnNames != nil &&
+                    appState.connection.selectedTable?.name != nil &&
+                    appState.connection.selectedTable?.columnInfo != nil
                 },
                 set: { newValue in
                     showRowEditor = newValue
@@ -115,9 +115,9 @@ struct TableContentView: View {
                 }
             )) {
                 if let rowToEdit = rowToEdit,
-                   let columnNames = appState.queryColumnNames,
-                   let tableName = appState.selectedTable?.name,
-                   let columnInfo = appState.selectedTable?.columnInfo {
+                   let columnNames = appState.query.queryColumnNames,
+                   let tableName = appState.connection.selectedTable?.name,
+                   let columnInfo = appState.connection.selectedTable?.columnInfo {
                     RowEditorView(
                         row: rowToEdit,
                         columnNames: columnNames,
@@ -160,7 +160,7 @@ struct TableContentView: View {
     }
     
     private func openJSONView() {
-        let selectedRows = appState.queryResults.filter { appState.selectedRowIDs.contains($0.id) }
+        let selectedRows = appState.query.queryResults.filter { appState.query.selectedRowIDs.contains($0.id) }
         guard !selectedRows.isEmpty else {
             jsonViewError = "No rows selected"
             return
@@ -172,52 +172,52 @@ struct TableContentView: View {
         DebugLog.print("🔄 [TableContentView] Refresh button clicked")
         Task {
             // Set loading state FIRST to prevent empty state flicker
-            appState.isExecutingQuery = true
-            appState.queryError = nil
-            appState.queryExecutionTime = nil
-            appState.showQueryResults = false // Hide results view during loading
-            appState.queryResults = [] // Clear previous results
-            appState.queryColumnNames = nil // Clear previous column names
-            appState.selectedRowIDs = [] // Clear selected rows
+            appState.query.isExecutingQuery = true
+            appState.query.queryError = nil
+            appState.query.queryExecutionTime = nil
+            appState.query.showQueryResults = false // Hide results view during loading
+            appState.query.queryResults = [] // Clear previous results
+            appState.query.queryColumnNames = nil // Clear previous column names
+            appState.query.selectedRowIDs = [] // Clear selected rows
 
             let startTime = Date()
 
             do {
                 DebugLog.print("📊 [TableContentView] Executing query...")
-                let (results, columnNames) = try await appState.databaseService.executeQuery(appState.queryText)
-                appState.queryResults = results
-                appState.queryColumnNames = columnNames.isEmpty ? nil : columnNames
-                appState.showQueryResults = true
-                
+                let (results, columnNames) = try await appState.connection.databaseService.executeQuery(appState.query.queryText)
+                appState.query.queryResults = results
+                appState.query.queryColumnNames = columnNames.isEmpty ? nil : columnNames
+                appState.query.showQueryResults = true
+
                 let endTime = Date()
-                appState.queryExecutionTime = endTime.timeIntervalSince(startTime)
-                
+                appState.query.queryExecutionTime = endTime.timeIntervalSince(startTime)
+
                 DebugLog.print("✅ [TableContentView] Query executed successfully, showing results")
             } catch {
-                appState.queryError = error.localizedDescription
-                appState.queryColumnNames = nil
-                appState.showQueryResults = true
-                
+                appState.query.queryError = error.localizedDescription
+                appState.query.queryColumnNames = nil
+                appState.query.showQueryResults = true
+
                 let endTime = Date()
-                appState.queryExecutionTime = endTime.timeIntervalSince(startTime)
-                
+                appState.query.queryExecutionTime = endTime.timeIntervalSince(startTime)
+
                 DebugLog.print("❌ [TableContentView] Query execution failed: \(error)")
             }
 
-            appState.isExecutingQuery = false
+            appState.query.isExecutingQuery = false
         }
     }
     
     private func deleteSelectedRows() {
-        DebugLog.print("🗑️ [TableContentView] Delete button clicked for \(appState.selectedRowIDs.count) row(s)")
+        DebugLog.print("🗑️ [TableContentView] Delete button clicked for \(appState.query.selectedRowIDs.count) row(s)")
 
-        guard let selectedTable = appState.selectedTable else {
+        guard let selectedTable = appState.connection.selectedTable else {
             deleteError = "No table selected"
             return
         }
 
         // Check if there are actually selected rows in the current table's results
-        let selectedRows = appState.queryResults.filter { appState.selectedRowIDs.contains($0.id) }
+        let selectedRows = appState.query.queryResults.filter { appState.query.selectedRowIDs.contains($0.id) }
         guard !selectedRows.isEmpty else {
             deleteError = "No rows selected"
             return
@@ -233,17 +233,17 @@ struct TableContentView: View {
     }
 
     private func fetchPrimaryKeysAndShowDeleteDialog() async {
-        guard let selectedTable = appState.selectedTable else { return }
+        guard let selectedTable = appState.connection.selectedTable else { return }
 
         do {
-            let pkColumns = try await appState.databaseService.fetchPrimaryKeyColumns(
+            let pkColumns = try await appState.connection.databaseService.fetchPrimaryKeyColumns(
                 schema: selectedTable.schema,
                 table: selectedTable.name
             )
 
             var updatedTable = selectedTable
             updatedTable.primaryKeyColumns = pkColumns
-            appState.selectedTable = updatedTable
+            appState.connection.selectedTable = updatedTable
 
             showDeleteConfirmation = true
         } catch {
@@ -252,17 +252,17 @@ struct TableContentView: View {
     }
 
     private func performDelete() async {
-        guard let selectedTable = appState.selectedTable else { return }
+        guard let selectedTable = appState.connection.selectedTable else { return }
 
         guard let pkColumns = selectedTable.primaryKeyColumns, !pkColumns.isEmpty else {
             deleteError = "This table has no primary key. DELETE requires a primary key."
             return
         }
 
-        let selectedRows = appState.queryResults.filter { appState.selectedRowIDs.contains($0.id) }
+        let selectedRows = appState.query.queryResults.filter { appState.query.selectedRowIDs.contains($0.id) }
 
         do {
-            try await appState.databaseService.deleteRows(
+            try await appState.connection.databaseService.deleteRows(
                 schema: selectedTable.schema,
                 table: selectedTable.name,
                 primaryKeyColumns: pkColumns,
@@ -271,29 +271,29 @@ struct TableContentView: View {
 
             // Remove deleted rows from the UI
             let deletedIDs = Set(selectedRows.map { $0.id })
-            appState.queryResults.removeAll { deletedIDs.contains($0.id) }
-            appState.selectedRowIDs = []
+            appState.query.queryResults.removeAll { deletedIDs.contains($0.id) }
+            appState.query.selectedRowIDs = []
         } catch {
             deleteError = error.localizedDescription
         }
     }
 
     private func editSelectedRows() {
-        DebugLog.print("✏️ [TableContentView] Edit button clicked for \(appState.selectedRowIDs.count) row(s)")
+        DebugLog.print("✏️ [TableContentView] Edit button clicked for \(appState.query.selectedRowIDs.count) row(s)")
 
-        guard let selectedTable = appState.selectedTable else {
+        guard let selectedTable = appState.connection.selectedTable else {
             editError = "No table selected"
             return
         }
 
         // Validate we have column names
-        guard appState.queryColumnNames != nil else {
+        guard appState.query.queryColumnNames != nil else {
             editError = "No query results available"
             return
         }
 
         // Find selected row in current table's results
-        let selectedRows = appState.queryResults.filter { appState.selectedRowIDs.contains($0.id) }
+        let selectedRows = appState.query.queryResults.filter { appState.query.selectedRowIDs.contains($0.id) }
         guard let rowToEdit = selectedRows.first else {
             editError = "No row selected"
             return
@@ -310,15 +310,15 @@ struct TableContentView: View {
     }
 
     private func fetchPrimaryKeysAndShowEditor(_ row: TableRow) async {
-        guard let selectedTable = appState.selectedTable else { return }
+        guard let selectedTable = appState.connection.selectedTable else { return }
 
         do {
-            let pkColumns = try await appState.databaseService.fetchPrimaryKeyColumns(
+            let pkColumns = try await appState.connection.databaseService.fetchPrimaryKeyColumns(
                 schema: selectedTable.schema,
                 table: selectedTable.name
             )
 
-            let columnInfo = try await appState.databaseService.fetchColumnInfo(
+            let columnInfo = try await appState.connection.databaseService.fetchColumnInfo(
                 schema: selectedTable.schema,
                 table: selectedTable.name
             )
@@ -326,7 +326,7 @@ struct TableContentView: View {
             var updatedTable = selectedTable
             updatedTable.primaryKeyColumns = pkColumns
             updatedTable.columnInfo = columnInfo
-            appState.selectedTable = updatedTable
+            appState.connection.selectedTable = updatedTable
 
             self.rowToEdit = row
             showRowEditor = true
@@ -339,13 +339,13 @@ struct TableContentView: View {
         DebugLog.print("🟡 [TableContentView.saveEditedRow] Received updatedValues: \(updatedValues)")
         DebugLog.print("  updatedValues count: \(updatedValues.count)")
 
-        guard let selectedTable = appState.selectedTable else { return }
+        guard let selectedTable = appState.connection.selectedTable else { return }
 
         guard let pkColumns = selectedTable.primaryKeyColumns, !pkColumns.isEmpty else {
             throw DatabaseError.noPrimaryKey
         }
 
-        try await appState.databaseService.updateRow(
+        try await appState.connection.databaseService.updateRow(
             schema: selectedTable.schema,
             table: selectedTable.name,
             primaryKeyColumns: pkColumns,
@@ -354,13 +354,13 @@ struct TableContentView: View {
         )
 
         // Update the row in the UI
-        if let index = appState.queryResults.firstIndex(where: { $0.id == originalRow.id }) {
+        if let index = appState.query.queryResults.firstIndex(where: { $0.id == originalRow.id }) {
             let updatedRow = TableRow(values: updatedValues)
-            appState.queryResults[index] = updatedRow
+            appState.query.queryResults[index] = updatedRow
 
             // Update selection to use the new row's ID
-            appState.selectedRowIDs.remove(originalRow.id)
-            appState.selectedRowIDs.insert(updatedRow.id)
+            appState.query.selectedRowIDs.remove(originalRow.id)
+            appState.query.selectedRowIDs.insert(updatedRow.id)
         }
     }
 }

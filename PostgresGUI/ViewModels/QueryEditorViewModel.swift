@@ -31,7 +31,7 @@ class QueryEditorViewModel {
         appState.query.selectedRowIDs = []
 
         // Execute query
-        let result = await queryService.executeQuery(appState.queryText)
+        let result = await queryService.executeQuery(appState.query.queryText)
 
         // Update state based on result
         if result.isSuccess {

@@ -50,7 +50,7 @@ class ServiceContainer {
     var queryService: QueryServiceProtocol {
         if _queryService == nil {
             _queryService = QueryService(
-                databaseService: appState.databaseService,
+                databaseService: appState.connection.databaseService,
                 queryState: queryState
             )
         }

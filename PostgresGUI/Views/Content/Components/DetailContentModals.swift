@@ -17,16 +17,16 @@ struct DetailContentModals: ViewModifier {
         content
             // JSON Viewer Sheet
             .sheet(isPresented: $viewModel.showJSONView) {
-                JSONViewerView(selectedRowIDs: appState.selectedRowIDs)
+                JSONViewerView(selectedRowIDs: appState.query.selectedRowIDs)
             }
             // Row Editor Sheet
             .sheet(isPresented: Binding(
                 get: {
                     viewModel.showRowEditor &&
                     viewModel.rowToEdit != nil &&
-                    appState.queryColumnNames != nil &&
-                    appState.selectedTable?.name != nil &&
-                    appState.selectedTable?.columnInfo != nil
+                    appState.query.queryColumnNames != nil &&
+                    appState.connection.selectedTable?.name != nil &&
+                    appState.connection.selectedTable?.columnInfo != nil
                 },
                 set: { newValue in
                     viewModel.showRowEditor = newValue
@@ -36,9 +36,9 @@ struct DetailContentModals: ViewModifier {
                 }
             )) {
                 if let rowToEdit = viewModel.rowToEdit,
-                   let columnNames = appState.queryColumnNames,
-                   let tableName = appState.selectedTable?.name,
-                   let columnInfo = appState.selectedTable?.columnInfo {
+                   let columnNames = appState.query.queryColumnNames,
+                   let tableName = appState.connection.selectedTable?.name,
+                   let columnInfo = appState.connection.selectedTable?.columnInfo {
                     RowEditorView(
                         row: rowToEdit,
                         columnNames: columnNames,
@@ -72,7 +72,7 @@ struct DetailContentModals: ViewModifier {
                     viewModel.showDeleteConfirmation = false
                 }
             } message: {
-                let selectedRowsCount = appState.queryResults.filter { appState.selectedRowIDs.contains($0.id) }.count
+                let selectedRowsCount = appState.query.queryResults.filter { appState.query.selectedRowIDs.contains($0.id) }.count
                 Text("Are you sure you want to delete \(selectedRowsCount) row(s)? This action cannot be undone.")
             }
             // Delete Error Alert

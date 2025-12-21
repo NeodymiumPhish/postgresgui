@@ -52,28 +52,28 @@ class SidebarViewModel {
         DebugLog.print("🔄 [SidebarViewModel] Loading tables for database: \(database.name)")
 
         // Clear tables immediately and show loading state
-        appState.tables = []
-        appState.isLoadingTables = true
+        appState.connection.tables = []
+        appState.connection.isLoadingTables = true
 
         // Clear table selection and all query-related state
-        appState.selectedTable = nil
-        appState.queryText = ""
-        appState.queryResults = []
-        appState.queryColumnNames = nil
-        appState.showQueryResults = false
-        appState.queryError = nil
-        appState.selectedRowIDs = []
+        appState.connection.selectedTable = nil
+        appState.query.queryText = ""
+        appState.query.queryResults = []
+        appState.query.queryColumnNames = nil
+        appState.query.showQueryResults = false
+        appState.query.queryError = nil
+        appState.query.selectedRowIDs = []
 
         do {
-            let tables = try await appState.databaseService.fetchTables(database: database.name)
-            appState.tables = tables
+            let tables = try await appState.connection.databaseService.fetchTables(database: database.name)
+            appState.connection.tables = tables
             DebugLog.print("✅ [SidebarViewModel] Loaded \(tables.count) tables")
         } catch {
             DebugLog.print("❌ [SidebarViewModel] Failed to load tables: \(error)")
-            appState.tables = []
+            appState.connection.tables = []
         }
 
-        appState.isLoadingTables = false
+        appState.connection.isLoadingTables = false
     }
 
     /// Create a new database
@@ -81,7 +81,7 @@ class SidebarViewModel {
         guard !newDatabaseName.isEmpty else { return }
 
         do {
-            try await appState.databaseService.createDatabase(name: newDatabaseName)
+            try await appState.connection.databaseService.createDatabase(name: newDatabaseName)
 
             // Refresh databases list
             await refreshDatabases()
@@ -100,13 +100,13 @@ class SidebarViewModel {
     /// Delete a database
     func deleteDatabase(_ database: DatabaseInfo) async {
         do {
-            try await appState.databaseService.deleteDatabase(name: database.name)
+            try await appState.connection.databaseService.deleteDatabase(name: database.name)
 
             // If we deleted the selected database, clear selection
-            if appState.selectedDatabase?.id == database.id {
-                appState.selectedDatabase = nil
+            if appState.connection.selectedDatabase?.id == database.id {
+                appState.connection.selectedDatabase = nil
                 selectedDatabaseID = nil
-                appState.tables = []
+                appState.connection.tables = []
             }
 
             // Refresh databases list
@@ -122,7 +122,7 @@ class SidebarViewModel {
     /// Refresh databases list
     func refreshDatabases() async {
         do {
-            appState.databases = try await appState.databaseService.fetchDatabases()
+            appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
 
             // After refreshing databases, restore last selected database if available
             await restoreLastDatabase()
@@ -134,7 +134,7 @@ class SidebarViewModel {
     /// Restore the last connected connection on app start
     func restoreLastConnection(connections: [ConnectionProfile], persistenceContext: PersistenceContextProtocol) async {
         // Only restore if not already connected and we have connections
-        guard !appState.isConnected, !connections.isEmpty else { return }
+        guard !appState.connection.isConnected, !connections.isEmpty else { return }
 
         // Get last connection ID from UserDefaults
         guard let lastConnectionIdString = userDefaults.string(forKey: Constants.UserDefaultsKeys.lastConnectionId),
@@ -159,7 +159,7 @@ class SidebarViewModel {
 
     private func restoreLastDatabase() async {
         // Only restore if no database is currently selected and we have databases
-        guard appState.selectedDatabase == nil, !appState.databases.isEmpty else { return }
+        guard appState.connection.selectedDatabase == nil, !appState.connection.databases.isEmpty else { return }
 
         // Get last database name from UserDefaults
         guard let lastDatabaseName = userDefaults.string(forKey: Constants.UserDefaultsKeys.lastDatabaseName),
@@ -168,7 +168,7 @@ class SidebarViewModel {
         }
 
         // Find the database in the list
-        guard let lastDatabase = appState.databases.first(where: { $0.name == lastDatabaseName }) else {
+        guard let lastDatabase = appState.connection.databases.first(where: { $0.name == lastDatabaseName }) else {
             // Database not found, clear the stored name
             userDefaults.removeObject(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
             return
@@ -176,7 +176,7 @@ class SidebarViewModel {
 
         // Set the database selection
         selectedDatabaseID = lastDatabase.id
-        appState.selectedDatabase = lastDatabase
+        appState.connection.selectedDatabase = lastDatabase
 
         // Load tables for this database
         await loadTables(for: lastDatabase)

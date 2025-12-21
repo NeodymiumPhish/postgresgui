@@ -19,7 +19,7 @@ struct RootView: View {
     var body: some View {
         ZStack {
             Group {
-                if appState.isShowingWelcomeScreen && connections.isEmpty {
+                if appState.navigation.isShowingWelcomeScreen && connections.isEmpty {
                     WelcomeView()
                         .environment(appState)
                 } else {
@@ -35,30 +35,30 @@ struct RootView: View {
         .environment(tabManager)
         .environment(loadingState)
         .sheet(isPresented: Binding(
-            get: { appState.isShowingConnectionForm },
+            get: { appState.navigation.isShowingConnectionForm },
             set: { newValue in
                 if newValue {
                     // Close other sheet before opening this one
-                    appState.isShowingConnectionsList = false
+                    appState.navigation.isShowingConnectionsList = false
                 }
-                appState.isShowingConnectionForm = newValue
+                appState.navigation.isShowingConnectionForm = newValue
                 if !newValue {
                     // Clear edit state when sheet is dismissed
-                    appState.connectionToEdit = nil
+                    appState.navigation.connectionToEdit = nil
                 }
             }
         )) {
-            ConnectionFormView(connectionToEdit: appState.connectionToEdit)
+            ConnectionFormView(connectionToEdit: appState.navigation.connectionToEdit)
                 .environment(appState)
         }
         .sheet(isPresented: Binding(
-            get: { appState.isShowingConnectionsList },
+            get: { appState.navigation.isShowingConnectionsList },
             set: { newValue in
                 if newValue {
                     // Close other sheet before opening this one
-                    appState.isShowingConnectionForm = false
+                    appState.navigation.isShowingConnectionForm = false
                 }
-                appState.isShowingConnectionsList = newValue
+                appState.navigation.isShowingConnectionsList = newValue
             }
         )) {
             ConnectionsListView()
@@ -75,9 +75,9 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .createNewTab)) { _ in
             // Save current state before creating new tab
             tabManager.updateActiveTab(
-                connectionId: appState.currentConnection?.id,
-                databaseName: appState.selectedDatabase?.name,
-                queryText: appState.queryText
+                connectionId: appState.connection.currentConnection?.id,
+                databaseName: appState.connection.selectedDatabase?.name,
+                queryText: appState.query.queryText
             )
             // Create new tab inheriting from current
             tabManager.createNewTab(inheritingFrom: tabManager.activeTab)
@@ -103,9 +103,9 @@ struct RootView: View {
                 // Window is closing - save tab state and cleanup connection
                 Task { @MainActor in
                     tabManager.updateActiveTab(
-                        connectionId: appState.currentConnection?.id,
-                        databaseName: appState.selectedDatabase?.name,
-                        queryText: appState.queryText
+                        connectionId: appState.connection.currentConnection?.id,
+                        databaseName: appState.connection.selectedDatabase?.name,
+                        queryText: appState.query.queryText
                     )
                     await appState.cleanupOnWindowClose()
                 }
@@ -144,7 +144,7 @@ struct RootView: View {
         DebugLog.print("🚀 [RootView] Restoring connection: \(connection.displayName)")
 
         // Restore query text from active tab
-        appState.queryText = activeTab.queryText
+        appState.query.queryText = activeTab.queryText
 
         // Connect to database
         loadingState.setPhase(.connectingToDatabase)
@@ -163,7 +163,7 @@ struct RootView: View {
         // Load databases
         loadingState.setPhase(.loadingDatabases)
         do {
-            appState.databases = try await appState.databaseService.fetchDatabases()
+            appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
         } catch {
             DebugLog.print("Failed to load databases: \(error)")
             loadingState.setReady()
@@ -172,8 +172,8 @@ struct RootView: View {
 
         // Restore database selection from active tab
         if let databaseName = activeTab.databaseName,
-           let database = appState.databases.first(where: { $0.name == databaseName }) {
-            appState.selectedDatabase = database
+           let database = appState.connection.databases.first(where: { $0.name == databaseName }) {
+            appState.connection.selectedDatabase = database
 
             // Load tables
             loadingState.setPhase(.loadingTables)
@@ -181,7 +181,7 @@ struct RootView: View {
         }
 
         loadingState.setReady()
-        appState.isShowingWelcomeScreen = false
+        appState.navigation.isShowingWelcomeScreen = false
     }
 
     private func loadTables(for database: DatabaseInfo, connection: ConnectionProfile) async {
@@ -194,25 +194,25 @@ struct RootView: View {
         DebugLog.print("📑 [RootView] Tab changed to: \(tab.id)")
 
         // Restore query text
-        appState.queryText = tab.queryText
+        appState.query.queryText = tab.queryText
 
         // Clear current state
-        appState.selectedTable = nil
-        appState.tables = []
-        appState.queryResults = []
-        appState.queryColumnNames = nil
+        appState.connection.selectedTable = nil
+        appState.connection.tables = []
+        appState.query.queryResults = []
+        appState.query.queryColumnNames = nil
 
         // If tab has no connection, just clear and return
         guard let connectionId = tab.connectionId,
               let connection = connections.first(where: { $0.id == connectionId }) else {
-            appState.currentConnection = nil
-            appState.selectedDatabase = nil
-            appState.databases = []
+            appState.connection.currentConnection = nil
+            appState.connection.selectedDatabase = nil
+            appState.connection.databases = []
             return
         }
 
         // Connect if different connection or not connected
-        if appState.currentConnection?.id != connectionId || !appState.databaseService.isConnected {
+        if appState.connection.currentConnection?.id != connectionId || !appState.connection.databaseService.isConnected {
             let connectionService = ConnectionService(
                 appState: appState,
                 keychainService: KeychainServiceImpl()
@@ -224,7 +224,7 @@ struct RootView: View {
 
         // Load databases
         do {
-            appState.databases = try await appState.databaseService.fetchDatabases()
+            appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
         } catch {
             DebugLog.print("Failed to load databases: \(error)")
             return
@@ -232,8 +232,8 @@ struct RootView: View {
 
         // Restore database selection
         if let databaseName = tab.databaseName,
-           let database = appState.databases.first(where: { $0.name == databaseName }) {
-            appState.selectedDatabase = database
+           let database = appState.connection.databases.first(where: { $0.name == databaseName }) {
+            appState.connection.selectedDatabase = database
             await loadTables(for: database, connection: connection)
         }
     }

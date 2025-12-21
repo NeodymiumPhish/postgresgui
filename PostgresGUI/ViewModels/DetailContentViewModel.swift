@@ -48,8 +48,8 @@ class DetailContentViewModel {
 
     func openJSONView() {
         let result = rowOperations.validateRowSelection(
-            selectedRowIDs: appState.selectedRowIDs,
-            queryResults: appState.queryResults
+            selectedRowIDs: appState.query.selectedRowIDs,
+            queryResults: appState.query.queryResults
         )
 
         switch result {
@@ -63,9 +63,9 @@ class DetailContentViewModel {
     // MARK: - Delete Operations
 
     func deleteSelectedRows() {
-        DebugLog.print("🗑️ [DetailContentViewModel] Delete button clicked for \(appState.selectedRowIDs.count) row(s)")
+        DebugLog.print("🗑️ [DetailContentViewModel] Delete button clicked for \(appState.query.selectedRowIDs.count) row(s)")
 
-        guard let selectedTable = appState.selectedTable else {
+        guard let selectedTable = appState.connection.selectedTable else {
             deleteError = RowOperationError.noTableSelected.localizedDescription
             return
         }
@@ -78,8 +78,8 @@ class DetailContentViewModel {
 
         // Validate row selection
         let result = rowOperations.validateRowSelection(
-            selectedRowIDs: appState.selectedRowIDs,
-            queryResults: appState.queryResults
+            selectedRowIDs: appState.query.selectedRowIDs,
+            queryResults: appState.query.queryResults
         )
 
         switch result {
@@ -91,24 +91,24 @@ class DetailContentViewModel {
     }
 
     func performDelete() async {
-        guard let selectedTable = appState.selectedTable else { return }
+        guard let selectedTable = appState.connection.selectedTable else { return }
 
         // Get selected rows
-        let selectedRows = appState.queryResults.filter { appState.selectedRowIDs.contains($0.id) }
+        let selectedRows = appState.query.queryResults.filter { appState.query.selectedRowIDs.contains($0.id) }
 
         // Perform delete
         let result = await rowOperations.deleteRows(
             table: selectedTable,
             rows: selectedRows,
-            databaseService: appState.databaseService
+            databaseService: appState.connection.databaseService
         )
 
         switch result {
         case .success:
             // Remove deleted rows from the UI
             let deletedIDs = Set(selectedRows.map { $0.id })
-            appState.queryResults.removeAll { deletedIDs.contains($0.id) }
-            appState.selectedRowIDs = []
+            appState.query.queryResults.removeAll { deletedIDs.contains($0.id) }
+            appState.query.selectedRowIDs = []
         case .failure(let error):
             deleteError = error.localizedDescription
         }
@@ -117,9 +117,9 @@ class DetailContentViewModel {
     // MARK: - Edit Operations
 
     func editSelectedRows() {
-        DebugLog.print("✏️ [DetailContentViewModel] Edit button clicked for \(appState.selectedRowIDs.count) row(s)")
+        DebugLog.print("✏️ [DetailContentViewModel] Edit button clicked for \(appState.query.selectedRowIDs.count) row(s)")
 
-        guard let selectedTable = appState.selectedTable else {
+        guard let selectedTable = appState.connection.selectedTable else {
             editError = RowOperationError.noTableSelected.localizedDescription
             return
         }
@@ -131,15 +131,15 @@ class DetailContentViewModel {
         }
 
         // Validate we have column names
-        guard appState.queryColumnNames != nil else {
+        guard appState.query.queryColumnNames != nil else {
             editError = "No query results available"
             return
         }
 
         // Validate row selection and get first row
         let result = rowOperations.validateRowSelection(
-            selectedRowIDs: appState.selectedRowIDs,
-            queryResults: appState.queryResults
+            selectedRowIDs: appState.query.selectedRowIDs,
+            queryResults: appState.query.queryResults
         )
 
         switch result {
@@ -159,7 +159,7 @@ class DetailContentViewModel {
         DebugLog.print("🟡 [DetailContentViewModel.saveEditedRow] Received updatedValues: \(updatedValues)")
         DebugLog.print("  updatedValues count: \(updatedValues.count)")
 
-        guard let selectedTable = appState.selectedTable else {
+        guard let selectedTable = appState.connection.selectedTable else {
             throw RowOperationError.noTableSelected
         }
 
@@ -168,18 +168,18 @@ class DetailContentViewModel {
             table: selectedTable,
             originalRow: originalRow,
             updatedValues: updatedValues,
-            databaseService: appState.databaseService
+            databaseService: appState.connection.databaseService
         )
 
         switch result {
         case .success(let updatedRow):
             // Update the row in the UI
-            if let index = appState.queryResults.firstIndex(where: { $0.id == originalRow.id }) {
-                appState.queryResults[index] = updatedRow
+            if let index = appState.query.queryResults.firstIndex(where: { $0.id == originalRow.id }) {
+                appState.query.queryResults[index] = updatedRow
 
                 // Update selection to use the new row's ID
-                appState.selectedRowIDs.remove(originalRow.id)
-                appState.selectedRowIDs.insert(updatedRow.id)
+                appState.query.selectedRowIDs.remove(originalRow.id)
+                appState.query.selectedRowIDs.insert(updatedRow.id)
             }
         case .failure(let error):
             throw error
@@ -192,32 +192,32 @@ class DetailContentViewModel {
         DebugLog.print("🔄 [DetailContentViewModel] Refresh button clicked")
 
         // Set loading state FIRST to prevent empty state flicker
-        appState.isExecutingQuery = true
-        appState.queryError = nil
-        appState.queryExecutionTime = nil
-        appState.showQueryResults = false // Hide results view during loading
-        appState.queryResults = [] // Clear previous results
-        appState.queryColumnNames = nil // Clear previous column names
-        appState.selectedRowIDs = [] // Clear selected rows
+        appState.query.isExecutingQuery = true
+        appState.query.queryError = nil
+        appState.query.queryExecutionTime = nil
+        appState.query.showQueryResults = false // Hide results view during loading
+        appState.query.queryResults = [] // Clear previous results
+        appState.query.queryColumnNames = nil // Clear previous column names
+        appState.query.selectedRowIDs = [] // Clear selected rows
 
         // Execute query
-        let result = await queryService.executeQuery(appState.queryText)
+        let result = await queryService.executeQuery(appState.query.queryText)
 
         // Update state based on result
         if result.isSuccess {
-            appState.queryResults = result.rows
-            appState.queryColumnNames = result.columnNames.isEmpty ? nil : result.columnNames
-            appState.showQueryResults = true
-            appState.queryExecutionTime = result.executionTime
+            appState.query.queryResults = result.rows
+            appState.query.queryColumnNames = result.columnNames.isEmpty ? nil : result.columnNames
+            appState.query.showQueryResults = true
+            appState.query.queryExecutionTime = result.executionTime
             DebugLog.print("✅ [DetailContentViewModel] Query executed successfully, showing results")
         } else if let error = result.error {
-            appState.queryError = error.localizedDescription
-            appState.queryColumnNames = nil
-            appState.showQueryResults = true
-            appState.queryExecutionTime = result.executionTime
+            appState.query.queryError = error.localizedDescription
+            appState.query.queryColumnNames = nil
+            appState.query.showQueryResults = true
+            appState.query.queryExecutionTime = result.executionTime
             DebugLog.print("❌ [DetailContentViewModel] Query execution failed: \(error)")
         }
 
-        appState.isExecutingQuery = false
+        appState.query.isExecutingQuery = false
     }
 }

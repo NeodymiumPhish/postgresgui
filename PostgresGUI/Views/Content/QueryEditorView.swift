@@ -40,7 +40,7 @@ struct QueryEditorView: View {
                 Spacer()
 
                 // Show saved timestamp on the right
-                if let savedAt = appState.lastSavedAt {
+                if let savedAt = appState.query.lastSavedAt {
                     Text("Saved \(savedAt.formatted(date: .omitted, time: .shortened))")
                         .foregroundColor(.secondary)
                         .font(.subheadline)
@@ -51,8 +51,8 @@ struct QueryEditorView: View {
 
             // Syntax highlighted editor
             SyntaxHighlightedEditor(text: Binding(
-                get: { appState.queryText },
-                set: { appState.queryText = $0 }
+                get: { appState.query.queryText },
+                set: { appState.query.queryText = $0 }
             ))
         }
         .alert("No Database Selected", isPresented: $showNoDatabaseAlert) {
@@ -60,7 +60,7 @@ struct QueryEditorView: View {
         } message: {
             Text("Select a database from the sidebar before running queries.")
         }
-        .onChange(of: appState.queryText) { _, newText in
+        .onChange(of: appState.query.queryText) { _, newText in
             // Debounced save of query text to tab state
             saveTask?.cancel()
             saveTask = Task {
@@ -72,7 +72,7 @@ struct QueryEditorView: View {
     }
 
     private func saveQuery() {
-        let queryText = appState.queryText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let queryText = appState.query.queryText.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Don't save empty queries
         guard !queryText.isEmpty else {
@@ -83,7 +83,7 @@ struct QueryEditorView: View {
         let now = Date()
 
         // Check if we're updating an existing saved query
-        if let existingId = appState.currentSavedQueryId {
+        if let existingId = appState.query.currentSavedQueryId {
             // Update existing query
             let descriptor = FetchDescriptor<SavedQuery>(
                 predicate: #Predicate { $0.id == existingId }
@@ -99,19 +99,19 @@ struct QueryEditorView: View {
             let savedQuery = SavedQuery(
                 name: queryName,
                 queryText: queryText,
-                connectionId: appState.currentConnection?.id,
-                databaseName: appState.selectedDatabase?.name
+                connectionId: appState.connection.currentConnection?.id,
+                databaseName: appState.connection.selectedDatabase?.name
             )
             modelContext.insert(savedQuery)
 
             // Update state to track this query
-            appState.currentSavedQueryId = savedQuery.id
+            appState.query.currentSavedQueryId = savedQuery.id
 
             DebugLog.print("💾 [QueryEditorView] Saved new query: \(queryName)")
         }
 
         // Update saved timestamp
-        appState.lastSavedAt = now
+        appState.query.lastSavedAt = now
 
         // Save context
         do {
@@ -125,7 +125,7 @@ struct QueryEditorView: View {
         DebugLog.print("🎬 [QueryEditorView] Execute button clicked")
 
         // Check if database is selected
-        guard appState.selectedDatabase != nil else {
+        guard appState.connection.selectedDatabase != nil else {
             showNoDatabaseAlert = true
             DebugLog.print("⚠️ [QueryEditorView] No database selected")
             return
@@ -133,38 +133,38 @@ struct QueryEditorView: View {
 
         Task {
             // Set loading state - but keep previous results visible to prevent flicker
-            appState.isExecutingQuery = true
-            appState.queryError = nil
-            appState.queryExecutionTime = nil
+            appState.query.isExecutingQuery = true
+            appState.query.queryError = nil
+            appState.query.queryExecutionTime = nil
             // Keep showQueryResults true and don't clear results - show previous results until new ones arrive
 
             let startTime = Date()
 
             do {
                 DebugLog.print("📊 [QueryEditorView] Executing query...")
-                let (results, columnNames) = try await appState.databaseService.executeQuery(appState.queryText)
+                let (results, columnNames) = try await appState.connection.databaseService.executeQuery(appState.query.queryText)
                 // Update results atomically - this prevents empty state flash
-                appState.queryResults = results
-                appState.queryColumnNames = columnNames.isEmpty ? nil : columnNames
-                appState.showQueryResults = true
-                
+                appState.query.queryResults = results
+                appState.query.queryColumnNames = columnNames.isEmpty ? nil : columnNames
+                appState.query.showQueryResults = true
+
                 let endTime = Date()
-                appState.queryExecutionTime = endTime.timeIntervalSince(startTime)
-                
+                appState.query.queryExecutionTime = endTime.timeIntervalSince(startTime)
+
                 DebugLog.print("✅ [QueryEditorView] Query executed successfully, showing results")
             } catch {
-                appState.queryError = error.localizedDescription
-                appState.queryColumnNames = nil
-                appState.showQueryResults = true
+                appState.query.queryError = error.localizedDescription
+                appState.query.queryColumnNames = nil
+                appState.query.showQueryResults = true
                 // Don't clear results on error - keep previous results visible
-                
+
                 let endTime = Date()
-                appState.queryExecutionTime = endTime.timeIntervalSince(startTime)
-                
+                appState.query.queryExecutionTime = endTime.timeIntervalSince(startTime)
+
                 DebugLog.print("❌ [QueryEditorView] Query execution failed: \(error)")
             }
 
-            appState.isExecutingQuery = false
+            appState.query.isExecutingQuery = false
         }
     }
 }

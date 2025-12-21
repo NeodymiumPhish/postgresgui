@@ -19,15 +19,15 @@ struct ConnectionPickerView: View {
 
     var body: some View {
         Picker("Connection", selection: Binding(
-            get: { 
+            get: {
                 // Validate that the current connection still exists in the connections array
-                if let current = appState.currentConnection,
+                if let current = appState.connection.currentConnection,
                    connections.contains(where: { $0.id == current.id }) {
                     return current
                 }
                 return nil
             },
-            set: { appState.currentConnection = $0 }
+            set: { appState.connection.currentConnection = $0 }
         )) {
             Text("Select Connection").tag(nil as ConnectionProfile?)
             ForEach(sortedConnections) { connection in
@@ -38,32 +38,32 @@ struct ConnectionPickerView: View {
         .labelsHidden()
         .onAppear {
             // Validate current connection exists
-            if let current = appState.currentConnection,
+            if let current = appState.connection.currentConnection,
                !connections.contains(where: { $0.id == current.id }) {
-                appState.currentConnection = nil
+                appState.connection.currentConnection = nil
             }
-            
+
             // If no connection is selected, try to restore last connection or auto-select first
-            if appState.currentConnection == nil {
+            if appState.connection.currentConnection == nil {
                 // Try to restore last connection
                 if let lastConnectionIdString = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.lastConnectionId),
                    let lastConnectionId = UUID(uuidString: lastConnectionIdString),
                    let lastConnection = connections.first(where: { $0.id == lastConnectionId }) {
-                    appState.currentConnection = lastConnection
+                    appState.connection.currentConnection = lastConnection
                 } else if let firstConnection = connections.first {
                     // Fallback to first connection if no last connection found
-                    appState.currentConnection = firstConnection
+                    appState.connection.currentConnection = firstConnection
                 }
             }
         }
         .onChange(of: connections.count) { oldCount, newCount in
             // When connections array changes (e.g., deletion), validate current selection
-            if let current = appState.currentConnection,
+            if let current = appState.connection.currentConnection,
                !connections.contains(where: { $0.id == current.id }) {
-                appState.currentConnection = nil
+                appState.connection.currentConnection = nil
             }
         }
-        .onChange(of: appState.currentConnection) { oldValue, newValue in
+        .onChange(of: appState.connection.currentConnection) { oldValue, newValue in
             if let connection = newValue {
                 Task {
                     await connect(to: connection)
@@ -71,14 +71,14 @@ struct ConnectionPickerView: View {
             }
         }
     }
-    
+
     private func connect(to connection: ConnectionProfile) async {
         do {
             // Get password from keychain
             let password = try KeychainService.getPassword(for: connection.id) ?? ""
 
             // Connect
-            try await appState.databaseService.connect(
+            try await appState.connection.databaseService.connect(
                 host: connection.host,
                 port: connection.port,
                 username: connection.username,
@@ -86,24 +86,24 @@ struct ConnectionPickerView: View {
                 database: connection.database,
                 sslMode: connection.sslModeEnum
             )
-            
+
             try? modelContext.save()
 
             // Save last connection ID
             UserDefaults.standard.set(connection.id.uuidString, forKey: Constants.UserDefaultsKeys.lastConnectionId)
-            
+
             // Load databases
             await loadDatabases()
-            
+
         } catch {
             // Handle error - could show alert here
             DebugLog.print("Failed to connect: \(error)")
         }
     }
-    
+
     private func loadDatabases() async {
         do {
-            appState.databases = try await appState.databaseService.fetchDatabases()
+            appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
         } catch {
             DebugLog.print("Failed to load databases: \(error)")
         }

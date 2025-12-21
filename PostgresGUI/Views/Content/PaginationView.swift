@@ -12,11 +12,11 @@ struct PaginationView: View {
     let totalRows: Int64
     
     var totalPages: Int {
-        max(1, Int(ceil(Double(totalRows) / Double(appState.rowsPerPage))))
+        max(1, Int(ceil(Double(totalRows) / Double(appState.query.rowsPerPage))))
     }
-    
+
     var currentPage: Int {
-        appState.currentPage
+        appState.query.currentPage
     }
     
     var body: some View {
@@ -38,8 +38,8 @@ struct PaginationView: View {
             
             Text("Rows per page:")
             Picker("Rows per page", selection: Binding(
-                get: { appState.rowsPerPage },
-                set: { appState.rowsPerPage = $0 }
+                get: { appState.query.rowsPerPage },
+                set: { appState.query.rowsPerPage = $0 }
             )) {
                 Text("10").tag(10)
                 Text("50").tag(50)
@@ -54,13 +54,13 @@ struct PaginationView: View {
     
     private func previousPage() {
         if currentPage > 0 {
-            appState.currentPage -= 1
+            appState.query.currentPage -= 1
         }
     }
-    
+
     private func nextPage() {
         if currentPage < totalPages - 1 {
-            appState.currentPage += 1
+            appState.query.currentPage += 1
         }
     }
 }

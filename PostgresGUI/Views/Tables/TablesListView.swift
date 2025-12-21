@@ -15,10 +15,13 @@ struct TablesListView: View {
         @Bindable var appState = appState
 
         TablesListIsolated(
-            tables: appState.tables,
-            selectedTable: $appState.selectedTable,
-            isLoadingTables: appState.isLoadingTables,
-            selectedDatabase: appState.selectedDatabase,
+            tables: appState.connection.tables,
+            selectedTable: Binding(
+                get: { appState.connection.selectedTable },
+                set: { appState.connection.selectedTable = $0 }
+            ),
+            isLoadingTables: appState.connection.isLoadingTables,
+            selectedDatabase: appState.connection.selectedDatabase,
             refreshTablesAction: {
                 await refreshTables(appState: appState)
             }
@@ -107,64 +110,64 @@ struct TablesListIsolated: View {
 @MainActor
 func refreshTables(appState: AppState) async {
         DebugLog.print("🔄 [TablesListView] Refresh tables START")
-        
-        guard let database = appState.selectedDatabase else {
+
+        guard let database = appState.connection.selectedDatabase else {
             DebugLog.print("❌ [TablesListView] No database selected for refresh")
             return
         }
-        
+
         defer {
             DebugLog.print("🔄 [TablesListView] Refresh tables END - setting isLoadingTables=false")
-            appState.isLoadingTables = false
+            appState.connection.isLoadingTables = false
         }
-        
-        appState.isLoadingTables = true
-        
+
+        appState.connection.isLoadingTables = true
+
         // Check if we're connected
-        guard appState.databaseService.isConnected else {
+        guard appState.connection.databaseService.isConnected else {
             DebugLog.print("❌ [TablesListView] Not connected, cannot refresh")
             return
         }
-        
+
         // Refresh databases list
         do {
             DebugLog.print("📊 [TablesListView] Fetching databases...")
-            appState.databases = try await appState.databaseService.fetchDatabases()
-            DebugLog.print("✅ [TablesListView] Refreshed \(appState.databases.count) databases")
+            appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
+            DebugLog.print("✅ [TablesListView] Refreshed \(appState.connection.databases.count) databases")
         } catch {
             DebugLog.print("❌ [TablesListView] Error refreshing databases: \(error)")
             DebugLog.print("❌ [TablesListView] Error details: \(String(describing: error))")
             // Continue with table refresh even if database refresh fails
         }
-        
+
         // Refresh tables list
         do {
             DebugLog.print("📊 [TablesListView] Fetching tables from database: \(database.name)")
-            appState.tables = try await appState.databaseService.fetchTables(database: database.name)
-            DebugLog.print("✅ [TablesListView] Refreshed \(appState.tables.count) tables")
-            
+            appState.connection.tables = try await appState.connection.databaseService.fetchTables(database: database.name)
+            DebugLog.print("✅ [TablesListView] Refreshed \(appState.connection.tables.count) tables")
+
             // Update selectedTable reference if it still exists in the refreshed list
             // Only update if the table object has actually changed (e.g., primaryKeyColumns or columnInfo updated)
             // This prevents unnecessary refreshes when the table is the same
-            if let selectedTable = appState.selectedTable,
-               let refreshedTable = appState.tables.first(where: { $0.id == selectedTable.id }) {
+            if let selectedTable = appState.connection.selectedTable,
+               let refreshedTable = appState.connection.tables.first(where: { $0.id == selectedTable.id }) {
                 // Only update if the table has actually changed (e.g., metadata was added)
                 if refreshedTable != selectedTable {
                     DebugLog.print("🔄 [TablesListView] Updating selectedTable with refreshed metadata")
-                    appState.selectedTable = refreshedTable
+                    appState.connection.selectedTable = refreshedTable
                 } else {
                     DebugLog.print("🔄 [TablesListView] selectedTable unchanged, skipping update")
                 }
-            } else if appState.selectedTable != nil {
+            } else if appState.connection.selectedTable != nil {
                 // Clear selection if the table no longer exists
                 DebugLog.print("🔄 [TablesListView] Selected table no longer exists, clearing selection")
-                appState.selectedTable = nil
+                appState.connection.selectedTable = nil
             }
         } catch {
             DebugLog.print("❌ [TablesListView] Error refreshing tables: \(error)")
             DebugLog.print("❌ [TablesListView] Error details: \(String(describing: error))")
             // Clear tables and selection on error to prevent stale data
-            appState.tables = []
-            appState.selectedTable = nil
+            appState.connection.tables = []
+            appState.connection.selectedTable = nil
         }
 }

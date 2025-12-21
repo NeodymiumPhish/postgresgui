@@ -324,13 +324,13 @@ class ConnectionFormViewModel {
                 try modelContext.save()
 
                 // If this is the current connection, disconnect
-                if appState.currentConnection?.id == profile.id {
-                    await appState.databaseService.disconnect()
-                    appState.currentConnection = nil
-                    appState.selectedDatabase = nil
-                    appState.selectedTable = nil
-                    appState.tables = []
-                    appState.databases = []
+                if appState.connection.currentConnection?.id == profile.id {
+                    await appState.connection.databaseService.disconnect()
+                    appState.connection.currentConnection = nil
+                    appState.connection.selectedDatabase = nil
+                    appState.connection.selectedTable = nil
+                    appState.connection.tables = []
+                    appState.connection.databases = []
                 }
             } else {
                 // Create new connection

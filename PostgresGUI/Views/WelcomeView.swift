@@ -64,10 +64,10 @@ struct WelcomeView: View {
     
     private func connectToLocalhostAsync() async {
         let localhostProfile = ConnectionProfile.localhost()
-        
+
         do {
             // First attempt: try without password (trust mode)
-            try await appState.databaseService.connect(
+            try await appState.connection.databaseService.connect(
                 host: localhostProfile.host,
                 port: localhostProfile.port,
                 username: localhostProfile.username,
@@ -75,27 +75,27 @@ struct WelcomeView: View {
                 database: localhostProfile.database,
                 sslMode: localhostProfile.sslModeEnum
             )
-            
+
             // Success - save profile and connect
             modelContext.insert(localhostProfile)
             try? modelContext.save()
 
-            appState.currentConnection = localhostProfile
-            appState.isShowingWelcomeScreen = false
-            
+            appState.connection.currentConnection = localhostProfile
+            appState.navigation.isShowingWelcomeScreen = false
+
             // Load databases
             await loadDatabases()
-            
+
         } catch {
             // If passwordless fails, prompt for password
             // For now, show connection form with localhost pre-filled
             appState.showConnectionForm()
         }
     }
-    
+
     private func loadDatabases() async {
         do {
-            appState.databases = try await appState.databaseService.fetchDatabases()
+            appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
         } catch {
             // Handle error
             DebugLog.print("Failed to load databases: \(error)")

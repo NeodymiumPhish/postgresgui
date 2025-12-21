@@ -37,19 +37,19 @@ struct ConnectionsSidebarSection: View {
             }
 
             Section("Databases") {
-                if appState.databases.isEmpty {
+                if appState.connection.databases.isEmpty {
                     Text("No databases")
                         .foregroundColor(.secondary)
                         .italic()
                 } else {
-                    ForEach(appState.databases) { database in
+                    ForEach(appState.connection.databases) { database in
                         DatabaseRowView(database: database)
                     }
                 }
             }
         }
         .safeAreaInset(edge: .bottom) {
-            if appState.isConnected {
+            if appState.connection.isConnected {
                 Button {
                     showCreateDatabaseForm = true
                 } label: {
@@ -69,7 +69,7 @@ struct ConnectionsSidebarSection: View {
     private var connectionPickerRow: some View {
         HStack {
             Picker("Connection", selection: Binding(
-                get: { appState.currentConnection },
+                get: { appState.connection.currentConnection },
                 set: { newConnection in
                     if let connection = newConnection {
                         Task {
@@ -78,7 +78,7 @@ struct ConnectionsSidebarSection: View {
                     }
                 }
             )) {
-                if appState.currentConnection == nil {
+                if appState.connection.currentConnection == nil {
                     Text("Select Connection").tag(nil as ConnectionProfile?)
                 }
                 ForEach(sortedConnections) { connection in
@@ -96,7 +96,7 @@ struct ConnectionsSidebarSection: View {
             .buttonStyle(.plain)
 
             Button {
-                appState.connectionToEdit = nil
+                appState.navigation.connectionToEdit = nil
                 appState.showConnectionForm()
             } label: {
                 Image(systemName: "plus.circle")
@@ -110,9 +110,9 @@ struct ConnectionsSidebarSection: View {
     private func handleDatabaseSelection(_ newID: DatabaseInfo.ID?) {
         guard let unwrappedID = newID else {
             selectedDatabaseID = nil
-            appState.selectedDatabase = nil
-            appState.tables = []
-            appState.isLoadingTables = false
+            appState.connection.selectedDatabase = nil
+            appState.connection.tables = []
+            appState.connection.isLoadingTables = false
             DebugLog.print("🔴 [ConnectionsSidebarSection] Selection cleared")
             return
         }
@@ -120,15 +120,15 @@ struct ConnectionsSidebarSection: View {
         selectedDatabaseID = unwrappedID
         DebugLog.print("🟢 [ConnectionsSidebarSection] selectedDatabaseID changed to \(unwrappedID)")
 
-        let database = appState.databases.first { $0.id == unwrappedID }
+        let database = appState.connection.databases.first { $0.id == unwrappedID }
 
         DebugLog.print("🔵 [ConnectionsSidebarSection] Updating selectedDatabase to: \(database?.name ?? "nil")")
-        appState.selectedDatabase = database
+        appState.connection.selectedDatabase = database
 
         // Clear tables immediately and show loading state
-        appState.tables = []
-        appState.isLoadingTables = true
-        appState.selectedTable = nil
+        appState.connection.tables = []
+        appState.connection.isLoadingTables = true
+        appState.connection.selectedTable = nil
         DebugLog.print("🟡 [ConnectionsSidebarSection] Cleared tables, isLoadingTables=true")
 
         if let database = database {
@@ -143,7 +143,7 @@ struct ConnectionsSidebarSection: View {
             // Clear saved database when selection is cleared
             UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
             DebugLog.print("🔴 [ConnectionsSidebarSection] No database selected, stopping loading")
-            appState.isLoadingTables = false
+            appState.connection.isLoadingTables = false
         }
     }
 }

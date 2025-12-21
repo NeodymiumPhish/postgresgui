@@ -85,7 +85,7 @@ struct QueryResultsView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Results or error display
-            if let error = appState.queryError {
+            if let error = appState.query.queryError {
                 ContentUnavailableView {
                     Label {
                         Text("Query Failed")
@@ -100,11 +100,11 @@ struct QueryResultsView: View {
                         .padding()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if appState.isExecutingQuery {
+            } else if appState.query.isExecutingQuery {
                 // Show loading state while query executes
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if appState.queryResults.isEmpty {
+            } else if appState.query.queryResults.isEmpty {
                 // Show empty table with headers if column names are available
                 if let columnNames = getColumnNames(), !columnNames.isEmpty {
                     // Empty table with overlay empty state message
@@ -130,17 +130,17 @@ struct QueryResultsView: View {
                 resultsTable
             }
         }
-        .onChange(of: appState.selectedTable?.id) { oldValue, newValue in
+        .onChange(of: appState.connection.selectedTable?.id) { oldValue, newValue in
             // Clear results immediately when table changes (prevents column mismatch crashes)
             if oldValue != newValue {
-                appState.queryResults = []
-                appState.queryColumnNames = nil
-                appState.queryError = nil
+                appState.query.queryResults = []
+                appState.query.queryColumnNames = nil
+                appState.query.queryError = nil
                 sortOrder = []
             }
 
             // Execute query when a table is selected
-            if let table = appState.selectedTable, table.id != lastExecutedTableID {
+            if let table = appState.connection.selectedTable, table.id != lastExecutedTableID {
                 lastExecutedTableID = table.id
                 Task { @MainActor in
                     await appState.executeTableQuery(for: table)
@@ -148,8 +148,8 @@ struct QueryResultsView: View {
             } else if newValue == nil {
                 // Clear query results when table selection is cleared
                 lastExecutedTableID = nil
-                appState.queryText = ""
-                appState.showQueryResults = false
+                appState.query.queryText = ""
+                appState.query.showQueryResults = false
             }
         }
     }
@@ -158,8 +158,8 @@ struct QueryResultsView: View {
     private var resultsTable: some View {
         if let columnNames = getColumnNames() {
             Table(sortedResults, selection: Binding(
-                get: { appState.selectedRowIDs },
-                set: { appState.selectedRowIDs = $0 }
+                get: { appState.query.selectedRowIDs },
+                set: { appState.query.selectedRowIDs = $0 }
             ), sortOrder: $sortOrder) {
                 TableColumnForEach(columnNames, id: \.self) { columnName in
                     TableColumn(columnName, sortUsing: TableRowComparator(columnName: columnName)) { row in
@@ -170,14 +170,14 @@ struct QueryResultsView: View {
                     .width(min: Constants.ColumnWidth.tableColumnMin)
                 }
             }
-            .id(appState.selectedTable?.id)
+            .id(appState.connection.selectedTable?.id)
             .onDeleteCommand {
-                if !appState.selectedRowIDs.isEmpty {
+                if !appState.query.selectedRowIDs.isEmpty {
                     onDeleteKeyPressed?()
                 }
             }
             .onKeyPress(.space) {
-                if !appState.selectedRowIDs.isEmpty {
+                if !appState.query.selectedRowIDs.isEmpty {
                     onSpaceKeyPressed?()
                     return .handled
                 }
@@ -198,13 +198,13 @@ struct QueryResultsView: View {
                 .width(min: Constants.ColumnWidth.tableColumnMin)
             }
         }
-        .id(appState.selectedTable?.id)
+        .id(appState.connection.selectedTable?.id)
     }
 
     private var filteredResults: [TableRow] {
-        guard !searchText.isEmpty else { return appState.queryResults }
+        guard !searchText.isEmpty else { return appState.query.queryResults }
         let lowercasedSearch = searchText.lowercased()
-        return appState.queryResults.filter { row in
+        return appState.query.queryResults.filter { row in
             row.values.values.contains { value in
                 guard let value = value else { return false }
                 return value.lowercased().contains(lowercasedSearch)
@@ -218,13 +218,13 @@ struct QueryResultsView: View {
 
     private func getColumnNames() -> [String]? {
         // First try to get column names from stored queryColumnNames (works even for empty results)
-        if let columnNames = appState.queryColumnNames, !columnNames.isEmpty {
+        if let columnNames = appState.query.queryColumnNames, !columnNames.isEmpty {
             DebugLog.print("📋 [QueryResultsView] Using stored column names: \(columnNames.joined(separator: ", "))")
             return columnNames
         }
-        
+
         // Fallback: Extract column names from the first row
-        guard let firstRow = appState.queryResults.first else {
+        guard let firstRow = appState.query.queryResults.first else {
             DebugLog.print("⚠️  [QueryResultsView] No column names available")
             return nil
         }

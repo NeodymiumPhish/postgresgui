@@ -27,24 +27,24 @@ struct MainSplitView: View {
                     ToolbarItem(placement: .secondaryAction) {
                         HStack(spacing: 0) {
                             Button {
-                                appState.sidebarViewMode = .connections
+                                appState.navigation.sidebarViewMode = .connections
                             } label: {
                                 Label("Connections", systemImage: "cylinder.split.1x2.fill")
                                     .labelStyle(.iconOnly)
                             }
                             .frame(width: 32, height: 24)
-                            .background(appState.sidebarViewMode == .connections ? Color.secondary.opacity(0.2) : Color.clear)
+                            .background(appState.navigation.sidebarViewMode == .connections ? Color.secondary.opacity(0.2) : Color.clear)
                             .clipShape(Capsule())
                             .contentShape(Capsule())
-                            
+
                             Button {
-                                appState.sidebarViewMode = .queries
+                                appState.navigation.sidebarViewMode = .queries
                             } label: {
                                 Label("Queries", systemImage: "text.document")
                                     .labelStyle(.iconOnly)
                             }
                             .frame(width: 32, height: 24)
-                            .background(appState.sidebarViewMode == .queries ? Color.secondary.opacity(0.2) : Color.clear)
+                            .background(appState.navigation.sidebarViewMode == .queries ? Color.secondary.opacity(0.2) : Color.clear)
                             .clipShape(Capsule())
                             .contentShape(Capsule())
                         }
@@ -61,10 +61,13 @@ struct MainSplitView: View {
                     HSplitView {
                         // Column 1: Table list - isolated from query state
                         TablesListIsolated(
-                            tables: appState.tables,
-                            selectedTable: $appState.selectedTable,
-                            isLoadingTables: appState.isLoadingTables,
-                            selectedDatabase: appState.selectedDatabase,
+                            tables: appState.connection.tables,
+                            selectedTable: Binding(
+                                get: { appState.connection.selectedTable },
+                                set: { appState.connection.selectedTable = $0 }
+                            ),
+                            isLoadingTables: appState.connection.isLoadingTables,
+                            selectedDatabase: appState.connection.selectedDatabase,
                             refreshTablesAction: {
                                 await TableRefreshService.refresh(appState: appState)
                             }
@@ -103,7 +106,7 @@ struct MainSplitView: View {
                 if viewModel == nil {
                     let rowOperations = RowOperationsService()
                     let queryService = QueryService(
-                        databaseService: appState.databaseService,
+                        databaseService: appState.connection.databaseService,
                         queryState: appState.query
                     )
                     viewModel = DetailContentViewModel(
@@ -114,7 +117,7 @@ struct MainSplitView: View {
                 }
             }
         }
-        .navigationTitle(appState.selectedDatabase?.name ?? "Unknown Database")
+        .navigationTitle(appState.connection.selectedDatabase?.name ?? "Unknown Database")
         .searchable(text: $searchText, prompt: "Filter results")
         .modifier(DetailContentModalsWrapper(viewModel: viewModel))
     }

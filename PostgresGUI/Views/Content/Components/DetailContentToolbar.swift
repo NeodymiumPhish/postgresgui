@@ -22,7 +22,7 @@ struct DetailContentToolbar: ToolbarContent {
                 Image(systemName: "doc.text")
             }
             .help("View selected rows as JSON")
-            .disabled(appState.selectedRowIDs.isEmpty)
+            .disabled(appState.query.selectedRowIDs.isEmpty)
 
             // Edit button
             Button(action: {
@@ -31,7 +31,7 @@ struct DetailContentToolbar: ToolbarContent {
                 Image(systemName: "square.and.pencil")
             }
             .help("Edit selected row")
-            .disabled(appState.selectedRowIDs.isEmpty)
+            .disabled(appState.query.selectedRowIDs.isEmpty)
 
             // Delete button
             Button(action: {
@@ -40,7 +40,7 @@ struct DetailContentToolbar: ToolbarContent {
                 Image(systemName: "trash")
             }
             .help("Delete selected rows")
-            .disabled(appState.selectedRowIDs.isEmpty)
+            .disabled(appState.query.selectedRowIDs.isEmpty)
         }
     }
 }

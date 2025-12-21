@@ -14,7 +14,7 @@ struct JSONViewerView: View {
     let selectedRowIDs: Set<UUID>
     
     private var selectedRows: [TableRow] {
-        appState.queryResults.filter { selectedRowIDs.contains($0.id) }
+        appState.query.queryResults.filter { selectedRowIDs.contains($0.id) }
     }
     
     private var jsonString: String {

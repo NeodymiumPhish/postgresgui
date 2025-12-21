@@ -75,12 +75,12 @@ struct DatabaseRowView: View {
 
     private func deleteDatabase(_ database: DatabaseInfo) async {
         do {
-            guard let connection = appState.currentConnection else { return }
+            guard let connection = appState.connection.currentConnection else { return }
 
             // Switch to postgres if connected to the database we're deleting
-            if appState.databaseService.connectedDatabase == database.name {
+            if appState.connection.databaseService.connectedDatabase == database.name {
                 let password = try KeychainService.getPassword(for: connection.id) ?? ""
-                try await appState.databaseService.connect(
+                try await appState.connection.databaseService.connect(
                     host: connection.host,
                     port: connection.port,
                     username: connection.username,
@@ -90,16 +90,16 @@ struct DatabaseRowView: View {
                 )
             }
 
-            try await appState.databaseService.deleteDatabase(name: database.name)
-            appState.databases.removeAll { $0.id == database.id }
+            try await appState.connection.databaseService.deleteDatabase(name: database.name)
+            appState.connection.databases.removeAll { $0.id == database.id }
 
-            if appState.selectedDatabase?.id == database.id {
-                appState.selectedDatabase = nil
-                appState.tables = []
-                appState.isLoadingTables = false
+            if appState.connection.selectedDatabase?.id == database.id {
+                appState.connection.selectedDatabase = nil
+                appState.connection.tables = []
+                appState.connection.isLoadingTables = false
             }
 
-            appState.databases = try await appState.databaseService.fetchDatabases()
+            appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
         } catch {
             if let connectionError = error as? ConnectionError {
                 deleteError = connectionError.errorDescription ?? "Failed to delete database."

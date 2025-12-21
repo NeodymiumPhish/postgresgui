@@ -35,7 +35,7 @@ struct ConnectionsListView: View {
                     Spacer()
                     
                     Button {
-                        appState.connectionToEdit = nil
+                        appState.navigation.connectionToEdit = nil
                         appState.showConnectionForm()
                     } label: {
                         Label("New Connection", systemImage: "plus")
@@ -60,14 +60,14 @@ struct ConnectionsListView: View {
                         ForEach(sortedConnections) { connection in
                             ConnectionRowView(
                                 connection: connection,
-                                isActive: appState.currentConnection?.id == connection.id,
+                                isActive: appState.connection.currentConnection?.id == connection.id,
                                 onConnect: {
                                     Task {
                                         await connect(to: connection)
                                     }
                                 },
                                 onEdit: {
-                                    appState.connectionToEdit = connection
+                                    appState.navigation.connectionToEdit = connection
                                     appState.showConnectionForm()
                                 },
                                 onDelete: {
@@ -167,8 +167,8 @@ struct ConnectionsListView: View {
 
         do {
             // Check if this is the currently active connection
-            let isActiveConnection = appState.currentConnection?.id == connection.id
-            
+            let isActiveConnection = appState.connection.currentConnection?.id == connection.id
+
             // Check if this is the last connection before deletion
             let wasLastConnection = connections.count == 1
 
@@ -177,32 +177,32 @@ struct ConnectionsListView: View {
 
             // Disconnect if this is the active connection
             if isActiveConnection {
-                await appState.databaseService.disconnect()
-                appState.currentConnection = nil
-                appState.selectedDatabase = nil
-                appState.tables = []
-                appState.databases = []
-                
+                await appState.connection.databaseService.disconnect()
+                appState.connection.currentConnection = nil
+                appState.connection.selectedDatabase = nil
+                appState.connection.tables = []
+                appState.connection.databases = []
+
                 // Clear last connection ID if this was the last connection
                 if let lastConnectionIdString = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.lastConnectionId),
                    lastConnectionIdString == connection.id.uuidString {
                     UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastConnectionId)
                 }
             }
-            
+
             // Delete from SwiftData
             modelContext.delete(connection)
             try modelContext.save()
-            
+
             DebugLog.print("✅ [ConnectionsListView] Connection deleted successfully")
             connectionToDelete = nil
-            
+
             // If this was the last connection, close modal and show welcome screen
             if wasLastConnection {
-                appState.isShowingWelcomeScreen = true
+                appState.navigation.isShowingWelcomeScreen = true
                 UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastConnectionId)
             }
-            
+
         } catch {
             DebugLog.print("❌ [ConnectionsListView] Error deleting connection: \(error)")
             if let keychainError = error as? KeychainError {

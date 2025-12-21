@@ -94,26 +94,26 @@ struct TableRowView: View {
     
     private func deleteTable(_ table: TableInfo) async {
         DebugLog.print("🗑️  [TableRowView] Deleting table: \(table.schema).\(table.name)")
-        
+
         do {
-            guard appState.databaseService.isConnected else {
+            guard appState.connection.databaseService.isConnected else {
                 deleteError = "Not connected to database"
                 return
             }
-            
-            try await appState.databaseService.deleteTable(schema: table.schema, table: table.name)
-            
+
+            try await appState.connection.databaseService.deleteTable(schema: table.schema, table: table.name)
+
             // Remove from tables list
-            appState.tables.removeAll { $0.id == table.id }
-            
+            appState.connection.tables.removeAll { $0.id == table.id }
+
             // Clear selection if this was the selected table
-            if appState.selectedTable?.id == table.id {
-                appState.selectedTable = nil
-                appState.showQueryResults = false
-                appState.queryText = ""
-                appState.queryResults = []
+            if appState.connection.selectedTable?.id == table.id {
+                appState.connection.selectedTable = nil
+                appState.query.showQueryResults = false
+                appState.query.queryText = ""
+                appState.query.queryResults = []
             }
-            
+
             DebugLog.print("✅ [TableRowView] Table deleted successfully")
         } catch {
             DebugLog.print("❌ [TableRowView] Error deleting table: \(error)")
@@ -124,7 +124,7 @@ struct TableRowView: View {
             }
         }
     }
-    
+
     private func copyTableName() {
         let tableName = "\(table.schema).\(table.name)"
         let pasteboard = NSPasteboard.general
@@ -132,43 +132,43 @@ struct TableRowView: View {
         pasteboard.setString(tableName, forType: .string)
         DebugLog.print("📋 [TableRowView] Copied table name to clipboard: \(tableName)")
     }
-    
+
     private func refreshQuery() {
         DebugLog.print("🔄 [TableRowView] Refresh query from context menu")
         Task {
             // Set loading state FIRST to prevent empty state flicker
-            appState.isExecutingQuery = true
-            appState.queryError = nil
-            appState.queryExecutionTime = nil
-            appState.showQueryResults = false // Hide results view during loading
-            appState.queryResults = [] // Clear previous results
-            appState.queryColumnNames = nil // Clear previous column names
+            appState.query.isExecutingQuery = true
+            appState.query.queryError = nil
+            appState.query.queryExecutionTime = nil
+            appState.query.showQueryResults = false // Hide results view during loading
+            appState.query.queryResults = [] // Clear previous results
+            appState.query.queryColumnNames = nil // Clear previous column names
 
             let startTime = Date()
 
             do {
                 DebugLog.print("📊 [TableRowView] Executing query...")
-                let (results, columnNames) = try await appState.databaseService.executeQuery(appState.queryText)
-                appState.queryResults = results
-                appState.queryColumnNames = columnNames.isEmpty ? nil : columnNames
-                appState.showQueryResults = true
-                
+                let (results, columnNames) = try await appState.connection.databaseService.executeQuery(appState.query.queryText)
+                appState.query.queryResults = results
+                appState.query.queryColumnNames = columnNames.isEmpty ? nil : columnNames
+                appState.query.showQueryResults = true
+
                 let endTime = Date()
-                appState.queryExecutionTime = endTime.timeIntervalSince(startTime)
-                
+                appState.query.queryExecutionTime = endTime.timeIntervalSince(startTime)
+
                 DebugLog.print("✅ [TableRowView] Query executed successfully, showing results")
             } catch {
-                appState.queryError = error.localizedDescription
-                appState.queryColumnNames = nil
-                appState.showQueryResults = true
-                
+                appState.query.queryError = error.localizedDescription
+                appState.query.queryColumnNames = nil
+                appState.query.showQueryResults = true
+
                 let endTime = Date()
-                appState.queryExecutionTime = endTime.timeIntervalSince(startTime)
-                
+                appState.query.queryExecutionTime = endTime.timeIntervalSince(startTime)
+
                 DebugLog.print("❌ [TableRowView] Query execution failed: \(error)")
             }
 
-            appState.isExecutingQuery = false
+            appState.query.isExecutingQuery = false
         }
     }
 }

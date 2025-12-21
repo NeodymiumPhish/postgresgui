@@ -21,13 +21,13 @@ struct TableRefreshService {
         connection: ConnectionProfile,
         appState: AppState
     ) async {
-        defer { appState.isLoadingTables = false }
+        defer { appState.connection.isLoadingTables = false }
 
         do {
             // Reconnect if not connected to target database
-            if appState.databaseService.connectedDatabase != database.name {
+            if appState.connection.databaseService.connectedDatabase != database.name {
                 let password = try KeychainService.getPassword(for: connection.id) ?? ""
-                try await appState.databaseService.connect(
+                try await appState.connection.databaseService.connect(
                     host: connection.host,
                     port: connection.port,
                     username: connection.username,
@@ -37,55 +37,55 @@ struct TableRefreshService {
                 )
             }
 
-            appState.tables = try await appState.databaseService.fetchTables(database: database.name)
+            appState.connection.tables = try await appState.connection.databaseService.fetchTables(database: database.name)
         } catch {
             DebugLog.print("❌ [TableRefreshService] Error loading tables: \(error)")
-            appState.tables = []
+            appState.connection.tables = []
         }
     }
 
     /// Refreshes both databases and tables lists.
     /// - Parameter appState: The app state to update
     static func refresh(appState: AppState) async {
-        guard let database = appState.selectedDatabase,
-              appState.currentConnection != nil else { return }
+        guard let database = appState.connection.selectedDatabase,
+              appState.connection.currentConnection != nil else { return }
 
-        defer { appState.isLoadingTables = false }
-        appState.isLoadingTables = true
+        defer { appState.connection.isLoadingTables = false }
+        appState.connection.isLoadingTables = true
 
-        guard appState.databaseService.isConnected else { return }
+        guard appState.connection.databaseService.isConnected else { return }
 
         // Refresh databases
         do {
-            appState.databases = try await appState.databaseService.fetchDatabases()
+            appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
         } catch {
             DebugLog.print("❌ [TableRefreshService] Error refreshing databases: \(error)")
         }
 
         // Refresh tables
         do {
-            appState.tables = try await appState.databaseService.fetchTables(database: database.name)
+            appState.connection.tables = try await appState.connection.databaseService.fetchTables(database: database.name)
             updateSelectedTable(appState: appState)
         } catch {
             DebugLog.print("❌ [TableRefreshService] Error refreshing tables: \(error)")
-            appState.tables = []
-            appState.selectedTable = nil
+            appState.connection.tables = []
+            appState.connection.selectedTable = nil
         }
     }
 
     /// Updates selectedTable reference if it still exists in refreshed list.
     private static func updateSelectedTable(appState: AppState) {
-        guard let selectedTable = appState.selectedTable,
-              let refreshedTable = appState.tables.first(where: { $0.id == selectedTable.id }) else {
-            if appState.selectedTable != nil {
-                appState.selectedTable = nil
+        guard let selectedTable = appState.connection.selectedTable,
+              let refreshedTable = appState.connection.tables.first(where: { $0.id == selectedTable.id }) else {
+            if appState.connection.selectedTable != nil {
+                appState.connection.selectedTable = nil
             }
             return
         }
 
         // Only update if metadata changed
         if refreshedTable != selectedTable {
-            appState.selectedTable = refreshedTable
+            appState.connection.selectedTable = refreshedTable
         }
     }
 }

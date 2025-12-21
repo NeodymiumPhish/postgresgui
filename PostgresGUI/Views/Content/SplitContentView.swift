@@ -51,11 +51,11 @@ struct SplitContentView: View {
 
     @ViewBuilder
     private var topPaneView: some View {
-        if appState.isExecutingQuery {
+        if appState.query.isExecutingQuery {
             ProgressView()
                 .scaleEffect(0.8)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if appState.showQueryResults {
+        } else if appState.query.showQueryResults {
             QueryResultsView(
                 onDeleteKeyPressed: onDeleteKeyPressed,
                 onSpaceKeyPressed: onSpaceKeyPressed
