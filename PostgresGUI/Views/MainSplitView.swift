@@ -69,7 +69,7 @@ struct MainSplitView: View {
                                 await TableRefreshService.refresh(appState: appState)
                             }
                         )
-                        .frame(minWidth: 250)
+                        .frame(minWidth: 250, maxWidth: 320)
 
                         // Column 2: Query results with toolbar
                         VStack(spacing: 0) {
