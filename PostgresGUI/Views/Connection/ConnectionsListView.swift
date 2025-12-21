@@ -246,7 +246,7 @@ private struct ConnectionRowView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
-                    Label(connection.database, systemImage: "externaldrive")
+                    Label(connection.database, systemImage: "cylinder.split.1x2.fill")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
