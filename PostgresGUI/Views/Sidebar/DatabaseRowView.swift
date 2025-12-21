@@ -87,24 +87,16 @@ struct DatabaseRowView: View {
         }
 
         do {
-            guard let connection = appState.connection.currentConnection else {
+            guard appState.connection.currentConnection != nil else {
                 DebugLog.print("[DatabaseRowView] No current connection, aborting delete")
                 return
             }
 
-            // Switch to postgres if connected to the database we're deleting
+            // Prevent deleting the currently connected database
             if appState.connection.databaseService.connectedDatabase == database.name {
-                DebugLog.print("[DatabaseRowView] Currently connected to target database, switching to 'postgres'")
-                let password = try KeychainService.getPassword(for: connection.id) ?? ""
-                try await appState.connection.databaseService.connect(
-                    host: connection.host,
-                    port: connection.port,
-                    username: connection.username,
-                    password: password,
-                    database: "postgres",
-                    sslMode: connection.sslModeEnum
-                )
-                DebugLog.print("[DatabaseRowView] Switched to 'postgres' database")
+                DebugLog.print("[DatabaseRowView] Cannot delete currently connected database")
+                deleteError = "Cannot delete '\(database.name)' while connected to it. Please switch to a different database first."
+                return
             }
 
             DebugLog.print("[DatabaseRowView] Executing deleteDatabase for: \(database.name)")
@@ -113,23 +105,12 @@ struct DatabaseRowView: View {
 
             appState.connection.databases.removeAll { $0.id == database.id }
 
-            if appState.connection.selectedDatabase?.id == database.id {
-                DebugLog.print("[DatabaseRowView] Clearing selected database state")
-                appState.connection.selectedDatabase = nil
-                appState.connection.tables = []
-                appState.connection.isLoadingTables = false
-            }
-
             DebugLog.print("[DatabaseRowView] Refreshing database list")
             appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
             DebugLog.print("[DatabaseRowView] Database list refreshed, count: \(appState.connection.databases.count)")
         } catch {
             DebugLog.print("[DatabaseRowView] Delete failed with error: \(error)")
-            if let connectionError = error as? ConnectionError {
-                deleteError = connectionError.errorDescription ?? "Failed to delete database."
-            } else {
-                deleteError = error.localizedDescription
-            }
+            deleteError = PostgresError.extractDetailedMessage(error)
         }
     }
 }

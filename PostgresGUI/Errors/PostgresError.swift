@@ -102,6 +102,46 @@ enum PostgresError {
         // Fall back to error description
         return error.localizedDescription
     }
+
+    /// Extract detailed error info from PSQLError for display in alerts
+    nonisolated static func extractDetailedMessage(_ error: PSQLError) -> String {
+        var parts: [String] = []
+
+        if let message = error.serverInfo?[.message] {
+            parts.append(message)
+        }
+
+        if let detail = error.serverInfo?[.detail] {
+            parts.append(detail)
+        }
+
+        if let hint = error.serverInfo?[.hint] {
+            parts.append("Hint: \(hint)")
+        }
+
+        if parts.isEmpty {
+            return error.localizedDescription
+        }
+
+        return parts.joined(separator: "\n\n")
+    }
+
+    /// Extract detailed message from any error, handling PSQLError specially
+    nonisolated static func extractDetailedMessage(_ error: Error) -> String {
+        if let psqlError = error as? PSQLError {
+            return extractDetailedMessage(psqlError)
+        }
+
+        // For ConnectionError.unknownError, try to unwrap the underlying error
+        if let connectionError = error as? ConnectionError,
+           case .unknownError(let underlyingError) = connectionError {
+            if let psqlError = underlyingError as? PSQLError {
+                return extractDetailedMessage(psqlError)
+            }
+        }
+
+        return error.localizedDescription
+    }
 }
 
 // MARK: - NIOConnectionError
