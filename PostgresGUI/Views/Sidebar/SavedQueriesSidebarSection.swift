@@ -125,6 +125,11 @@ struct SavedQueriesSidebarSection: View {
                     }
                 }
             }
+        .onDeleteCommand {
+            guard !selectedQueryIDs.isEmpty else { return }
+            let queries = savedQueries.filter { selectedQueryIDs.contains($0.id) }
+            queriesToDelete = queries
+        }
         .onChange(of: selectedQueryIDs) { oldIDs, newIDs in
             // Load query when a single item is clicked (not added to existing selection)
             if newIDs.count == 1, let newID = newIDs.first,
@@ -209,18 +214,35 @@ struct SavedQueriesSidebarSection: View {
     // MARK: - Query Actions
 
     private func createNewQuery() {
-        selectedQueryIDs = []
+        // Create new saved query entry
+        let newQuery = SavedQuery(
+            name: "Untitled Query",
+            queryText: "",
+            connectionId: appState.currentConnection?.id,
+            databaseName: appState.selectedDatabase?.name
+        )
+        modelContext.insert(newQuery)
 
-        appState.queryText = ""
-        appState.currentSavedQueryId = nil
-        appState.lastSavedAt = nil
-        appState.showQueryResults = false
-        appState.queryResults = []
-        appState.queryColumnNames = nil
-        appState.queryError = nil
-        appState.queryExecutionTime = nil
+        do {
+            try modelContext.save()
 
-        DebugLog.print("📝 [SavedQueriesSidebarSection] Created new query")
+            // Set this query as active
+            appState.queryText = ""
+            appState.currentSavedQueryId = newQuery.id
+            appState.lastSavedAt = newQuery.updatedAt
+            appState.showQueryResults = false
+            appState.queryResults = []
+            appState.queryColumnNames = nil
+            appState.queryError = nil
+            appState.queryExecutionTime = nil
+
+            // Select the new query in the list
+            selectedQueryIDs = [newQuery.id]
+
+            DebugLog.print("📝 [SavedQueriesSidebarSection] Created new query: \(newQuery.name)")
+        } catch {
+            DebugLog.print("❌ [SavedQueriesSidebarSection] Failed to create new query: \(error)")
+        }
     }
 
     private func loadQuery(_ query: SavedQuery) {
