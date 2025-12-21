@@ -25,7 +25,6 @@ class ViewModelFactory {
     func makeConnectionFormViewModel(connectionToEdit: ConnectionProfile?) -> ConnectionFormViewModel {
         ConnectionFormViewModel(
             appState: services.appState,
-            connectionService: services.connectionService,
             keychainService: services.keychainService,
             connectionToEdit: connectionToEdit
         )

@@ -8,100 +8,248 @@
 import Foundation
 import SwiftUI
 import SwiftData
+import AppKit
 
-/// ViewModel for ConnectionFormView
+/// Input mode for connection form
+enum ConnectionInputMode {
+    case individual
+    case connectionString
+}
+
+/// ViewModel for ConnectionFormView - handles all business logic and state
 @Observable
 @MainActor
 class ConnectionFormViewModel {
-    private let appState: AppState
-    private let connectionService: ConnectionServiceProtocol
-    private let keychainService: KeychainServiceProtocol
-    private let connectionToEdit: ConnectionProfile?
+    // MARK: - Dependencies
 
-    // Form state - Individual fields
+    private let appState: AppState
+    private let keychainService: KeychainServiceProtocol
+    let connectionToEdit: ConnectionProfile?
+
+    // MARK: - Form State - Individual Fields
+
     var individualName: String = ""
     var host: String = "localhost"
     var port: String = "5432"
     var username: String = "postgres"
     var password: String = ""
     var database: String = "postgres"
-    var sslMode: SSLMode = .default
     var showPassword: Bool = false
+    var showIndividualNameField: Bool = false
 
-    // Connection string mode
+    // MARK: - Form State - Connection String
+
     var connectionString: String = ""
     var connectionStringName: String = ""
     var connectionStringWarnings: [String] = []
+    var showConnectionStringNameField: Bool = false
+    var copyButtonLabel: String = "Copy"
 
-    // Connection test state
-    var testResult: String?
-    var testResultColor: Color = .primary
+    // MARK: - Input Mode
+
+    var inputMode: ConnectionInputMode = .individual
+
+    // MARK: - Connection Test State
+
     var isConnecting: Bool = false
     var connectionTestStatus: ConnectionTestStatus = .idle
 
-    // Password management
+    // MARK: - Password Management
+
     var hasStoredPassword: Bool = false
     var actualStoredPassword: String = ""
     var passwordModified: Bool = false
 
-    // Alert state
+    // MARK: - Alert State
+
     var showKeychainAlert: Bool = false
     var keychainAlertMessage: String = ""
 
-    enum ConnectionTestStatus {
-        case idle
-        case testing
-        case success
-        case failure(String)
+    // MARK: - Computed Properties
+
+    var isEditing: Bool {
+        connectionToEdit != nil
     }
+
+    var currentName: String? {
+        if inputMode == .individual {
+            return showIndividualNameField && !individualName.isEmpty ? individualName : nil
+        } else {
+            return showConnectionStringNameField && !connectionStringName.isEmpty ? connectionStringName : nil
+        }
+    }
+
+    var navigationTitle: String {
+        isEditing ? "Edit Connection" : "Create New Connection"
+    }
+
+    var toggleLabel: String {
+        isEditing ? "View Connection String" : "Use Connection String"
+    }
+
+    // MARK: - Initialization
 
     init(
         appState: AppState,
-        connectionService: ConnectionServiceProtocol,
-        keychainService: KeychainServiceProtocol,
-        connectionToEdit: ConnectionProfile?
+        keychainService: KeychainServiceProtocol? = nil,
+        connectionToEdit: ConnectionProfile? = nil
     ) {
         self.appState = appState
-        self.connectionService = connectionService
-        self.keychainService = keychainService
+        self.keychainService = keychainService ?? KeychainServiceImpl()
         self.connectionToEdit = connectionToEdit
+    }
 
-        // Load connection data if editing
+    /// Load connection data when editing
+    func loadConnectionIfNeeded() {
+        guard let connection = connectionToEdit else { return }
+
+        // Populate both name fields with the same value initially
+        individualName = connection.name ?? ""
+        connectionStringName = connection.name ?? ""
+        host = connection.host
+        port = String(connection.port)
+        username = connection.username
+        database = connection.database
+
+        // Password handling - don't access keychain on form load
+        hasStoredPassword = true
+        actualStoredPassword = ""
+        passwordModified = false
+        password = String(repeating: "•", count: 8)
+
+        // Show name fields when editing only if name is not nil
+        showIndividualNameField = connection.name != nil
+        showConnectionStringNameField = connection.name != nil
+
+        // If in connection string mode, populate the connection string
+        if inputMode == .connectionString {
+            connectionString = generateConnectionString()
+        }
+    }
+
+    // MARK: - Input Mode Handling
+
+    func handleInputModeChange(to newMode: ConnectionInputMode) {
+        connectionTestStatus = .idle
+        connectionStringWarnings.removeAll()
+
+        // If switching to connection string mode in edit mode, populate the connection string
+        if newMode == .connectionString, isEditing {
+            connectionString = generateConnectionString()
+        }
+
+        inputMode = newMode
+    }
+
+    // MARK: - Password Handling
+
+    /// Load password from keychain when user clicks "Show Password"
+    func loadPasswordFromKeychain() -> Bool {
+        guard let connection = connectionToEdit else { return true }
+
+        do {
+            if let keychainPassword = try keychainService.getPassword(for: connection.id) {
+                actualStoredPassword = keychainPassword
+                return true
+            } else {
+                actualStoredPassword = ""
+                return true
+            }
+        } catch {
+            connectionTestStatus = .error(
+                message: "Unable to retrieve password from keychain. You may need to grant access in System Settings > Privacy & Security."
+            )
+            return false
+        }
+    }
+
+    /// Get the actual password value for connection
+    func getActualPassword() -> String {
         if let connection = connectionToEdit {
-            loadConnection(connection)
+            if hasStoredPassword && !passwordModified {
+                return (try? keychainService.getPassword(for: connection.id)) ?? ""
+            }
+        }
+        return password
+    }
+
+    /// Handle password field change
+    func handlePasswordChange(_ newValue: String) {
+        password = newValue
+        if hasStoredPassword && !passwordModified {
+            passwordModified = true
+        }
+    }
+
+    // MARK: - Connection String Handling
+
+    func validateConnectionString() {
+        connectionStringWarnings.removeAll()
+
+        guard !connectionString.isEmpty else { return }
+
+        do {
+            let parsed = try ConnectionStringParser.parse(connectionString)
+
+            if !parsed.unsupportedParameters.isEmpty {
+                let params = parsed.unsupportedParameters.joined(separator: ", ")
+                connectionStringWarnings.append("Unsupported parameters will be ignored: \(params)")
+            }
+        } catch {
+            connectionTestStatus = .error(message: error.localizedDescription)
+        }
+    }
+
+    func generateConnectionString() -> String {
+        guard let connection = connectionToEdit else { return "" }
+
+        let passwordPlaceholder = hasStoredPassword ? "YOUR_PASSWORD" : nil
+
+        return ConnectionStringParser.build(
+            username: connection.username,
+            password: passwordPlaceholder,
+            host: connection.host,
+            port: connection.port,
+            database: connection.database,
+            sslMode: connection.sslModeEnum
+        )
+    }
+
+    func copyConnectionStringToClipboard() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(connectionString, forType: .string)
+
+        copyButtonLabel = "Copied!"
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            copyButtonLabel = "Copy"
         }
     }
 
     // MARK: - Connection Testing
 
-    /// Test the connection with current settings
-    func testConnection(inputMode: ConnectionInputMode) async {
+    func testConnection() async {
         isConnecting = true
-        testResult = nil
         connectionStringWarnings.removeAll()
 
         let testStartTime = Date()
         connectionTestStatus = .testing
 
-        DebugLog.print("🧪 [ConnectionFormViewModel] Testing connection...")
+        DebugLog.print("🧪 [ConnectionFormViewModel] ========== Starting Connection Test ==========")
+        DebugLog.print("   Mode: \(inputMode == .connectionString ? "Connection String" : "Individual Fields")")
 
-        // Parse connection details based on input mode
-        let connectionDetails: (host: String, port: Int, username: String, password: String, database: String, sslMode: SSLMode)?
-
-        if inputMode == .connectionString {
-            connectionDetails = parseConnectionString()
-        } else {
-            connectionDetails = parseIndividualFields()
-        }
-
-        guard let details = connectionDetails else {
-            isConnecting = false
-            return
-        }
-
-        // Test connection
         do {
-            _ = try await DatabaseService.testConnection(
+            let details = try parseConnectionDetails()
+
+            DebugLog.print("   Final connection parameters:")
+            DebugLog.print("     Host: \(details.host)")
+            DebugLog.print("     Port: \(details.port)")
+            DebugLog.print("     Username: \(details.username)")
+            DebugLog.print("     Database: \(details.database)")
+            DebugLog.print("     SSL Mode: \(details.sslMode.rawValue)")
+
+            let success = try await DatabaseService.testConnection(
                 host: details.host,
                 port: details.port,
                 username: details.username,
@@ -110,277 +258,269 @@ class ConnectionFormViewModel {
                 sslMode: details.sslMode
             )
 
-            // Ensure minimum display duration for testing status
+            // Ensure testing state is visible for at least 150ms
             let elapsed = Date().timeIntervalSince(testStartTime)
-            if elapsed < 0.5 {
-                try? await Task.sleep(nanoseconds: UInt64((0.5 - elapsed) * 1_000_000_000))
+            if elapsed < 0.15 {
+                try? await Task.sleep(nanoseconds: UInt64((0.15 - elapsed) * 1_000_000_000))
             }
 
-            connectionTestStatus = .success
-            testResult = "Connection successful!"
-            testResultColor = .green
-
-            DebugLog.print("✅ [ConnectionFormViewModel] Connection test successful")
+            if success {
+                DebugLog.print("   ✅ Connection test successful!")
+                connectionTestStatus = .success
+            } else {
+                DebugLog.print("   ❌ Connection test failed (returned false)")
+                connectionTestStatus = .error(message: "Could not connect to \(details.host):\(details.port)")
+            }
+        } catch let error as ConnectionFormError {
+            await handleTestError(error.message, startTime: testStartTime)
         } catch {
-            DebugLog.print("❌ [ConnectionFormViewModel] Connection test failed: \(error)")
-
-            let parsedError = parseConnectionError(error)
-            connectionTestStatus = .failure(parsedError.message)
-            testResult = parsedError.message
-            testResultColor = .red
+            let parsed = parseConnectionError(error)
+            await handleTestError(parsed.message, startTime: testStartTime)
         }
 
         isConnecting = false
     }
 
-    /// Save the connection
-    func saveConnection(inputMode: ConnectionInputMode, modelContext: ModelContext, onSaved: @escaping (ConnectionProfile) -> Void) async {
-        // Parse connection details based on input mode
-        let connectionDetails: (host: String, port: Int, username: String, password: String, database: String, sslMode: SSLMode, name: String)?
-
-        if inputMode == .connectionString {
-            connectionDetails = parseConnectionStringForSave()
-        } else {
-            connectionDetails = parseIndividualFieldsForSave()
+    private func handleTestError(_ message: String, startTime: Date) async {
+        let elapsed = Date().timeIntervalSince(startTime)
+        if elapsed < 0.15 {
+            try? await Task.sleep(nanoseconds: UInt64((0.15 - elapsed) * 1_000_000_000))
         }
+        connectionTestStatus = .error(message: message)
+        DebugLog.print("   ❌ \(message)")
+    }
 
-        guard let details = connectionDetails else {
-            return
-        }
+    // MARK: - Save Connection
 
-        // Create or update connection profile
-        let profile: ConnectionProfile
-        if let existing = connectionToEdit {
-            // Update existing
-            profile = existing
-            profile.name = details.name.isEmpty ? nil : details.name
-            profile.host = details.host
-            profile.port = details.port
-            profile.username = details.username
-            profile.database = details.database
-            profile.sslMode = details.sslMode.rawValue
-        } else {
-            // Create new
-            profile = ConnectionProfile(
-                name: details.name.isEmpty ? nil : details.name,
-                host: details.host,
-                port: details.port,
-                username: details.username,
-                database: details.database,
-                sslMode: details.sslMode
-            )
-            modelContext.insert(profile)
-        }
+    func saveConnection(modelContext: ModelContext) async -> Bool {
+        isConnecting = true
+        connectionStringWarnings.removeAll()
 
-        // Save password to keychain
         do {
-            try keychainService.savePassword(details.password, for: profile.id)
-        } catch {
-            DebugLog.print("❌ Failed to save password to keychain: \(error)")
-            keychainAlertMessage = "Failed to save password securely: \(error.localizedDescription)"
+            let details = try parseConnectionDetails()
+
+            let profile: ConnectionProfile
+
+            if let existingConnection = connectionToEdit {
+                // Update existing connection
+                profile = existingConnection
+                profile.name = currentName
+                profile.host = details.host
+                profile.port = details.port
+                profile.username = details.username
+                profile.database = details.database
+                profile.sslMode = details.sslMode.rawValue
+
+                // Update password if modified
+                if passwordModified {
+                    if !password.isEmpty {
+                        try keychainService.savePassword(password, for: profile.id)
+                    } else {
+                        try? keychainService.deletePassword(for: profile.id)
+                    }
+                }
+
+                // Save changes to SwiftData
+                try modelContext.save()
+
+                // If this is the current connection, disconnect
+                if appState.currentConnection?.id == profile.id {
+                    await appState.databaseService.disconnect()
+                    appState.currentConnection = nil
+                    appState.selectedDatabase = nil
+                    appState.selectedTable = nil
+                    appState.tables = []
+                    appState.databases = []
+                }
+            } else {
+                // Create new connection
+                profile = ConnectionProfile(
+                    name: currentName,
+                    host: details.host,
+                    port: details.port,
+                    username: details.username,
+                    database: details.database,
+                    sslMode: details.sslMode,
+                    password: nil
+                )
+
+                // Save password to keychain
+                if !details.password.isEmpty {
+                    try keychainService.savePassword(details.password, for: profile.id)
+                }
+
+                modelContext.insert(profile)
+                try modelContext.save()
+
+                // Auto-connect if first connection
+                let descriptor = FetchDescriptor<ConnectionProfile>()
+                let allConnections = try modelContext.fetch(descriptor)
+
+                if allConnections.count == 1 {
+                    await autoConnect(to: profile, password: details.password)
+                }
+            }
+
+            DebugLog.print("✅ [ConnectionFormViewModel] Connection profile saved successfully")
+            isConnecting = false
+            return true
+
+        } catch let error as ConnectionFormError {
+            keychainAlertMessage = error.message
             showKeychainAlert = true
-        }
-
-        // Save to SwiftData
-        do {
-            try modelContext.save()
-            DebugLog.print("✅ Connection saved successfully")
-            onSaved(profile)
+            isConnecting = false
+            return false
         } catch {
-            DebugLog.print("❌ Failed to save connection: \(error)")
+            DebugLog.print("❌ [ConnectionFormViewModel] Save error: \(error)")
+            keychainAlertMessage = error.localizedDescription
+            showKeychainAlert = true
+            isConnecting = false
+            return false
         }
+    }
+
+    private func autoConnect(to connection: ConnectionProfile, password: String) async {
+        let connectionService = ConnectionService(
+            appState: appState,
+            keychainService: keychainService
+        )
+
+        let result = await connectionService.connect(
+            to: connection,
+            password: password,
+            saveAsLast: true
+        )
+
+        switch result {
+        case .success:
+            DebugLog.print("✅ [ConnectionFormViewModel] Auto-connect successful")
+        case .failure(let error):
+            DebugLog.print("❌ [ConnectionFormViewModel] Auto-connect failed: \(error)")
+        }
+    }
+
+    func showConnectionsList() {
+        appState.showConnectionsList()
     }
 
     // MARK: - Private Helpers
 
-    private func loadConnection(_ connection: ConnectionProfile) {
-        individualName = connection.name ?? ""
-        connectionStringName = connection.name ?? ""
-        host = connection.host
-        port = String(connection.port)
-        username = connection.username
-        database = connection.database
-        sslMode = connection.sslModeEnum
+    private struct ConnectionDetails {
+        let host: String
+        let port: Int
+        let username: String
+        let password: String
+        let database: String
+        let sslMode: SSLMode
+    }
 
-        // Load password from keychain
-        do {
-            if let storedPassword = try keychainService.getPassword(for: connection.id) {
-                hasStoredPassword = true
-                actualStoredPassword = storedPassword
-                password = String(repeating: "•", count: 12) // Placeholder
-            }
-        } catch {
-            DebugLog.print("⚠️ Failed to load password from keychain: \(error)")
+    private func parseConnectionDetails() throws -> ConnectionDetails {
+        if inputMode == .connectionString {
+            return try parseConnectionString()
+        } else {
+            return try parseIndividualFields()
         }
     }
 
-    private func parseConnectionString() -> (host: String, port: Int, username: String, password: String, database: String, sslMode: SSLMode)? {
-        do {
-            let parsed = try ConnectionStringParser.parse(connectionString)
+    private func parseConnectionString() throws -> ConnectionDetails {
+        let parsed = try ConnectionStringParser.parse(connectionString)
 
-            // Show warnings for unsupported parameters
-            if !parsed.unsupportedParameters.isEmpty {
-                let params = parsed.unsupportedParameters.joined(separator: ", ")
-                connectionStringWarnings.append("Unsupported parameters will be ignored: \(params)")
-            }
-
-            return (
-                host: parsed.host,
-                port: parsed.port,
-                username: parsed.username ?? "postgres",
-                password: parsed.password ?? "",
-                database: parsed.database ?? "postgres",
-                sslMode: parsed.sslMode
-            )
-        } catch {
-            testResult = error.localizedDescription
-            testResultColor = .red
-            return nil
+        if !parsed.unsupportedParameters.isEmpty {
+            let params = parsed.unsupportedParameters.joined(separator: ", ")
+            connectionStringWarnings.append("Unsupported parameters will be ignored: \(params)")
         }
+
+        var parsedPassword = parsed.password ?? ""
+
+        // Replace YOUR_PASSWORD placeholder with keychain password
+        if let connection = connectionToEdit, parsedPassword == "YOUR_PASSWORD" {
+            if let keychainPassword = try? keychainService.getPassword(for: connection.id), !keychainPassword.isEmpty {
+                parsedPassword = keychainPassword
+            }
+        }
+
+        return ConnectionDetails(
+            host: parsed.host,
+            port: parsed.port,
+            username: parsed.username ?? Constants.PostgreSQL.defaultUsername,
+            password: parsedPassword,
+            database: parsed.database ?? Constants.PostgreSQL.defaultDatabase,
+            sslMode: parsed.sslMode
+        )
     }
 
-    private func parseIndividualFields() -> (host: String, port: Int, username: String, password: String, database: String, sslMode: SSLMode)? {
-        guard let portInt = Int(port) else {
-            testResult = "Invalid port number"
-            testResultColor = .red
-            return nil
+    private func parseIndividualFields() throws -> ConnectionDetails {
+        guard let portInt = Int(port), portInt > 0 && portInt <= 65535 else {
+            throw ConnectionFormError(message: "Invalid port number")
         }
 
-        let actualPassword = getActualPassword()
+        let passwordToUse: String
+        if let connection = connectionToEdit {
+            if let keychainPassword = try? keychainService.getPassword(for: connection.id), !keychainPassword.isEmpty {
+                passwordToUse = passwordModified ? password : keychainPassword
+            } else {
+                passwordToUse = password
+            }
+        } else {
+            passwordToUse = password
+        }
 
-        return (
-            host: host,
+        let sslMode: SSLMode
+        if let connection = connectionToEdit {
+            sslMode = connection.sslModeEnum
+        } else {
+            sslMode = .default
+        }
+
+        return ConnectionDetails(
+            host: host.isEmpty ? "localhost" : host,
             port: portInt,
-            username: username,
-            password: actualPassword,
-            database: database,
+            username: username.isEmpty ? "postgres" : username,
+            password: passwordToUse,
+            database: database.isEmpty ? "postgres" : database,
             sslMode: sslMode
         )
     }
 
-    private func parseConnectionStringForSave() -> (host: String, port: Int, username: String, password: String, database: String, sslMode: SSLMode, name: String)? {
-        guard let details = parseConnectionString() else {
-            return nil
-        }
-        return (details.host, details.port, details.username, details.password, details.database, details.sslMode, connectionStringName)
-    }
-
-    private func parseIndividualFieldsForSave() -> (host: String, port: Int, username: String, password: String, database: String, sslMode: SSLMode, name: String)? {
-        guard let details = parseIndividualFields() else {
-            return nil
-        }
-        return (details.host, details.port, details.username, details.password, details.database, details.sslMode, individualName)
-    }
-
-    private func getActualPassword() -> String {
-        if connectionToEdit != nil {
-            // Always get from keychain if not modified
-            if hasStoredPassword && !passwordModified {
-                return actualStoredPassword
-            }
-        }
-        // User has entered a new password
-        return password
-    }
-
-    /// Parse connection error and return user-friendly message with suggestions
     private func parseConnectionError(_ error: Error) -> (message: String, suggestions: [String]) {
         let errorMessage = error.localizedDescription.lowercased()
         let nsError = error as NSError
 
-        // Connection refused errors
         if errorMessage.contains("connection refused") ||
            errorMessage.contains("could not connect") ||
            nsError.domain.contains("NIOConnectionError") {
             return (
                 message: "Could not connect to server",
-                suggestions: [
-                    "Check if PostgreSQL is running",
-                    "Verify host and port are correct",
-                    "Check firewall settings"
-                ]
+                suggestions: ["Check if PostgreSQL is running", "Verify host and port are correct"]
             )
         }
 
-        // Timeout errors
-        if errorMessage.contains("timeout") ||
-           errorMessage.contains("timed out") {
-            return (
-                message: "Connection timeout",
-                suggestions: [
-                    "Check your network connection",
-                    "Verify firewall settings",
-                    "Try increasing connection timeout"
-                ]
-            )
+        if errorMessage.contains("timeout") || errorMessage.contains("timed out") {
+            return (message: "Connection timeout", suggestions: ["Check your network connection"])
         }
 
-        // Authentication errors
-        if errorMessage.contains("password") ||
-           errorMessage.contains("authentication") ||
-           errorMessage.contains("invalid credentials") {
-            return (
-                message: "Authentication failed",
-                suggestions: [
-                    "Verify username and password",
-                    "Check user permissions in PostgreSQL",
-                    "Ensure the user exists and has access to the database"
-                ]
-            )
+        if errorMessage.contains("password") || errorMessage.contains("authentication") {
+            return (message: "Authentication failed", suggestions: ["Verify username and password"])
         }
 
-        // Database not found errors
-        if errorMessage.contains("database") && (errorMessage.contains("does not exist") || errorMessage.contains("not found")) {
-            return (
-                message: "Database not found",
-                suggestions: [
-                    "Check database name spelling",
-                    "Verify database exists on server",
-                    "Ensure you have permission to access the database"
-                ]
-            )
+        if errorMessage.contains("database") && errorMessage.contains("does not exist") {
+            return (message: "Database not found", suggestions: ["Check database name spelling"])
         }
 
-        // SSL errors
-        if errorMessage.contains("ssl") ||
-           errorMessage.contains("tls") ||
-           errorMessage.contains("certificate") {
-            return (
-                message: "SSL connection failed",
-                suggestions: [
-                    "Check SSL mode setting",
-                    "Verify server SSL configuration",
-                    "Try changing SSL mode to 'disable' or 'prefer'"
-                ]
-            )
+        if errorMessage.contains("ssl") || errorMessage.contains("tls") {
+            return (message: "SSL connection failed", suggestions: ["Check SSL mode setting"])
         }
 
-        // Host resolution errors
-        if errorMessage.contains("could not resolve") ||
-           errorMessage.contains("host") && errorMessage.contains("not found") {
-            return (
-                message: "Could not resolve host",
-                suggestions: [
-                    "Check host address spelling",
-                    "Verify network connectivity",
-                    "Try using IP address instead of hostname"
-                ]
-            )
+        if errorMessage.contains("could not resolve") {
+            return (message: "Could not resolve host", suggestions: ["Check host address spelling"])
         }
 
-        // Generic error
-        return (
-            message: error.localizedDescription,
-            suggestions: [
-                "Check your connection settings",
-                "Verify PostgreSQL server is running",
-                "Review error details above"
-            ]
-        )
+        return (message: error.localizedDescription, suggestions: [])
     }
+}
 
-    enum ConnectionInputMode {
-        case individual
-        case connectionString
-    }
+// MARK: - Error Type
+
+private struct ConnectionFormError: Error {
+    let message: String
 }

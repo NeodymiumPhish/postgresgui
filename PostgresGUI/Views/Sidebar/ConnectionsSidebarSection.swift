@@ -1,0 +1,149 @@
+//
+//  ConnectionsSidebarSection.swift
+//  PostgresGUI
+//
+//  Created by ghazi on 11/28/25.
+//
+
+import SwiftUI
+import SwiftData
+
+/// Sidebar section for database connections and tables
+struct ConnectionsSidebarSection: View {
+    @Environment(AppState.self) private var appState
+    @Environment(TabManager.self) private var tabManager
+    @Environment(\.modelContext) private var modelContext
+
+    @Binding var selectedDatabaseID: DatabaseInfo.ID?
+    @Binding var showCreateDatabaseForm: Bool
+
+    let connections: [ConnectionProfile]
+    let onConnect: @MainActor (ConnectionProfile) async -> Void
+    let onLoadTables: @MainActor (DatabaseInfo) async -> Void
+
+    private var sortedConnections: [ConnectionProfile] {
+        connections.sorted { $0.displayName < $1.displayName }
+    }
+
+    var body: some View {
+        List(selection: Binding<DatabaseInfo.ID?>(
+            get: { selectedDatabaseID },
+            set: { newID in
+                handleDatabaseSelection(newID)
+            }
+        )) {
+            Section("Connection") {
+                connectionPickerRow
+            }
+
+            Section("Databases") {
+                if appState.databases.isEmpty {
+                    Text("No databases")
+                        .foregroundColor(.secondary)
+                        .italic()
+                } else {
+                    ForEach(appState.databases) { database in
+                        DatabaseRowView(database: database)
+                    }
+                }
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if appState.isConnected {
+                Button {
+                    showCreateDatabaseForm = true
+                } label: {
+                    Label("Create Database", systemImage: "plus")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 4)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 100, style: .continuous))
+                .padding()
+                .buttonStyle(.glass)
+            }
+        }
+    }
+
+    // MARK: - Connection Picker Row
+
+    private var connectionPickerRow: some View {
+        HStack {
+            Picker("Connection", selection: Binding(
+                get: { appState.currentConnection },
+                set: { newConnection in
+                    if let connection = newConnection {
+                        Task {
+                            await onConnect(connection)
+                        }
+                    }
+                }
+            )) {
+                if appState.currentConnection == nil {
+                    Text("Select Connection").tag(nil as ConnectionProfile?)
+                }
+                ForEach(sortedConnections) { connection in
+                    Text(connection.displayName).tag(connection as ConnectionProfile?)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+
+            Button {
+                appState.showConnectionsList()
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                appState.connectionToEdit = nil
+                appState.showConnectionForm()
+            } label: {
+                Image(systemName: "plus.circle")
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func handleDatabaseSelection(_ newID: DatabaseInfo.ID?) {
+        guard let unwrappedID = newID else {
+            selectedDatabaseID = nil
+            appState.selectedDatabase = nil
+            appState.tables = []
+            appState.isLoadingTables = false
+            DebugLog.print("🔴 [ConnectionsSidebarSection] Selection cleared")
+            return
+        }
+
+        selectedDatabaseID = unwrappedID
+        DebugLog.print("🟢 [ConnectionsSidebarSection] selectedDatabaseID changed to \(unwrappedID)")
+
+        let database = appState.databases.first { $0.id == unwrappedID }
+
+        DebugLog.print("🔵 [ConnectionsSidebarSection] Updating selectedDatabase to: \(database?.name ?? "nil")")
+        appState.selectedDatabase = database
+
+        // Clear tables immediately and show loading state
+        appState.tables = []
+        appState.isLoadingTables = true
+        appState.selectedTable = nil
+        DebugLog.print("🟡 [ConnectionsSidebarSection] Cleared tables, isLoadingTables=true")
+
+        if let database = database {
+            // Save last selected database name
+            UserDefaults.standard.set(database.name, forKey: Constants.UserDefaultsKeys.lastDatabaseName)
+
+            DebugLog.print("🟠 [ConnectionsSidebarSection] Starting loadTables for: \(database.name)")
+            Task {
+                await onLoadTables(database)
+            }
+        } else {
+            // Clear saved database when selection is cleared
+            UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
+            DebugLog.print("🔴 [ConnectionsSidebarSection] No database selected, stopping loading")
+            appState.isLoadingTables = false
+        }
+    }
+}
