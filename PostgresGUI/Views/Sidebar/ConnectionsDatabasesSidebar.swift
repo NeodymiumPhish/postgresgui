@@ -229,6 +229,7 @@ struct ConnectionsDatabasesSidebar: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 100, style: .continuous))
                 .padding()
+                .buttonStyle(.glass)
             }
         }
     }
@@ -274,6 +275,7 @@ struct ConnectionsDatabasesSidebar: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 100, style: .continuous))
             .padding()
+            .buttonStyle(.glass)
         }
         .sheet(item: $queryToEdit) { query in
             EditQuerySheet(query: query)
