@@ -10,7 +10,6 @@ import SwiftUI
 struct MainSplitView: View {
     @Environment(AppState.self) private var appState
     @Environment(TabManager.self) private var tabManager
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var searchText: String = ""
     @State private var viewModel: DetailContentViewModel?
 
@@ -25,31 +24,29 @@ struct MainSplitView: View {
                     max: Constants.ColumnWidth.sidebarMax
                 )
                 .toolbar {
-                    if horizontalSizeClass == .regular {
-                        ToolbarItem(placement: .secondaryAction) {
-                            HStack(spacing: 0) {
-                                Button {
-                                    appState.sidebarViewMode = .connections
-                                } label: {
-                                    Label("Connections", systemImage: "cylinder.split.1x2.fill")
-                                        .labelStyle(.iconOnly)
-                                }
-                                .frame(width: 32, height: 24)
-                                .background(appState.sidebarViewMode == .connections ? Color.secondary.opacity(0.2) : Color.clear)
-                                .clipShape(Capsule())
-                                .contentShape(Capsule())
-                                
-                                Button {
-                                    appState.sidebarViewMode = .queries
-                                } label: {
-                                    Label("Queries", systemImage: "text.document")
-                                        .labelStyle(.iconOnly)
-                                }
-                                .frame(width: 32, height: 24)
-                                .background(appState.sidebarViewMode == .queries ? Color.secondary.opacity(0.2) : Color.clear)
-                                .clipShape(Capsule())
-                                .contentShape(Capsule())
+                    ToolbarItem(placement: .secondaryAction) {
+                        HStack(spacing: 0) {
+                            Button {
+                                appState.sidebarViewMode = .connections
+                            } label: {
+                                Label("Connections", systemImage: "cylinder.split.1x2.fill")
+                                    .labelStyle(.iconOnly)
                             }
+                            .frame(width: 32, height: 24)
+                            .background(appState.sidebarViewMode == .connections ? Color.secondary.opacity(0.2) : Color.clear)
+                            .clipShape(Capsule())
+                            .contentShape(Capsule())
+                            
+                            Button {
+                                appState.sidebarViewMode = .queries
+                            } label: {
+                                Label("Queries", systemImage: "text.document")
+                                    .labelStyle(.iconOnly)
+                            }
+                            .frame(width: 32, height: 24)
+                            .background(appState.sidebarViewMode == .queries ? Color.secondary.opacity(0.2) : Color.clear)
+                            .clipShape(Capsule())
+                            .contentShape(Capsule())
                         }
                     }
                 }
