@@ -27,6 +27,7 @@ struct QueryEditorView: View {
                     }
                 }
                 .buttonStyle(.glass)
+                .clipShape(Capsule())
                 .tint(.green)
                 .keyboardShortcut(.return, modifiers: [.command])
 
