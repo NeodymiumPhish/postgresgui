@@ -37,7 +37,7 @@ struct SavedQueriesSidebarSection: View {
     @State private var queryToEdit: SavedQuery?
     @State private var queriesToDelete: [SavedQuery] = []
     @State private var searchText: String = ""
-    @State private var sortOption: SortOption = .updatedDesc
+    @State private var sortOption: SortOption = .createdAsc
 
     private var filteredAndSortedQueries: [SavedQuery] {
         let filtered = savedQueries.filter { query in
@@ -214,9 +214,22 @@ struct SavedQueriesSidebarSection: View {
     // MARK: - Query Actions
 
     private func createNewQuery() {
+        // Find the next available number for "Untitled Query X"
+        let existingNumbers = savedQueries
+            .compactMap { query -> Int? in
+                if query.name == "Untitled Query" {
+                    return 1
+                }
+                guard query.name.hasPrefix("Untitled Query ") else { return nil }
+                let suffix = query.name.dropFirst("Untitled Query ".count)
+                return Int(suffix)
+            }
+        let nextNumber = (existingNumbers.max() ?? 0) + 1
+        let queryName = nextNumber == 1 ? "Untitled Query" : "Untitled Query \(nextNumber)"
+
         // Create new saved query entry
         let newQuery = SavedQuery(
-            name: "Untitled Query",
+            name: queryName,
             queryText: "",
             connectionId: appState.currentConnection?.id,
             databaseName: appState.selectedDatabase?.name
