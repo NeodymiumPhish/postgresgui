@@ -8,6 +8,24 @@
 import SwiftUI
 import SwiftData
 
+/// Sort options for saved queries
+private enum SortOption: String, CaseIterable {
+    case nameAsc = "Name (A-Z)"
+    case nameDesc = "Name (Z-A)"
+    case updatedDesc = "Updated (Newest)"
+    case updatedAsc = "Updated (Oldest)"
+    case createdDesc = "Created (Newest)"
+    case createdAsc = "Created (Oldest)"
+
+    var icon: String {
+        switch self {
+        case .nameAsc, .nameDesc: return "textformat"
+        case .updatedDesc, .updatedAsc: return "clock"
+        case .createdDesc, .createdAsc: return "calendar"
+        }
+    }
+}
+
 /// Sidebar section for saved queries
 struct SavedQueriesSidebarSection: View {
     @Environment(AppState.self) private var appState
@@ -18,16 +36,71 @@ struct SavedQueriesSidebarSection: View {
     @Binding var selectedQueryID: SavedQuery.ID?
     @State private var queryToEdit: SavedQuery?
     @State private var queryToDelete: SavedQuery?
+    @State private var searchText: String = ""
+    @State private var sortOption: SortOption = .updatedDesc
+
+    private var filteredAndSortedQueries: [SavedQuery] {
+        let filtered = savedQueries.filter { query in
+            guard !searchText.isEmpty else { return true }
+            let search = searchText.lowercased()
+            return query.name.lowercased().contains(search) ||
+                   query.queryText.lowercased().contains(search)
+        }
+
+        return filtered.sorted { lhs, rhs in
+            switch sortOption {
+            case .nameAsc:
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            case .nameDesc:
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedDescending
+            case .updatedDesc:
+                return lhs.updatedAt > rhs.updatedAt
+            case .updatedAsc:
+                return lhs.updatedAt < rhs.updatedAt
+            case .createdDesc:
+                return lhs.createdAt > rhs.createdAt
+            case .createdAsc:
+                return lhs.createdAt < rhs.createdAt
+            }
+        }
+    }
 
     var body: some View {
-        List(selection: $selectedQueryID) {
-            Section("Saved Queries") {
-                if savedQueries.isEmpty {
-                    Text("No saved queries")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(savedQueries) { query in
+        VStack(spacing: 0) {
+            // Search and sort header
+            HStack(spacing: 6) {
+                HStack(spacing: 4) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                    TextField("Filter", text: $searchText)
+                        .font(.system(size: 12))
+                        .textFieldStyle(.plain)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(nsColor: .quaternaryLabelColor).opacity(0.5))
+                .clipShape(Capsule())
+
+                sortMenu
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+
+            List(selection: $selectedQueryID) {
+                Section("Saved Queries") {
+                    if filteredAndSortedQueries.isEmpty {
+                        if savedQueries.isEmpty {
+                            Text("No saved queries")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("No matching queries")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        ForEach(filteredAndSortedQueries) { query in
                         SavedQueryRowView(
                             query: query,
                             onEdit: { queryToEdit = query },
@@ -80,6 +153,35 @@ struct SavedQueriesSidebarSection: View {
         } message: { query in
             Text("Are you sure you want to delete \"\(query.name)\"? This action cannot be undone.")
         }
+        }
+    }
+
+    // MARK: - Sort Menu
+
+    private var sortMenu: some View {
+        Menu {
+            ForEach(SortOption.allCases, id: \.self) { option in
+                Button {
+                    sortOption = option
+                } label: {
+                    HStack {
+                        Label(option.rawValue, systemImage: option.icon)
+                        if sortOption == option {
+                            Spacer()
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "line.3.horizontal.decrease")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .padding(6)
+                .background(Color(nsColor: .quaternaryLabelColor).opacity(0.5))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Query Actions
