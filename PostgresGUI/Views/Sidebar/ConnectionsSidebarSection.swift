@@ -21,6 +21,9 @@ struct ConnectionsSidebarSection: View {
     let onConnect: @MainActor (ConnectionProfile) async -> Void
     let onLoadTables: @MainActor (DatabaseInfo) async -> Void
 
+    /// Tracks the current database switching task to enable cancellation
+    @State private var loadTablesTask: Task<Void, Never>?
+
     private var sortedConnections: [ConnectionProfile] {
         connections.sorted { $0.displayName < $1.displayName }
     }
@@ -135,8 +138,10 @@ struct ConnectionsSidebarSection: View {
             // Save last selected database name
             UserDefaults.standard.set(database.name, forKey: Constants.UserDefaultsKeys.lastDatabaseName)
 
+            // Cancel any in-flight database switching task to prevent race conditions
+            loadTablesTask?.cancel()
             DebugLog.print("🟠 [ConnectionsSidebarSection] Starting loadTables for: \(database.name)")
-            Task {
+            loadTablesTask = Task {
                 await onLoadTables(database)
             }
         } else {

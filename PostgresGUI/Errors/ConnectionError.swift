@@ -15,6 +15,7 @@ enum ConnectionError: LocalizedError, Equatable {
     case timeout
     case networkUnreachable
     case notConnected
+    case connectionCancelled
     case sslContextCreationFailed(String)
     case unknownError(Error)
     case invalidConnectionString(ConnectionStringParser.ParseError)
@@ -36,6 +37,8 @@ enum ConnectionError: LocalizedError, Equatable {
             return "Network unreachable. Please check your connection settings."
         case .notConnected:
             return "Not connected to database."
+        case .connectionCancelled:
+            return "Connection was superseded by a newer request."
         case .sslContextCreationFailed(let message):
             return "Failed to initialize SSL/TLS context: \(message). Secure connection cannot be established."
         case .unknownError(let error):
@@ -84,6 +87,8 @@ enum ConnectionError: LocalizedError, Equatable {
             return "Verify your network connection and firewall settings."
         case .notConnected:
             return "Please connect to a database first."
+        case .connectionCancelled:
+            return nil
         case .sslContextCreationFailed:
             return "Check that your SSL certificates are valid and properly configured. If you want to connect without SSL, select 'Disable' or 'Prefer' mode."
         case .unknownError:
@@ -112,6 +117,8 @@ enum ConnectionError: LocalizedError, Equatable {
         case (.networkUnreachable, .networkUnreachable):
             return true
         case (.notConnected, .notConnected):
+            return true
+        case (.connectionCancelled, .connectionCancelled):
             return true
         case (.sslContextCreationFailed(let lhs), .sslContextCreationFailed(let rhs)):
             return lhs == rhs

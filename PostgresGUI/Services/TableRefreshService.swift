@@ -22,6 +22,7 @@ struct TableRefreshService {
         appState: AppState
     ) async {
         defer { appState.connection.isLoadingTables = false }
+        guard !Task.isCancelled else { return }
 
         do {
             // Reconnect if not connected to target database
@@ -37,7 +38,12 @@ struct TableRefreshService {
                 )
             }
 
+            guard !Task.isCancelled else { return }
             appState.connection.tables = try await appState.connection.databaseService.fetchTables(database: database.name)
+        } catch is CancellationError {
+            // Silently ignore cancellation
+        } catch ConnectionError.connectionCancelled {
+            // Silently ignore - superseded by newer request
         } catch {
             DebugLog.print("❌ [TableRefreshService] Error loading tables: \(error)")
             appState.connection.tables = []

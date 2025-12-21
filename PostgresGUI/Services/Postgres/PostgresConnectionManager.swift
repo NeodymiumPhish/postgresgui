@@ -23,6 +23,11 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
     private var wrappedConnection: PostgresDatabaseConnection?
     private let logger = Logger.debugLogger(label: "com.postgresgui.connection")
 
+    /// Generation counter to detect stale connection attempts
+    /// When a new connect() is called, the generation increments.
+    /// When an older connect() completes, it checks if it's still current.
+    private var connectionGeneration: UInt64 = 0
+
     /// Check if currently connected
     var isConnected: Bool {
         connection != nil
@@ -83,6 +88,10 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
     ) async throws {
         logger.info("Connecting to PostgreSQL at \(host):\(port), database: \(database)")
 
+        // Increment generation to invalidate any in-flight connection attempts
+        connectionGeneration &+= 1
+        let myGeneration = connectionGeneration
+
         // Close existing connection if any
         if connection != nil {
             await disconnect()
@@ -133,9 +142,20 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
                 logger: logger
             )
 
+            // Check if a newer connect() was called while we were awaiting
+            // If so, close this connection immediately - it's stale
+            guard connectionGeneration == myGeneration else {
+                logger.warning("⚠️ Stale connection detected (generation \(myGeneration) vs current \(connectionGeneration)), closing")
+                try? await newConnection.close()
+                throw ConnectionError.connectionCancelled
+            }
+
             self.connection = newConnection
             self.wrappedConnection = PostgresDatabaseConnection(connection: newConnection, logger: logger)
             logger.info("Successfully connected to PostgreSQL")
+        } catch let error as ConnectionError where error == .connectionCancelled {
+            // Re-throw cancellation without shutting down ELG (newer connection needs it)
+            throw error
         } catch {
             logger.error("Connection failed: \(error)")
             // Shutdown event loop group on failure
