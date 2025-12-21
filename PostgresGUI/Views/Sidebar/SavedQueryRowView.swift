@@ -13,14 +13,20 @@ struct SavedQueryRowView: View {
 
     var body: some View {
         NavigationLink(value: query.id) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(query.name)
-                    .lineLimit(1)
+            HStack {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(query.name)
+                            .lineLimit(1)
 
-                Text(query.queryText.prefix(50) + (query.queryText.count > 50 ? "..." : ""))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
+                        Text(query.queryText.prefix(50) + (query.queryText.count > 50 ? "..." : ""))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                } icon: {
+                    Image(systemName: "text.document")
+                }
             }
         }
         .contextMenu {
