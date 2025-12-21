@@ -126,7 +126,7 @@ struct ConnectionFormView: View {
                 )
             }
 
-            formRow(label: "Host") {
+            formRow(label: "Host", alignment: .top) {
                 TextEditor(text: $viewModel.host)
                     .font(.body)
                     .frame(height: 40)
