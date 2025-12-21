@@ -150,8 +150,10 @@ struct SavedQueriesSidebarSection: View {
                                 set: { isExpanded in
                                     if isExpanded {
                                         expandedFolders.insert(folder.id)
+                                        DebugLog.print("📂 [SavedQueriesSidebarSection] Expanded folder: \(folder.name)")
                                     } else {
                                         expandedFolders.remove(folder.id)
+                                        DebugLog.print("📁 [SavedQueriesSidebarSection] Collapsed folder: \(folder.name)")
                                     }
                                 }
                             )

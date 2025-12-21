@@ -25,6 +25,7 @@ struct EditFolderSheet: View {
 
             HStack {
                 Button("Cancel") {
+                    DebugLog.print("❌ [EditFolderSheet] Cancel tapped for folder: \(folder.name)")
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
@@ -47,10 +48,15 @@ struct EditFolderSheet: View {
 
     private func saveChanges() {
         let trimmedName = folderName.trimmingCharacters(in: .whitespaces)
-        guard !trimmedName.isEmpty else { return }
+        guard !trimmedName.isEmpty else {
+            DebugLog.print("⚠️ [EditFolderSheet] Empty folder name, not saving")
+            return
+        }
 
+        let oldName = folder.name
         folder.name = trimmedName
         folder.updatedAt = Date()
+        DebugLog.print("✅ [EditFolderSheet] Renamed folder from '\(oldName)' to '\(trimmedName)'")
         dismiss()
     }
 }

@@ -28,6 +28,7 @@ struct QueryFolderRowView: View {
         .onHover { isHovered = $0 }
         .contextMenu {
             Button {
+                DebugLog.print("✏️ [QueryFolderRowView] Rename tapped for folder: \(folder.name)")
                 onRename()
             } label: {
                 Label("Rename...", systemImage: "pencil")
@@ -36,6 +37,7 @@ struct QueryFolderRowView: View {
             Divider()
 
             Button(role: .destructive) {
+                DebugLog.print("🗑️ [QueryFolderRowView] Delete tapped for folder: \(folder.name)")
                 onDelete()
             } label: {
                 Label("Delete Folder...", systemImage: "trash")
@@ -46,6 +48,7 @@ struct QueryFolderRowView: View {
     private var menuButton: some View {
         Menu {
             Button {
+                DebugLog.print("✏️ [QueryFolderRowView] Rename tapped for folder: \(folder.name)")
                 onRename()
             } label: {
                 Label("Rename...", systemImage: "pencil")
@@ -54,6 +57,7 @@ struct QueryFolderRowView: View {
             Divider()
 
             Button(role: .destructive) {
+                DebugLog.print("🗑️ [QueryFolderRowView] Delete tapped for folder: \(folder.name)")
                 onDelete()
             } label: {
                 Label("Delete Folder...", systemImage: "trash")

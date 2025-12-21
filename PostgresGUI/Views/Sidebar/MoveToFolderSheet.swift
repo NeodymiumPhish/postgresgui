@@ -117,6 +117,7 @@ struct MoveToFolderSheet: View {
                         .cornerRadius(6)
                     } else {
                         Button {
+                            DebugLog.print("📁 [MoveToFolderSheet] New Folder tapped")
                             isCreatingNewFolder = true
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 isNewFolderFocused = true
@@ -147,6 +148,7 @@ struct MoveToFolderSheet: View {
             HStack {
                 Spacer()
                 Button("Cancel") {
+                    DebugLog.print("❌ [MoveToFolderSheet] Cancel tapped")
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
@@ -154,6 +156,9 @@ struct MoveToFolderSheet: View {
             .padding()
         }
         .frame(width: 350)
+        .onAppear {
+            DebugLog.print("📁 [MoveToFolderSheet] Opened for \(queries.count) queries")
+        }
     }
 
     private func moveToFolder(_ folder: QueryFolder?) {
