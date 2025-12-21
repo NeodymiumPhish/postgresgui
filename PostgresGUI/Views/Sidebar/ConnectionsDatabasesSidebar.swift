@@ -23,7 +23,7 @@ struct ConnectionsDatabasesSidebar: View {
     @Query(sort: \SavedQuery.updatedAt, order: .reverse) private var savedQueries: [SavedQuery]
 
     @State private var selectedDatabaseID: DatabaseInfo.ID?
-    @State private var selectedQueryID: SavedQuery.ID?
+    @State private var selectedQueryIDs: Set<SavedQuery.ID> = []
     @State private var connectionError: String?
     @State private var showConnectionError = false
     @State private var showCreateDatabaseForm = false
@@ -48,7 +48,7 @@ struct ConnectionsDatabasesSidebar: View {
             case .queries:
                 SavedQueriesSidebarSection(
                     savedQueries: savedQueries,
-                    selectedQueryID: $selectedQueryID
+                    selectedQueryIDs: $selectedQueryIDs
                 )
             }
         }

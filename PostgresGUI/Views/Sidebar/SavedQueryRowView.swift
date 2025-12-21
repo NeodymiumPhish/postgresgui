@@ -7,12 +7,19 @@ import SwiftUI
 
 struct SavedQueryRowView: View {
     let query: SavedQuery
+    let isSelected: Bool
+    let selectedCount: Int
     let onEdit: () -> Void
     let onDelete: () -> Void
+    let onDeleteSelected: () -> Void
     let onDuplicate: () -> Void
 
     @State private var isHovered = false
     @State private var isButtonHovered = false
+
+    private var showDeleteSelected: Bool {
+        isSelected && selectedCount > 1
+    }
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
@@ -29,36 +36,76 @@ struct SavedQueryRowView: View {
         .tag(query.id)
         .onHover { isHovered = $0 }
         .contextMenu {
-            Button(action: onEdit) {
-                Label("Rename...", systemImage: "pencil")
+            if !showDeleteSelected {
+                Button {
+                    DebugLog.print("✏️ [SavedQueryRowView] Rename tapped for: \(query.name)")
+                    onEdit()
+                } label: {
+                    Label("Rename...", systemImage: "pencil")
+                }
+
+                Button {
+                    DebugLog.print("📋 [SavedQueryRowView] Duplicate tapped for: \(query.name)")
+                    onDuplicate()
+                } label: {
+                    Label("Duplicate", systemImage: "doc.on.doc")
+                }
+
+                Divider()
             }
 
-            Button(action: onDuplicate) {
-                Label("Duplicate", systemImage: "doc.on.doc")
-            }
-
-            Divider()
-
-            Button(role: .destructive, action: onDelete) {
-                Label("Delete...", systemImage: "trash")
+            if showDeleteSelected {
+                Button(role: .destructive) {
+                    DebugLog.print("🗑️ [SavedQueryRowView] Delete \(selectedCount) selected queries tapped")
+                    onDeleteSelected()
+                } label: {
+                    Label("Delete \(selectedCount) Queries...", systemImage: "trash")
+                }
+            } else {
+                Button(role: .destructive) {
+                    DebugLog.print("🗑️ [SavedQueryRowView] Delete tapped for: \(query.name)")
+                    onDelete()
+                } label: {
+                    Label("Delete...", systemImage: "trash")
+                }
             }
         }
     }
 
     private var menuButton: some View {
         Menu {
-            Button(action: onEdit) {
-                Label("Rename...", systemImage: "pencil")
+            if !showDeleteSelected {
+                Button {
+                    DebugLog.print("✏️ [SavedQueryRowView] Rename tapped for: \(query.name)")
+                    onEdit()
+                } label: {
+                    Label("Rename...", systemImage: "pencil")
+                }
+
+                Button {
+                    DebugLog.print("📋 [SavedQueryRowView] Duplicate tapped for: \(query.name)")
+                    onDuplicate()
+                } label: {
+                    Label("Duplicate", systemImage: "doc.on.doc")
+                }
+
+                Divider()
             }
 
-            Button(action: onDuplicate) {
-                Label("Duplicate", systemImage: "doc.on.doc")
-            }
-
-            Divider()
-
-            Button(role: .destructive, action: onDelete) {
-                Label("Delete...", systemImage: "trash")
+            if showDeleteSelected {
+                Button(role: .destructive) {
+                    DebugLog.print("🗑️ [SavedQueryRowView] Delete \(selectedCount) selected queries tapped")
+                    onDeleteSelected()
+                } label: {
+                    Label("Delete \(selectedCount) Queries...", systemImage: "trash")
+                }
+            } else {
+                Button(role: .destructive) {
+                    DebugLog.print("🗑️ [SavedQueryRowView] Delete tapped for: \(query.name)")
+                    onDelete()
+                } label: {
+                    Label("Delete...", systemImage: "trash")
+                }
             }
         } label: {
             Image(systemName: "ellipsis")

@@ -33,9 +33,9 @@ struct SavedQueriesSidebarSection: View {
 
     let savedQueries: [SavedQuery]
 
-    @Binding var selectedQueryID: SavedQuery.ID?
+    @Binding var selectedQueryIDs: Set<SavedQuery.ID>
     @State private var queryToEdit: SavedQuery?
-    @State private var queryToDelete: SavedQuery?
+    @State private var queriesToDelete: [SavedQuery] = []
     @State private var searchText: String = ""
     @State private var sortOption: SortOption = .updatedDesc
 
@@ -96,7 +96,7 @@ struct SavedQueriesSidebarSection: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
 
-            List(selection: $selectedQueryID) {
+            List(selection: $selectedQueryIDs) {
                 if filteredAndSortedQueries.isEmpty {
                     if savedQueries.isEmpty {
                         Text("No saved queries")
@@ -111,22 +111,34 @@ struct SavedQueriesSidebarSection: View {
                     ForEach(filteredAndSortedQueries) { query in
                         SavedQueryRowView(
                             query: query,
+                            isSelected: selectedQueryIDs.contains(query.id),
+                            selectedCount: selectedQueryIDs.count,
                             onEdit: { queryToEdit = query },
-                            onDelete: { queryToDelete = query },
+                            onDelete: { queriesToDelete = [query] },
+                            onDeleteSelected: {
+                                let queries = savedQueries.filter { selectedQueryIDs.contains($0.id) }
+                                queriesToDelete = queries
+                            },
                             onDuplicate: { duplicateQuery(query) }
                         )
                         .listRowSeparator(.visible)
                     }
                 }
             }
-        .onChange(of: selectedQueryID) { _, newID in
-            if let newID = newID,
+        .onChange(of: selectedQueryIDs) { oldIDs, newIDs in
+            // Load query when a single item is clicked (not added to existing selection)
+            if newIDs.count == 1, let newID = newIDs.first,
+               !oldIDs.contains(newID),
                let query = savedQueries.first(where: { $0.id == newID }) {
                 loadQuery(query)
             }
         }
         .onChange(of: appState.currentSavedQueryId) { _, newID in
-            selectedQueryID = newID
+            if let newID = newID {
+                selectedQueryIDs = [newID]
+            } else {
+                selectedQueryIDs = []
+            }
         }
         .safeAreaInset(edge: .bottom) {
             Button {
@@ -144,21 +156,24 @@ struct SavedQueriesSidebarSection: View {
             EditQuerySheet(query: query)
         }
         .confirmationDialog(
-            "Delete Query?",
+            queriesToDelete.count == 1 ? "Delete Query?" : "Delete \(queriesToDelete.count) Queries?",
             isPresented: Binding(
-                get: { queryToDelete != nil },
-                set: { if !$0 { queryToDelete = nil } }
-            ),
-            presenting: queryToDelete
-        ) { query in
+                get: { !queriesToDelete.isEmpty },
+                set: { if !$0 { queriesToDelete = [] } }
+            )
+        ) {
             Button("Delete", role: .destructive) {
-                deleteQuery(query)
+                deleteQueries(queriesToDelete)
             }
             Button("Cancel", role: .cancel) {
-                queryToDelete = nil
+                queriesToDelete = []
             }
-        } message: { query in
-            Text("Are you sure you want to delete \"\(query.name)\"? This action cannot be undone.")
+        } message: {
+            if queriesToDelete.count == 1, let query = queriesToDelete.first {
+                Text("Are you sure you want to delete \"\(query.name)\"? This action cannot be undone.")
+            } else {
+                Text("Are you sure you want to delete \(queriesToDelete.count) queries? This action cannot be undone.")
+            }
         }
         }
     }
@@ -194,7 +209,7 @@ struct SavedQueriesSidebarSection: View {
     // MARK: - Query Actions
 
     private func createNewQuery() {
-        selectedQueryID = nil
+        selectedQueryIDs = []
 
         appState.queryText = ""
         appState.currentSavedQueryId = nil
@@ -240,21 +255,24 @@ struct SavedQueriesSidebarSection: View {
         }
     }
 
-    private func deleteQuery(_ query: SavedQuery) {
-        if appState.currentSavedQueryId == query.id {
-            appState.currentSavedQueryId = nil
-            appState.lastSavedAt = nil
+    private func deleteQueries(_ queries: [SavedQuery]) {
+        for query in queries {
+            if appState.currentSavedQueryId == query.id {
+                appState.currentSavedQueryId = nil
+                appState.lastSavedAt = nil
+            }
+            modelContext.delete(query)
         }
-
-        modelContext.delete(query)
 
         do {
             try modelContext.save()
-            DebugLog.print("🗑️ [SavedQueriesSidebarSection] Deleted query: \(query.name)")
+            // Clear selection after deletion
+            selectedQueryIDs = []
+            DebugLog.print("🗑️ [SavedQueriesSidebarSection] Deleted \(queries.count) queries")
         } catch {
-            DebugLog.print("❌ [SavedQueriesSidebarSection] Failed to delete query: \(error)")
+            DebugLog.print("❌ [SavedQueriesSidebarSection] Failed to delete queries: \(error)")
         }
 
-        queryToDelete = nil
+        queriesToDelete = []
     }
 }
