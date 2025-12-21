@@ -16,7 +16,7 @@ struct DatabaseRowView: View {
     var body: some View {
         NavigationLink(value: database.id) {
             HStack {
-                Label(database.name, systemImage: "externaldrive")
+                Label(database.name, systemImage: "cylinder.split.1x2.fill")
                 Spacer()
                 if isHovered {
                     menuButton
