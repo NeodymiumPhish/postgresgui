@@ -20,6 +20,14 @@ enum SSLMode: String, Sendable {
     /// Using 'disable' as default for better localhost compatibility
     nonisolated static let `default` = SSLMode.disable
 
+    /// Returns appropriate SSL mode for a given host
+    /// Remote hosts require SSL; local hosts disable it
+    nonisolated static func defaultFor(host: String) -> SSLMode {
+        let h = host.lowercased()
+        let isLocal = h.isEmpty || h == "localhost" || h == "127.0.0.1" || h == "::1" || h.hasSuffix(".local")
+        return isLocal ? .disable : .require
+    }
+
     /// Convert SSLMode to abstract DatabaseTLSMode
     /// - Returns: DatabaseTLSMode for connection manager
     nonisolated var databaseTLSMode: DatabaseTLSMode {

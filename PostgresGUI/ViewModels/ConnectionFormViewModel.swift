@@ -469,7 +469,7 @@ class ConnectionFormViewModel {
         if let connection = connectionToEdit {
             sslMode = connection.sslModeEnum
         } else {
-            sslMode = .default
+            sslMode = SSLMode.defaultFor(host: host)
         }
 
         return ConnectionDetails(
