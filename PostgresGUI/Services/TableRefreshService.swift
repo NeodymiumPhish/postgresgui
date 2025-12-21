@@ -48,7 +48,7 @@ struct TableRefreshService {
     /// - Parameter appState: The app state to update
     static func refresh(appState: AppState) async {
         guard let database = appState.selectedDatabase,
-              let connection = appState.currentConnection else { return }
+              appState.currentConnection != nil else { return }
 
         defer { appState.isLoadingTables = false }
         appState.isLoadingTables = true

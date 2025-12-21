@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct TableInfo: Identifiable, Hashable {
+struct TableInfo: Identifiable {
     let id: String
     let name: String
     let schema: String
@@ -20,5 +20,18 @@ struct TableInfo: Identifiable, Hashable {
         self.schema = schema
         self.primaryKeyColumns = primaryKeyColumns
         self.columnInfo = columnInfo
+    }
+}
+
+// Custom Hashable using only id - prevents List deselection when metadata is updated
+extension TableInfo: Equatable {
+    static func == (lhs: TableInfo, rhs: TableInfo) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
+extension TableInfo: Hashable {
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }

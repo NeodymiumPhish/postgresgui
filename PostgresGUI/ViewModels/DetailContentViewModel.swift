@@ -70,6 +70,12 @@ class DetailContentViewModel {
             return
         }
 
+        // Check for primary key (metadata is fetched when query runs)
+        guard let pkColumns = selectedTable.primaryKeyColumns, !pkColumns.isEmpty else {
+            deleteError = RowOperationError.noPrimaryKey.localizedDescription
+            return
+        }
+
         // Validate row selection
         let result = rowOperations.validateRowSelection(
             selectedRowIDs: appState.selectedRowIDs,
@@ -78,30 +84,6 @@ class DetailContentViewModel {
 
         switch result {
         case .success:
-            // Check if we need to fetch metadata first
-            if selectedTable.primaryKeyColumns == nil {
-                Task {
-                    await fetchMetadataAndShowDeleteDialog()
-                }
-            } else {
-                showDeleteConfirmation = true
-            }
-        case .failure(let error):
-            deleteError = error.localizedDescription
-        }
-    }
-
-    private func fetchMetadataAndShowDeleteDialog() async {
-        guard let selectedTable = appState.selectedTable else { return }
-
-        let result = await rowOperations.ensureTableMetadata(
-            table: selectedTable,
-            databaseService: appState.databaseService
-        )
-
-        switch result {
-        case .success(let updatedTable):
-            appState.selectedTable = updatedTable
             showDeleteConfirmation = true
         case .failure(let error):
             deleteError = error.localizedDescription
@@ -142,6 +124,12 @@ class DetailContentViewModel {
             return
         }
 
+        // Check for primary key (metadata is fetched when query runs)
+        guard let pkColumns = selectedTable.primaryKeyColumns, !pkColumns.isEmpty else {
+            editError = RowOperationError.noPrimaryKey.localizedDescription
+            return
+        }
+
         // Validate we have column names
         guard appState.queryColumnNames != nil else {
             editError = "No query results available"
@@ -160,33 +148,7 @@ class DetailContentViewModel {
                 editError = "No row selected"
                 return
             }
-
-            // Check if we need to fetch metadata first
-            if selectedTable.primaryKeyColumns == nil || selectedTable.columnInfo == nil {
-                Task {
-                    await fetchMetadataAndShowEditor(rowToEdit)
-                }
-            } else {
-                self.rowToEdit = rowToEdit
-                showRowEditor = true
-            }
-        case .failure(let error):
-            editError = error.localizedDescription
-        }
-    }
-
-    private func fetchMetadataAndShowEditor(_ row: TableRow) async {
-        guard let selectedTable = appState.selectedTable else { return }
-
-        let result = await rowOperations.ensureTableMetadata(
-            table: selectedTable,
-            databaseService: appState.databaseService
-        )
-
-        switch result {
-        case .success(let updatedTable):
-            appState.selectedTable = updatedTable
-            self.rowToEdit = row
+            self.rowToEdit = rowToEdit
             showRowEditor = true
         case .failure(let error):
             editError = error.localizedDescription

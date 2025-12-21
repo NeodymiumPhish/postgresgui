@@ -200,6 +200,9 @@ class AppState {
             query.queryColumnNames = result.columnNames.isEmpty ? nil : result.columnNames
             query.showQueryResults = true
             query.queryExecutionTime = result.executionTime
+
+            // Fetch table metadata (primary keys, column info) for edit/delete operations
+            await fetchTableMetadata(for: table)
         } else if let error = result.error {
             query.queryError = error.localizedDescription
             query.queryColumnNames = nil
@@ -208,6 +211,41 @@ class AppState {
         }
 
         query.isExecutingQuery = false
+    }
+
+    /// Fetch and cache table metadata (primary keys, column info)
+    @MainActor
+    private func fetchTableMetadata(for table: TableInfo) async {
+        var updatedTable = table
+
+        // Fetch primary key columns if not cached
+        if updatedTable.primaryKeyColumns == nil {
+            do {
+                let pkColumns = try await databaseService.fetchPrimaryKeyColumns(
+                    schema: table.schema,
+                    table: table.name
+                )
+                updatedTable.primaryKeyColumns = pkColumns
+            } catch {
+                DebugLog.print("⚠️ [AppState] Failed to fetch primary keys: \(error)")
+            }
+        }
+
+        // Fetch column info if not cached
+        if updatedTable.columnInfo == nil {
+            do {
+                let columnInfo = try await databaseService.fetchColumnInfo(
+                    schema: table.schema,
+                    table: table.name
+                )
+                updatedTable.columnInfo = columnInfo
+            } catch {
+                DebugLog.print("⚠️ [AppState] Failed to fetch column info: \(error)")
+            }
+        }
+
+        // Update selectedTable with metadata
+        selectedTable = updatedTable
     }
 
     /// Clean up resources when window is closing
