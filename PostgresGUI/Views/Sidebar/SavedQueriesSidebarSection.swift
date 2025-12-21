@@ -67,6 +67,15 @@ struct SavedQueriesSidebarSection: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Title
+            Text("Saved Queries")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
+
             // Search and sort header
             HStack(spacing: 6) {
                 HStack(spacing: 4) {
@@ -88,19 +97,18 @@ struct SavedQueriesSidebarSection: View {
             .padding(.vertical, 6)
 
             List(selection: $selectedQueryID) {
-                Section("Saved Queries") {
-                    if filteredAndSortedQueries.isEmpty {
-                        if savedQueries.isEmpty {
-                            Text("No saved queries")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("No matching queries")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
+                if filteredAndSortedQueries.isEmpty {
+                    if savedQueries.isEmpty {
+                        Text("No saved queries")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     } else {
-                        ForEach(filteredAndSortedQueries) { query in
+                        Text("No matching queries")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    ForEach(filteredAndSortedQueries) { query in
                         SavedQueryRowView(
                             query: query,
                             onEdit: { queryToEdit = query },
@@ -111,7 +119,6 @@ struct SavedQueriesSidebarSection: View {
                     }
                 }
             }
-        }
         .onChange(of: selectedQueryID) { _, newID in
             if let newID = newID,
                let query = savedQueries.first(where: { $0.id == newID }) {
