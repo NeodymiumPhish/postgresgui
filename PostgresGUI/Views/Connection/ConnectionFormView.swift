@@ -92,7 +92,10 @@ struct ConnectionFormView: View {
                                 let success = await viewModel.saveConnection(modelContext: modelContext)
                                 if success {
                                     dismiss()
-                                    viewModel.showConnectionsList()
+                                    // Skip showing connections list if auto-connected (first connection)
+                                    if appState.connection.currentConnection == nil {
+                                        viewModel.showConnectionsList()
+                                    }
                                 }
                             }
                         }
