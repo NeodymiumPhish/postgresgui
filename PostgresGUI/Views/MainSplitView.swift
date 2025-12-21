@@ -79,7 +79,7 @@ struct MainSplitView: View {
                                 QueryResultsView(searchText: searchText)
                             }
                         }
-                        .frame(minWidth: 300)
+                        // .frame(minWidth: 250)
                     }.frame(minHeight: 400)
 
                     QueryEditorView()
