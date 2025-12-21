@@ -17,6 +17,7 @@ final class SavedQuery: Identifiable {
     var databaseName: String?
     var createdAt: Date
     var updatedAt: Date
+    var folder: QueryFolder?
 
     init(
         id: UUID = UUID(),
@@ -25,7 +26,8 @@ final class SavedQuery: Identifiable {
         connectionId: UUID? = nil,
         databaseName: String? = nil,
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        folder: QueryFolder? = nil
     ) {
         self.id = id
         self.name = name
@@ -34,6 +36,7 @@ final class SavedQuery: Identifiable {
         self.databaseName = databaseName
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.folder = folder
     }
 }
 

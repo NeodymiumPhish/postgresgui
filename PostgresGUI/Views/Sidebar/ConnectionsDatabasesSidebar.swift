@@ -21,6 +21,7 @@ struct ConnectionsDatabasesSidebar: View {
 
     @Query private var connections: [ConnectionProfile]
     @Query(sort: \SavedQuery.updatedAt, order: .reverse) private var savedQueries: [SavedQuery]
+    @Query(sort: \QueryFolder.name) private var queryFolders: [QueryFolder]
 
     @State private var selectedDatabaseID: DatabaseInfo.ID?
     @State private var selectedQueryIDs: Set<SavedQuery.ID> = []
@@ -48,6 +49,7 @@ struct ConnectionsDatabasesSidebar: View {
             case .queries:
                 SavedQueriesSidebarSection(
                     savedQueries: savedQueries,
+                    folders: queryFolders,
                     selectedQueryIDs: $selectedQueryIDs
                 )
             }

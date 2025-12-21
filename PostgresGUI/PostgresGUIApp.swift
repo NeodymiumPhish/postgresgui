@@ -20,6 +20,7 @@ struct PostgresGUIApp: App {
         let schema = Schema([
             ConnectionProfile.self,
             SavedQuery.self,
+            QueryFolder.self,
             TabState.self,
         ])
 

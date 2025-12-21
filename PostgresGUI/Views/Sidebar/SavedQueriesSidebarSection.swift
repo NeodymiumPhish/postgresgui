@@ -26,21 +26,32 @@ private enum SortOption: String, CaseIterable {
     }
 }
 
-/// Sidebar section for saved queries
+/// Sidebar section for saved queries with folder support
 struct SavedQueriesSidebarSection: View {
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
 
     let savedQueries: [SavedQuery]
+    let folders: [QueryFolder]
 
     @Binding var selectedQueryIDs: Set<SavedQuery.ID>
     @State private var queryToEdit: SavedQuery?
+    @State private var folderToEdit: QueryFolder?
     @State private var queriesToDelete: [SavedQuery] = []
+    @State private var folderToDelete: QueryFolder?
     @State private var searchText: String = ""
     @State private var sortOption: SortOption = .createdAsc
+    @State private var expandedFolders: Set<UUID> = []
+    @State private var queriesToMove: [SavedQuery] = []
 
-    private var filteredAndSortedQueries: [SavedQuery] {
-        let filtered = savedQueries.filter { query in
+    // Queries not in any folder
+    private var unfolderedQueries: [SavedQuery] {
+        savedQueries.filter { $0.folder == nil }
+    }
+
+    // Apply filtering and sorting to queries
+    private func filteredAndSorted(_ queries: [SavedQuery]) -> [SavedQuery] {
+        let filtered = queries.filter { query in
             guard !searchText.isEmpty else { return true }
             let search = searchText.lowercased()
             return query.name.lowercased().contains(search) ||
@@ -63,6 +74,31 @@ struct SavedQueriesSidebarSection: View {
                 return lhs.createdAt < rhs.createdAt
             }
         }
+    }
+
+    // Filter and sort folders
+    private var filteredFolders: [QueryFolder] {
+        if searchText.isEmpty {
+            return folders.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        }
+
+        // When searching, only show folders that have matching queries
+        return folders.filter { folder in
+            guard let queries = folder.queries else { return false }
+            return queries.contains { query in
+                let search = searchText.lowercased()
+                return query.name.lowercased().contains(search) ||
+                       query.queryText.lowercased().contains(search)
+            }
+        }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    private var hasAnyContent: Bool {
+        !savedQueries.isEmpty || !folders.isEmpty
+    }
+
+    private var hasMatchingContent: Bool {
+        !filteredAndSorted(unfolderedQueries).isEmpty || !filteredFolders.isEmpty
     }
 
     var body: some View {
@@ -97,18 +133,63 @@ struct SavedQueriesSidebarSection: View {
             .padding(.vertical, 6)
 
             List(selection: $selectedQueryIDs) {
-                if filteredAndSortedQueries.isEmpty {
-                    if savedQueries.isEmpty {
-                        Text("No saved queries")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("No matching queries")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
+                if !hasAnyContent {
+                    Text("No saved queries")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else if !hasMatchingContent {
+                    Text("No matching queries")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 } else {
-                    ForEach(filteredAndSortedQueries) { query in
+                    // Folders with their queries
+                    ForEach(filteredFolders) { folder in
+                        DisclosureGroup(
+                            isExpanded: Binding(
+                                get: { expandedFolders.contains(folder.id) },
+                                set: { isExpanded in
+                                    if isExpanded {
+                                        expandedFolders.insert(folder.id)
+                                    } else {
+                                        expandedFolders.remove(folder.id)
+                                    }
+                                }
+                            )
+                        ) {
+                            let folderQueries = filteredAndSorted(folder.queries ?? [])
+                            ForEach(folderQueries) { query in
+                                SavedQueryRowView(
+                                    query: query,
+                                    isSelected: selectedQueryIDs.contains(query.id),
+                                    selectedCount: selectedQueryIDs.count,
+                                    onEdit: { queryToEdit = query },
+                                    onDelete: { queriesToDelete = [query] },
+                                    onDeleteSelected: {
+                                        let queries = savedQueries.filter { selectedQueryIDs.contains($0.id) }
+                                        queriesToDelete = queries
+                                    },
+                                    onDuplicate: { duplicateQuery(query) },
+                                    onMoveToFolder: {
+                                        if selectedQueryIDs.count > 1 && selectedQueryIDs.contains(query.id) {
+                                            queriesToMove = savedQueries.filter { selectedQueryIDs.contains($0.id) }
+                                        } else {
+                                            queriesToMove = [query]
+                                        }
+                                    }
+                                )
+                                .listRowSeparator(.visible)
+                            }
+                        } label: {
+                            QueryFolderRowView(
+                                folder: folder,
+                                onRename: { folderToEdit = folder },
+                                onDelete: { folderToDelete = folder }
+                            )
+                        }
+                    }
+
+                    // Queries not in any folder
+                    ForEach(filteredAndSorted(unfolderedQueries)) { query in
                         SavedQueryRowView(
                             query: query,
                             isSelected: selectedQueryIDs.contains(query.id),
@@ -119,67 +200,118 @@ struct SavedQueriesSidebarSection: View {
                                 let queries = savedQueries.filter { selectedQueryIDs.contains($0.id) }
                                 queriesToDelete = queries
                             },
-                            onDuplicate: { duplicateQuery(query) }
+                            onDuplicate: { duplicateQuery(query) },
+                            onMoveToFolder: {
+                                if selectedQueryIDs.count > 1 && selectedQueryIDs.contains(query.id) {
+                                    queriesToMove = savedQueries.filter { selectedQueryIDs.contains($0.id) }
+                                } else {
+                                    queriesToMove = [query]
+                                }
+                            }
                         )
                         .listRowSeparator(.visible)
                     }
                 }
             }
-        .onDeleteCommand {
-            guard !selectedQueryIDs.isEmpty else { return }
-            let queries = savedQueries.filter { selectedQueryIDs.contains($0.id) }
-            queriesToDelete = queries
-        }
-        .onChange(of: selectedQueryIDs) { oldIDs, newIDs in
-            // Load query when a single item is clicked (not added to existing selection)
-            if newIDs.count == 1, let newID = newIDs.first,
-               !oldIDs.contains(newID),
-               let query = savedQueries.first(where: { $0.id == newID }) {
-                loadQuery(query)
+            .onDeleteCommand {
+                guard !selectedQueryIDs.isEmpty else { return }
+                let queries = savedQueries.filter { selectedQueryIDs.contains($0.id) }
+                queriesToDelete = queries
             }
-        }
-        .onChange(of: appState.currentSavedQueryId) { _, newID in
-            if let newID = newID {
-                selectedQueryIDs = [newID]
-            } else {
-                selectedQueryIDs = []
+            .onChange(of: selectedQueryIDs) { oldIDs, newIDs in
+                // Load query when a single item is clicked (not added to existing selection)
+                if newIDs.count == 1, let newID = newIDs.first,
+                   !oldIDs.contains(newID),
+                   let query = savedQueries.first(where: { $0.id == newID }) {
+                    loadQuery(query)
+                }
             }
-        }
-        .safeAreaInset(edge: .bottom) {
-            Button {
-                createNewQuery()
-            } label: {
-                Label("New Query", systemImage: "plus")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
+            .onChange(of: appState.currentSavedQueryId) { _, newID in
+                if let newID = newID {
+                    selectedQueryIDs = [newID]
+                    // Auto-expand folder containing this query
+                    if let query = savedQueries.first(where: { $0.id == newID }),
+                       let folder = query.folder {
+                        expandedFolders.insert(folder.id)
+                    }
+                } else {
+                    selectedQueryIDs = []
+                }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 100, style: .continuous))
-            .padding()
-            .buttonStyle(.glass)
-        }
-        .sheet(item: $queryToEdit) { query in
-            EditQuerySheet(query: query)
-        }
-        .confirmationDialog(
-            queriesToDelete.count == 1 ? "Delete Query?" : "Delete \(queriesToDelete.count) Queries?",
-            isPresented: Binding(
-                get: { !queriesToDelete.isEmpty },
-                set: { if !$0 { queriesToDelete = [] } }
-            )
-        ) {
-            Button("Delete", role: .destructive) {
-                deleteQueries(queriesToDelete)
+            .safeAreaInset(edge: .bottom) {
+                Button {
+                    createNewQuery()
+                } label: {
+                    Label("New Query", systemImage: "plus")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 4)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 100, style: .continuous))
+                .padding()
+                .buttonStyle(.glass)
             }
-            Button("Cancel", role: .cancel) {
-                queriesToDelete = []
+            .sheet(item: $queryToEdit) { query in
+                EditQuerySheet(query: query)
             }
-        } message: {
-            if queriesToDelete.count == 1, let query = queriesToDelete.first {
-                Text("Are you sure you want to delete \"\(query.name)\"? This action cannot be undone.")
-            } else {
-                Text("Are you sure you want to delete \(queriesToDelete.count) queries? This action cannot be undone.")
+            .sheet(item: $folderToEdit) { folder in
+                EditFolderSheet(folder: folder)
             }
-        }
+            .sheet(isPresented: Binding(
+                get: { !queriesToMove.isEmpty },
+                set: { if !$0 { queriesToMove = [] } }
+            )) {
+                MoveToFolderSheet(queries: queriesToMove, folders: folders)
+            }
+            .confirmationDialog(
+                queriesToDelete.count == 1 ? "Delete Query?" : "Delete \(queriesToDelete.count) Queries?",
+                isPresented: Binding(
+                    get: { !queriesToDelete.isEmpty },
+                    set: { if !$0 { queriesToDelete = [] } }
+                )
+            ) {
+                Button("Delete", role: .destructive) {
+                    deleteQueries(queriesToDelete)
+                }
+                Button("Cancel", role: .cancel) {
+                    queriesToDelete = []
+                }
+            } message: {
+                if queriesToDelete.count == 1, let query = queriesToDelete.first {
+                    Text("Are you sure you want to delete \"\(query.name)\"? This action cannot be undone.")
+                } else {
+                    Text("Are you sure you want to delete \(queriesToDelete.count) queries? This action cannot be undone.")
+                }
+            }
+            .confirmationDialog(
+                "Delete Folder?",
+                isPresented: Binding(
+                    get: { folderToDelete != nil },
+                    set: { if !$0 { folderToDelete = nil } }
+                )
+            ) {
+                Button("Delete Folder Only", role: .destructive) {
+                    if let folder = folderToDelete {
+                        deleteFolder(folder, deleteQueries: false)
+                    }
+                }
+                Button("Delete Folder and Queries", role: .destructive) {
+                    if let folder = folderToDelete {
+                        deleteFolder(folder, deleteQueries: true)
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    folderToDelete = nil
+                }
+            } message: {
+                if let folder = folderToDelete {
+                    let queryCount = folder.queries?.count ?? 0
+                    if queryCount > 0 {
+                        Text("The folder \"\(folder.name)\" contains \(queryCount) queries. What would you like to do?")
+                    } else {
+                        Text("Are you sure you want to delete the folder \"\(folder.name)\"?")
+                    }
+                }
+            }
         }
     }
 
@@ -278,7 +410,8 @@ struct SavedQueriesSidebarSection: View {
             name: "\(query.name) (Copy)",
             queryText: query.queryText,
             connectionId: query.connectionId,
-            databaseName: query.databaseName
+            databaseName: query.databaseName,
+            folder: query.folder
         )
         modelContext.insert(newQuery)
 
@@ -309,5 +442,34 @@ struct SavedQueriesSidebarSection: View {
         }
 
         queriesToDelete = []
+    }
+
+    private func deleteFolder(_ folder: QueryFolder, deleteQueries: Bool) {
+        if deleteQueries {
+            // Delete all queries in the folder
+            for query in folder.queries ?? [] {
+                if appState.currentSavedQueryId == query.id {
+                    appState.currentSavedQueryId = nil
+                    appState.lastSavedAt = nil
+                }
+                modelContext.delete(query)
+            }
+        } else {
+            // Move queries out of the folder
+            for query in folder.queries ?? [] {
+                query.folder = nil
+            }
+        }
+
+        modelContext.delete(folder)
+
+        do {
+            try modelContext.save()
+            DebugLog.print("🗑️ [SavedQueriesSidebarSection] Deleted folder: \(folder.name)")
+        } catch {
+            DebugLog.print("❌ [SavedQueriesSidebarSection] Failed to delete folder: \(error)")
+        }
+
+        folderToDelete = nil
     }
 }

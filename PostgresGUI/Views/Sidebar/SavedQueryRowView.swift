@@ -13,11 +13,12 @@ struct SavedQueryRowView: View {
     let onDelete: () -> Void
     let onDeleteSelected: () -> Void
     let onDuplicate: () -> Void
+    let onMoveToFolder: () -> Void
 
     @State private var isHovered = false
     @State private var isButtonHovered = false
 
-    private var showDeleteSelected: Bool {
+    private var showMultiSelectActions: Bool {
         isSelected && selectedCount > 1
     }
 
@@ -36,7 +37,7 @@ struct SavedQueryRowView: View {
         .tag(query.id)
         .onHover { isHovered = $0 }
         .contextMenu {
-            if !showDeleteSelected {
+            if !showMultiSelectActions {
                 Button {
                     DebugLog.print("✏️ [SavedQueryRowView] Rename tapped for: \(query.name)")
                     onEdit()
@@ -54,7 +55,16 @@ struct SavedQueryRowView: View {
                 Divider()
             }
 
-            if showDeleteSelected {
+            Button {
+                DebugLog.print("📁 [SavedQueryRowView] Move to folder tapped for: \(showMultiSelectActions ? "\(selectedCount) queries" : query.name)")
+                onMoveToFolder()
+            } label: {
+                Label(showMultiSelectActions ? "Move \(selectedCount) to Folder..." : "Move to Folder...", systemImage: "folder")
+            }
+
+            Divider()
+
+            if showMultiSelectActions {
                 Button(role: .destructive) {
                     DebugLog.print("🗑️ [SavedQueryRowView] Delete \(selectedCount) selected queries tapped")
                     onDeleteSelected()
@@ -74,7 +84,7 @@ struct SavedQueryRowView: View {
 
     private var menuButton: some View {
         Menu {
-            if !showDeleteSelected {
+            if !showMultiSelectActions {
                 Button {
                     DebugLog.print("✏️ [SavedQueryRowView] Rename tapped for: \(query.name)")
                     onEdit()
@@ -92,7 +102,16 @@ struct SavedQueryRowView: View {
                 Divider()
             }
 
-            if showDeleteSelected {
+            Button {
+                DebugLog.print("📁 [SavedQueryRowView] Move to folder tapped for: \(showMultiSelectActions ? "\(selectedCount) queries" : query.name)")
+                onMoveToFolder()
+            } label: {
+                Label(showMultiSelectActions ? "Move \(selectedCount) to Folder..." : "Move to Folder...", systemImage: "folder")
+            }
+
+            Divider()
+
+            if showMultiSelectActions {
                 Button(role: .destructive) {
                     DebugLog.print("🗑️ [SavedQueryRowView] Delete \(selectedCount) selected queries tapped")
                     onDeleteSelected()
