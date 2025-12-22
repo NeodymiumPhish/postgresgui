@@ -22,6 +22,7 @@ struct WelcomeView: View {
             Text("Hello, and welcome!")
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
+                .accessibilityIdentifier("welcomeText")
             
             VStack(spacing: Constants.Spacing.small) {
                 Button(action: connectToLocalhost) {
@@ -35,7 +36,8 @@ struct WelcomeView: View {
                 }
                 .buttonStyle(.glassProminent)
                 .controlSize(.large)
-                
+                .accessibilityIdentifier("connectToLocalhostButton")
+
                 Button(action: showConnectionForm) {
                     HStack {
                         Text("Connect to Server")
@@ -48,6 +50,7 @@ struct WelcomeView: View {
                 .buttonStyle(.glassProminent)
                 .tint(.secondary)
                 .controlSize(.large)
+                .accessibilityIdentifier("connectToServerButton")
             }
         }
         .frame(minWidth: 500, maxWidth: .infinity, minHeight: 500, maxHeight: .infinity)

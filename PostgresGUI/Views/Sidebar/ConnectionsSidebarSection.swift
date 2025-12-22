@@ -97,6 +97,7 @@ struct ConnectionsSidebarSection: View {
                 Image(systemName: "gearshape")
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("connectionSettingsButton")
 
             Button {
                 appState.navigation.connectionToEdit = nil
@@ -105,6 +106,7 @@ struct ConnectionsSidebarSection: View {
                 Image(systemName: "plus.circle")
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("addConnectionButton")
         }
     }
 
