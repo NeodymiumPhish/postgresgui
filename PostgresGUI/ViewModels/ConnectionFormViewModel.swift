@@ -483,7 +483,9 @@ class ConnectionFormViewModel {
     }
 
     private func parseConnectionError(_ error: Error) -> (message: String, suggestions: [String]) {
-        let errorMessage = error.localizedDescription.lowercased()
+        // First, try to extract a detailed message from PSQLError
+        let detailedMessage = PostgresError.extractDetailedMessage(error)
+        let errorMessage = detailedMessage.lowercased()
         let nsError = error as NSError
 
         if errorMessage.contains("connection refused") ||
@@ -511,11 +513,14 @@ class ConnectionFormViewModel {
             return (message: "SSL connection failed", suggestions: ["Check SSL mode setting"])
         }
 
-        if errorMessage.contains("could not resolve") {
+        if errorMessage.contains("could not resolve") ||
+           errorMessage.contains("no such host") ||
+           errorMessage.contains("nodename nor servname provided") {
             return (message: "Could not resolve host", suggestions: ["Check host address spelling"])
         }
 
-        return (message: error.localizedDescription, suggestions: [])
+        // Use the detailed message from PostgresError if available
+        return (message: detailedMessage, suggestions: [])
     }
 }
 

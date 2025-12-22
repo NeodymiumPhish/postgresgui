@@ -119,11 +119,38 @@ enum PostgresError {
             parts.append("Hint: \(hint)")
         }
 
-        if parts.isEmpty {
-            return error.localizedDescription
+        if !parts.isEmpty {
+            return parts.joined(separator: "\n\n")
         }
 
-        return parts.joined(separator: "\n\n")
+        // Try to get a cleaner description from the underlying error
+        let description = String(describing: error)
+
+        // Check for common connection-related patterns
+        if description.contains("connectionError") || description.contains("Connection") {
+            // Try to extract the actual error message from the description
+            if description.contains("NIOConnectionError") {
+                return "Could not connect to server"
+            }
+            if description.contains("posix") || description.contains("POSIX") {
+                // POSIX errors often have codes like (61) for connection refused
+                if description.contains("61") {
+                    return "Connection refused"
+                }
+                if description.contains("60") || description.contains("timeout") || description.contains("Timeout") {
+                    return "Connection timed out"
+                }
+                return "Network error"
+            }
+        }
+
+        // Check for SSL/TLS errors
+        if description.contains("ssl") || description.contains("SSL") || description.contains("tls") || description.contains("TLS") {
+            return "SSL/TLS connection failed"
+        }
+
+        // Fallback: try to provide something cleaner than the raw error
+        return error.localizedDescription
     }
 
     /// Extract detailed message from any error, handling PSQLError specially
@@ -138,9 +165,47 @@ enum PostgresError {
             if let psqlError = underlyingError as? PSQLError {
                 return extractDetailedMessage(psqlError)
             }
+            // Try to get a cleaner message from the underlying error
+            return extractCleanErrorMessage(underlyingError)
         }
 
-        return error.localizedDescription
+        // For ConnectionError with proper descriptions, use them
+        if let connectionError = error as? ConnectionError {
+            return connectionError.errorDescription ?? error.localizedDescription
+        }
+
+        return extractCleanErrorMessage(error)
+    }
+
+    /// Extract a cleaner error message from a generic error
+    private nonisolated static func extractCleanErrorMessage(_ error: Error) -> String {
+        let description = String(describing: error)
+        let localizedDesc = error.localizedDescription
+
+        // Check for common patterns and provide cleaner messages
+        let lowerDesc = description.lowercased()
+
+        if lowerDesc.contains("connection refused") {
+            return "Connection refused"
+        }
+        if lowerDesc.contains("no such host") || lowerDesc.contains("nodename nor servname") {
+            return "Could not resolve host"
+        }
+        if lowerDesc.contains("timeout") || lowerDesc.contains("timed out") {
+            return "Connection timed out"
+        }
+        if lowerDesc.contains("network is unreachable") {
+            return "Network unreachable"
+        }
+
+        // If localizedDescription is cleaner than the raw description, use it
+        // But filter out ugly technical messages
+        if !localizedDesc.contains("PSQLError") && !localizedDesc.contains("code:") {
+            return localizedDesc
+        }
+
+        // Last resort: provide a generic but clean message
+        return "Connection failed"
     }
 }
 
