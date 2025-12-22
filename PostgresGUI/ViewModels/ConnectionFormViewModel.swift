@@ -304,6 +304,15 @@ class ConnectionFormViewModel {
             if let existingConnection = connectionToEdit {
                 // Update existing connection
                 profile = existingConnection
+
+                // Check if connection-critical parameters changed (requires reconnect)
+                let connectionParamsChanged = profile.host != details.host ||
+                    profile.port != details.port ||
+                    profile.username != details.username ||
+                    profile.database != details.database ||
+                    profile.sslMode != details.sslMode.rawValue ||
+                    passwordModified
+
                 profile.name = currentName
                 profile.host = details.host
                 profile.port = details.port
@@ -323,8 +332,9 @@ class ConnectionFormViewModel {
                 // Save changes to SwiftData
                 try modelContext.save()
 
-                // If this is the current connection, disconnect
-                if appState.connection.currentConnection?.id == profile.id {
+                // Only disconnect if connection-critical parameters changed
+                // (name-only changes don't require reconnection)
+                if connectionParamsChanged && appState.connection.currentConnection?.id == profile.id {
                     await appState.connection.databaseService.disconnect()
                     appState.connection.currentConnection = nil
                     appState.connection.selectedDatabase = nil
