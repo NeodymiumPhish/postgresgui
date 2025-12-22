@@ -5,12 +5,15 @@
 //  Created by ghazi on 11/29/25.
 //
 
-import SwiftUI
 import AppKit
 
 /// A ruler view that displays line numbers for a text view
 class LineNumberRulerView: NSRulerView {
     weak var textView: NSTextView?
+
+    // Cached line start offsets for O(log n) line number lookup
+    private var lineStartOffsets: [Int] = [0]
+    private var cachedTextHash: Int = 0
 
     init(scrollView: NSScrollView, textView: NSTextView) {
         self.textView = textView
@@ -21,6 +24,41 @@ class LineNumberRulerView: NSRulerView {
 
     required init(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    /// Rebuild line offset cache - O(n) but only when text changes
+    private func rebuildLineCache(for text: String) {
+        let textHash = text.hashValue
+        guard textHash != cachedTextHash else { return }
+
+        cachedTextHash = textHash
+        lineStartOffsets = [0]
+
+        // Build array of line start positions
+        let nsText = text as NSString
+        let length = nsText.length
+        for i in 0..<length {
+            if nsText.character(at: i) == 0x0A {
+                lineStartOffsets.append(i + 1)
+            }
+        }
+    }
+
+    /// Binary search to find line number at character offset - O(log m) where m = line count
+    private func lineNumber(at characterOffset: Int) -> Int {
+        var low = 0
+        var high = lineStartOffsets.count - 1
+
+        while low < high {
+            let mid = (low + high + 1) / 2
+            if lineStartOffsets[mid] <= characterOffset {
+                low = mid
+            } else {
+                high = mid - 1
+            }
+        }
+
+        return low + 1  // 1-indexed line numbers
     }
 
     override func drawHashMarksAndLabels(in rect: NSRect) {
@@ -109,28 +147,30 @@ class LineNumberRulerView: NSRulerView {
         visibleRect: CGRect,
         attributes: [NSAttributedString.Key: Any]
     ) {
-        // Calculate line numbers to display
+        // Rebuild line cache if text changed - O(n) but only when needed
+        rebuildLineCache(for: text)
+
+        // Calculate visible character range
         let glyphRange = layoutManager.glyphRange(forBoundingRect: visibleRect, in: textContainer)
         let characterRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
 
-        // Count lines up to the start of visible range
-        var lineNumber = 1
-        var index = 0
-        while index < characterRange.location {
-            if (text as NSString).character(at: index) == 0x0A { // newline
-                lineNumber += 1
-            }
-            index += 1
-        }
+        // Use binary search to find starting line number - O(log m) instead of O(n)
+        var lineNumber = lineNumber(at: characterRange.location)
 
-        var currentIndex = characterRange.location
+        // Find the line start index for the first visible line
+        let lineIndex = lineNumber - 1
+        var currentIndex = lineIndex < lineStartOffsets.count ? lineStartOffsets[lineIndex] : characterRange.location
+
         var lastYPosition: CGFloat = 0
         var lastLineHeight: CGFloat = 0
         var lastLineNumber = lineNumber
 
-        while currentIndex <= text.count {
+        let textLength = text.count
+        let maxCharRange = NSMaxRange(characterRange)
+
+        while currentIndex <= textLength {
             // Handle the case where we're at the end of text
-            let charLength = (currentIndex < text.count) ? 1 : 0
+            let charLength = (currentIndex < textLength) ? 1 : 0
 
             // Get the glyph range for this line
             let lineGlyphRange = layoutManager.glyphRange(
@@ -163,27 +203,17 @@ class LineNumberRulerView: NSRulerView {
             // Store the last line number we drew
             lastLineNumber = lineNumber
 
-            // Move to next line
+            // Move to next line using cached offsets - O(1) lookup
             lineNumber += 1
-
-            // Find the next newline
-            var foundNewline = false
-            while currentIndex < text.count {
-                if (text as NSString).character(at: currentIndex) == 0x0A {
-                    currentIndex += 1
-                    foundNewline = true
-                    break
-                }
-                currentIndex += 1
-            }
-
-            // If we didn't find a newline, we're at the end
-            if !foundNewline {
+            let nextLineIndex = lineNumber - 1
+            if nextLineIndex < lineStartOffsets.count {
+                currentIndex = lineStartOffsets[nextLineIndex]
+            } else {
                 break
             }
 
             // Check if we've gone beyond the visible range
-            if currentIndex > NSMaxRange(characterRange) {
+            if currentIndex > maxCharRange {
                 break
             }
         }
