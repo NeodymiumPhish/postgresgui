@@ -63,9 +63,6 @@ struct ConnectionFormView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
-                        if viewModel.isEditing {
-                            viewModel.showConnectionsList()
-                        }
                     }
                 }
 
@@ -92,10 +89,6 @@ struct ConnectionFormView: View {
                                 let success = await viewModel.saveConnection(modelContext: modelContext)
                                 if success {
                                     dismiss()
-                                    // Skip showing connections list if auto-connected (first connection)
-                                    if appState.connection.currentConnection == nil {
-                                        viewModel.showConnectionsList()
-                                    }
                                 }
                             }
                         }

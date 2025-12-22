@@ -22,9 +22,12 @@ class NavigationState {
     var isShowingConnectionsList: Bool = false
     var isShowingWelcomeScreen: Bool = true
     var connectionToEdit: ConnectionProfile? = nil
+    var connectionFormOpenedFromList: Bool = false
 
     // Sheet management helpers - ensure only one sheet is shown at a time
     func showConnectionForm() {
+        // Track if we came from the connections list
+        connectionFormOpenedFromList = isShowingConnectionsList
         isShowingConnectionsList = false
         isShowingConnectionForm = true
     }
