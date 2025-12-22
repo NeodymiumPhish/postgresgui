@@ -153,7 +153,7 @@ struct QueryEditorView: View {
 
                 DebugLog.print("✅ [QueryEditorView] Query executed successfully, showing results")
             } catch {
-                appState.query.queryError = error.localizedDescription
+                appState.query.queryError = error
                 appState.query.queryColumnNames = nil
                 appState.query.showQueryResults = true
                 // Don't clear results on error - keep previous results visible

@@ -85,7 +85,7 @@ struct QueryResultsView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Results or error display
-            if let error = appState.query.queryError {
+            if let errorMessage = appState.query.queryErrorMessage {
                 ContentUnavailableView {
                     Label {
                         Text("Query Failed")
@@ -95,9 +95,8 @@ struct QueryResultsView: View {
                             .foregroundColor(.red)
                     }
                 } description: {
-                    Text(error)
+                    Text(errorMessage)
                         .foregroundColor(.secondary)
-                        .padding()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if appState.query.isExecutingQuery {

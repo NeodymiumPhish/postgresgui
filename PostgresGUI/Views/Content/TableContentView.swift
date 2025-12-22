@@ -194,7 +194,7 @@ struct TableContentView: View {
 
                 DebugLog.print("✅ [TableContentView] Query executed successfully, showing results")
             } catch {
-                appState.query.queryError = error.localizedDescription
+                appState.query.queryError = error
                 appState.query.queryColumnNames = nil
                 appState.query.showQueryResults = true
 

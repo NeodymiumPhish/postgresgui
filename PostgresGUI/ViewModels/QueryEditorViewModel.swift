@@ -41,7 +41,7 @@ class QueryEditorViewModel {
             appState.query.queryExecutionTime = result.executionTime
             DebugLog.print("✅ [QueryEditorViewModel] Query executed successfully")
         } else if let error = result.error {
-            appState.query.queryError = error.localizedDescription
+            appState.query.queryError = error
             appState.query.queryColumnNames = nil
             appState.query.showQueryResults = true
             appState.query.queryExecutionTime = result.executionTime

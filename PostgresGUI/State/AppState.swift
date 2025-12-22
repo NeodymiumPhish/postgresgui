@@ -70,7 +70,7 @@ class AppState {
             // Fetch table metadata (primary keys, column info) for edit/delete operations
             await fetchTableMetadata(for: table)
         } else if let error = result.error {
-            query.queryError = error.localizedDescription
+            query.queryError = error
             query.queryColumnNames = nil
             query.showQueryResults = true
             query.queryExecutionTime = result.executionTime

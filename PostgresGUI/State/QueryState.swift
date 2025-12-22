@@ -16,10 +16,16 @@ class QueryState {
     var queryResults: [TableRow] = []
     var queryColumnNames: [String]? = nil
     var isExecutingQuery: Bool = false
-    var queryError: String? = nil
+    var queryError: Error? = nil
     var showQueryResults: Bool = false
     var queryExecutionTime: TimeInterval? = nil
     var selectedRowIDs: Set<UUID> = []
+
+    /// Formatted error message for display
+    var queryErrorMessage: String? {
+        guard let error = queryError else { return nil }
+        return PostgresError.extractDetailedMessage(error)
+    }
 
     // Saved query state
     var currentSavedQueryId: UUID? = nil

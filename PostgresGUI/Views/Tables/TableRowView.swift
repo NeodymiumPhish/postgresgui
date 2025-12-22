@@ -158,7 +158,7 @@ struct TableRowView: View {
 
                 DebugLog.print("✅ [TableRowView] Query executed successfully, showing results")
             } catch {
-                appState.query.queryError = error.localizedDescription
+                appState.query.queryError = error
                 appState.query.queryColumnNames = nil
                 appState.query.showQueryResults = true
 
