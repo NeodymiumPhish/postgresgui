@@ -146,18 +146,7 @@ struct ConnectionsListView: View {
             try? modelContext.save()
         case .failure(let error):
             DebugLog.print("Failed to connect: \(error)")
-            DebugLog.print("Failed to connect - detailed error: \(String(reflecting: error))")
-
-            // Show user-friendly error message
-            if let connectionError = error as? ConnectionError {
-                var errorMessage = connectionError.errorDescription ?? "Connection failed."
-                if let recovery = connectionError.recoverySuggestion {
-                    errorMessage += "\n\n\(recovery)"
-                }
-                self.connectionError = errorMessage
-            } else {
-                self.connectionError = error.localizedDescription
-            }
+            connectionError = PostgresError.extractDetailedMessage(error)
             showConnectionError = true
         }
     }
