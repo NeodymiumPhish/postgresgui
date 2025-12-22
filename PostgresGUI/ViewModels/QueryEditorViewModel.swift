@@ -23,6 +23,8 @@ class QueryEditorViewModel {
     func executeQuery() async {
         DebugLog.print("🚀 [QueryEditorViewModel] Execute button clicked")
 
+        let queryText = appState.query.queryText
+
         // Set loading state
         appState.query.isExecutingQuery = true
         appState.query.queryError = nil
@@ -31,7 +33,7 @@ class QueryEditorViewModel {
         appState.query.selectedRowIDs = []
 
         // Execute query
-        let result = await queryService.executeQuery(appState.query.queryText)
+        let result = await queryService.executeQuery(queryText)
 
         // Update state based on result
         if result.isSuccess {

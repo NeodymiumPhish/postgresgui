@@ -196,6 +196,8 @@ class DatabaseService {
     // MARK: - Query Execution
 
     /// Execute arbitrary SQL query and return results along with column names
+    /// Supports multi-statement scripts by splitting and executing sequentially
+    /// Wraps in transaction for atomicity (unless user already has transaction commands)
     func executeQuery(_ sql: String) async throws -> ([TableRow], [String]) {
         guard _isConnected else {
             throw ConnectionError.notConnected
@@ -204,8 +206,72 @@ class DatabaseService {
         logger.info("Executing query")
         logger.debug("SQL: \(sql.prefix(200))")
 
+        // Split SQL into individual statements to work around PostgresNIO limitation
+        // (doesn't support multiple commands in a single prepared statement)
+        let statements = SQLStatementSplitter.split(sql)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        guard !statements.isEmpty else {
+            return ([], [])
+        }
+
+        // Single statement - no transaction wrapper needed
+        if statements.count == 1 {
+            return try await connectionManager.withConnection { conn in
+                try await self.queryExecutor.executeQuery(connection: conn, sql: statements[0])
+            }
+        }
+
+        // Multiple statements - wrap in transaction if user hasn't already
+        // Execute all within single connection block for atomicity
+        let needsTransaction = !Self.containsTransactionCommands(sql)
+
         return try await connectionManager.withConnection { conn in
-            try await self.queryExecutor.executeQuery(connection: conn, sql: sql)
+            var lastRows: [TableRow] = []
+            var lastColumnNames: [String] = []
+
+            do {
+                if needsTransaction {
+                    _ = try await self.queryExecutor.executeQuery(connection: conn, sql: "BEGIN")
+                }
+
+                for statement in statements {
+                    let (rows, columnNames) = try await self.queryExecutor.executeQuery(
+                        connection: conn,
+                        sql: statement
+                    )
+
+                    if !rows.isEmpty {
+                        lastRows = rows
+                        lastColumnNames = columnNames
+                    }
+                }
+
+                if needsTransaction {
+                    _ = try await self.queryExecutor.executeQuery(connection: conn, sql: "COMMIT")
+                }
+            } catch {
+                if needsTransaction {
+                    _ = try? await self.queryExecutor.executeQuery(connection: conn, sql: "ROLLBACK")
+                }
+                throw error
+            }
+
+            return (lastRows, lastColumnNames)
+        }
+    }
+
+    /// Check if SQL contains transaction control commands
+    /// Note: We intentionally exclude "END" as it conflicts with PL/pgSQL block syntax.
+    /// Users who use "END" for transactions (rare) will just get nested transactions, which is safe.
+    private static func containsTransactionCommands(_ sql: String) -> Bool {
+        let upperSQL = sql.uppercased()
+        let transactionKeywords = ["BEGIN", "START TRANSACTION", "COMMIT", "ROLLBACK", "SAVEPOINT"]
+        return transactionKeywords.contains { keyword in
+            // Match keyword as whole word (not part of identifier)
+            let pattern = "\\b\(keyword)\\b"
+            return upperSQL.range(of: pattern, options: .regularExpression) != nil
         }
     }
 

@@ -125,11 +125,13 @@ struct QueryEditorView: View {
         DebugLog.print("🎬 [QueryEditorView] Execute button clicked")
 
         // Check if database is selected
-        guard appState.connection.selectedDatabase != nil else {
+        guard let database = appState.connection.selectedDatabase else {
             showNoDatabaseAlert = true
             DebugLog.print("⚠️ [QueryEditorView] No database selected")
             return
         }
+
+        let queryText = appState.query.queryText
 
         Task {
             // Set loading state - but keep previous results visible to prevent flicker
@@ -142,7 +144,7 @@ struct QueryEditorView: View {
 
             do {
                 DebugLog.print("📊 [QueryEditorView] Executing query...")
-                let (results, columnNames) = try await appState.connection.databaseService.executeQuery(appState.query.queryText)
+                let (results, columnNames) = try await appState.connection.databaseService.executeQuery(queryText)
                 // Update results atomically - this prevents empty state flash
                 appState.query.queryResults = results
                 appState.query.queryColumnNames = columnNames.isEmpty ? nil : columnNames
@@ -152,6 +154,11 @@ struct QueryEditorView: View {
                 appState.query.queryExecutionTime = endTime.timeIntervalSince(startTime)
 
                 DebugLog.print("✅ [QueryEditorView] Query executed successfully, showing results")
+
+                // Refresh tables list if query modified schema
+                if Self.isSchemaModifyingQuery(queryText) {
+                    await refreshTables(database: database)
+                }
             } catch {
                 appState.query.queryError = error
                 appState.query.queryColumnNames = nil
@@ -165,6 +172,32 @@ struct QueryEditorView: View {
             }
 
             appState.query.isExecutingQuery = false
+        }
+    }
+
+    /// Check if SQL contains schema-modifying statements that affect the tables list
+    private static func isSchemaModifyingQuery(_ sql: String) -> Bool {
+        let upperSQL = sql.uppercased()
+        let patterns = [
+            "CREATE\\s+TABLE",
+            "DROP\\s+TABLE",
+            "ALTER\\s+TABLE",
+            "CREATE\\s+TEMP(ORARY)?\\s+TABLE"
+        ]
+        return patterns.contains { pattern in
+            upperSQL.range(of: pattern, options: .regularExpression) != nil
+        }
+    }
+
+    /// Refresh the tables list for the current database
+    private func refreshTables(database: DatabaseInfo) async {
+        do {
+            appState.connection.tables = try await appState.connection.databaseService.fetchTables(
+                database: database.name
+            )
+            DebugLog.print("🔄 [QueryEditorView] Tables list refreshed after schema change")
+        } catch {
+            DebugLog.print("⚠️ [QueryEditorView] Failed to refresh tables: \(error)")
         }
     }
 }
