@@ -47,7 +47,10 @@ struct TablesListIsolated: View {
         }()
         
         Group {
-            if tables.isEmpty {
+            if isLoadingTables {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if tables.isEmpty {
                 ContentUnavailableView {
                     Label {
                         Text("No tables found")

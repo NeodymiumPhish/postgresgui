@@ -117,7 +117,7 @@ struct MainSplitView: View {
                 }
             }
         }
-        .navigationTitle(appState.connection.selectedDatabase?.name ?? "Unknown Database")
+        .navigationTitle(appState.connection.selectedDatabase?.name ?? "")
         .searchable(text: $searchText, prompt: "Filter results")
         .modifier(DetailContentModalsWrapper(viewModel: viewModel))
     }

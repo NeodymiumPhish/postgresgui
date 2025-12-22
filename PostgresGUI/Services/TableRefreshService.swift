@@ -21,8 +21,17 @@ struct TableRefreshService {
         connection: ConnectionProfile,
         appState: AppState
     ) async {
-        defer { appState.connection.isLoadingTables = false }
+        // Only clear loading state if we're still the active request for this database
+        defer {
+            if appState.connection.selectedDatabase?.id == database.id {
+                appState.connection.isLoadingTables = false
+            }
+        }
+
         guard !Task.isCancelled else { return }
+
+        // Verify this is still the selected database before any work
+        guard appState.connection.selectedDatabase?.id == database.id else { return }
 
         do {
             // Reconnect if not connected to target database
@@ -39,12 +48,24 @@ struct TableRefreshService {
             }
 
             guard !Task.isCancelled else { return }
-            appState.connection.tables = try await appState.connection.databaseService.fetchTables(database: database.name)
+
+            // Verify still selected after reconnect
+            guard appState.connection.selectedDatabase?.id == database.id else { return }
+
+            let tables = try await appState.connection.databaseService.fetchTables(database: database.name)
+
+            // Final check before writing - prevent stale data from overwriting newer results
+            guard !Task.isCancelled,
+                  appState.connection.selectedDatabase?.id == database.id else { return }
+
+            appState.connection.tables = tables
         } catch is CancellationError {
             // Silently ignore cancellation
         } catch ConnectionError.connectionCancelled {
             // Silently ignore - superseded by newer request
         } catch {
+            // Only write error state if still the active request
+            guard appState.connection.selectedDatabase?.id == database.id else { return }
             DebugLog.print("❌ [TableRefreshService] Error loading tables: \(error)")
             appState.connection.tables = []
         }
@@ -56,7 +77,13 @@ struct TableRefreshService {
         guard let database = appState.connection.selectedDatabase,
               appState.connection.currentConnection != nil else { return }
 
-        defer { appState.connection.isLoadingTables = false }
+        let databaseId = database.id
+
+        defer {
+            if appState.connection.selectedDatabase?.id == databaseId {
+                appState.connection.isLoadingTables = false
+            }
+        }
         appState.connection.isLoadingTables = true
 
         guard appState.connection.databaseService.isConnected else { return }
@@ -68,11 +95,20 @@ struct TableRefreshService {
             DebugLog.print("❌ [TableRefreshService] Error refreshing databases: \(error)")
         }
 
+        // Verify still selected before fetching tables
+        guard appState.connection.selectedDatabase?.id == databaseId else { return }
+
         // Refresh tables
         do {
-            appState.connection.tables = try await appState.connection.databaseService.fetchTables(database: database.name)
+            let tables = try await appState.connection.databaseService.fetchTables(database: database.name)
+
+            // Final check before writing
+            guard appState.connection.selectedDatabase?.id == databaseId else { return }
+
+            appState.connection.tables = tables
             updateSelectedTable(appState: appState)
         } catch {
+            guard appState.connection.selectedDatabase?.id == databaseId else { return }
             DebugLog.print("❌ [TableRefreshService] Error refreshing tables: \(error)")
             appState.connection.tables = []
             appState.connection.selectedTable = nil

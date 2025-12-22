@@ -76,6 +76,11 @@ class DatabaseService {
         // Get abstract TLS mode from SSLMode
         let tlsMode = sslMode.databaseTLSMode
 
+        // Clear state before reconnecting to prevent stale reads by concurrent tasks
+        // This ensures _isConnected is false while connection is in progress
+        _isConnected = false
+        currentDatabase = nil
+
         do {
             try await connectionManager.connect(
                 host: host,
