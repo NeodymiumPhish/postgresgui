@@ -274,8 +274,8 @@ class ConnectionFormViewModel {
         } catch let error as ConnectionFormError {
             await handleTestError(error.message, startTime: testStartTime)
         } catch {
-            let parsed = parseConnectionError(error)
-            await handleTestError(parsed.message, startTime: testStartTime)
+            let message = PostgresError.extractDetailedMessage(error)
+            await handleTestError(message, startTime: testStartTime)
         }
 
         isConnecting = false
@@ -480,47 +480,6 @@ class ConnectionFormViewModel {
             database: database.isEmpty ? "postgres" : database,
             sslMode: sslMode
         )
-    }
-
-    private func parseConnectionError(_ error: Error) -> (message: String, suggestions: [String]) {
-        // First, try to extract a detailed message from PSQLError
-        let detailedMessage = PostgresError.extractDetailedMessage(error)
-        let errorMessage = detailedMessage.lowercased()
-        let nsError = error as NSError
-
-        if errorMessage.contains("connection refused") ||
-           errorMessage.contains("could not connect") ||
-           nsError.domain.contains("NIOConnectionError") {
-            return (
-                message: "Could not connect to server",
-                suggestions: ["Check if PostgreSQL is running", "Verify host and port are correct"]
-            )
-        }
-
-        if errorMessage.contains("timeout") || errorMessage.contains("timed out") {
-            return (message: "Connection timeout", suggestions: ["Check your network connection"])
-        }
-
-        if errorMessage.contains("password") || errorMessage.contains("authentication") {
-            return (message: "Authentication failed", suggestions: ["Verify username and password"])
-        }
-
-        if errorMessage.contains("database") && errorMessage.contains("does not exist") {
-            return (message: "Database not found", suggestions: ["Check database name spelling"])
-        }
-
-        if errorMessage.contains("ssl") || errorMessage.contains("tls") {
-            return (message: "SSL connection failed", suggestions: ["Check SSL mode setting"])
-        }
-
-        if errorMessage.contains("could not resolve") ||
-           errorMessage.contains("no such host") ||
-           errorMessage.contains("nodename nor servname provided") {
-            return (message: "Could not resolve host", suggestions: ["Check host address spelling"])
-        }
-
-        // Use the detailed message from PostgresError if available
-        return (message: detailedMessage, suggestions: [])
     }
 }
 
