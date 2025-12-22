@@ -44,6 +44,10 @@ struct RootView: View {
                 }
                 appState.navigation.isShowingConnectionForm = newValue
                 if !newValue {
+                    // If we were editing a connection, reopen the connections list
+                    if appState.navigation.connectionToEdit != nil {
+                        appState.navigation.isShowingConnectionsList = true
+                    }
                     // Clear edit state when sheet is dismissed
                     appState.navigation.connectionToEdit = nil
                 }
