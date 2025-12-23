@@ -460,7 +460,12 @@ class ConnectionFormViewModel {
     }
 
     private func parseIndividualFields() throws -> ConnectionDetails {
-        guard let portInt = Int(port), portInt > 0 && portInt <= 65535 else {
+        let trimmedHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPort = port.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDatabase = database.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let portInt = Int(trimmedPort), portInt > 0 && portInt <= 65535 else {
             throw ConnectionFormError(message: "Invalid port number")
         }
 
@@ -479,15 +484,15 @@ class ConnectionFormViewModel {
         if let connection = connectionToEdit {
             sslMode = connection.sslModeEnum
         } else {
-            sslMode = SSLMode.defaultFor(host: host)
+            sslMode = SSLMode.defaultFor(host: trimmedHost)
         }
 
         return ConnectionDetails(
-            host: host.isEmpty ? "localhost" : host,
+            host: trimmedHost.isEmpty ? "localhost" : trimmedHost,
             port: portInt,
-            username: username.isEmpty ? "postgres" : username,
+            username: trimmedUsername.isEmpty ? "postgres" : trimmedUsername,
             password: passwordToUse,
-            database: database.isEmpty ? "postgres" : database,
+            database: trimmedDatabase.isEmpty ? "postgres" : trimmedDatabase,
             sslMode: sslMode
         )
     }
