@@ -110,6 +110,9 @@ struct TableRowView: View {
             if appState.connection.selectedTable?.id == table.id {
                 appState.connection.selectedTable = nil
                 appState.query.showQueryResults = false
+                if !appState.query.queryText.isEmpty {
+                    DebugLog.print("🗑️ [TableRowView] Cleared queryText due to table deletion: \(table.schema).\(table.name)")
+                }
                 appState.query.queryText = ""
                 appState.query.queryResults = []
             }

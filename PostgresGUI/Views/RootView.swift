@@ -230,7 +230,11 @@ struct RootView: View {
         DebugLog.print("📑 [RootView] Tab changed to: \(tab.id)")
 
         // Restore query text
+        let previousQueryText = appState.query.queryText
         appState.query.queryText = tab.queryText
+        if previousQueryText != tab.queryText {
+            DebugLog.print("📝 [RootView] queryText changed from: \"\(previousQueryText.prefix(30))...\" to: \"\(tab.queryText.prefix(30))...\" (tab restore)")
+        }
 
         // Clear current state
         appState.connection.selectedTable = nil

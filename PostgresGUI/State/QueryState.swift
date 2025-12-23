@@ -73,6 +73,9 @@ class QueryState {
 
     /// Reset query state
     func reset() {
+        if !queryText.isEmpty {
+            DebugLog.print("🗑️ [QueryState] reset() called - clearing queryText (was: \"\(queryText.prefix(50))...\")")
+        }
         queryText = ""
         queryResults = []
         queryColumnNames = nil

@@ -57,7 +57,11 @@ class SidebarViewModel {
 
         // Clear table selection and all query-related state
         appState.connection.selectedTable = nil
+        let previousQueryText = appState.query.queryText
         appState.query.queryText = ""
+        if !previousQueryText.isEmpty {
+            DebugLog.print("🗑️ [SidebarViewModel] Cleared queryText (was: \"\(previousQueryText.prefix(50))...\") due to database switch to: \(database.name)")
+        }
         appState.query.queryResults = []
         appState.query.queryColumnNames = nil
         appState.query.showQueryResults = false

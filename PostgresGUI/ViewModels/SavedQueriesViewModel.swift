@@ -139,6 +139,9 @@ class SavedQueriesViewModel {
             try modelContext.save()
 
             // Set this query as active
+            if !appState.query.queryText.isEmpty {
+                DebugLog.print("🗑️ [SavedQueriesViewModel] Cleared queryText due to new saved query creation: \(newQuery.name)")
+            }
             appState.query.queryText = ""
             appState.query.currentSavedQueryId = newQuery.id
             appState.query.lastSavedAt = newQuery.updatedAt
