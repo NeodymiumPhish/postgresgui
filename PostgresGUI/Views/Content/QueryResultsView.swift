@@ -145,12 +145,9 @@ struct QueryResultsView: View {
                     await appState.executeTableQuery(for: table)
                 }
             } else if newValue == nil {
-                // Clear query results when table selection is cleared
+                // Clear query results when table selection is cleared (but preserve queryText)
                 lastExecutedTableID = nil
-                if !appState.query.queryText.isEmpty {
-                    DebugLog.print("🗑️ [QueryResultsView] Cleared queryText due to table selection cleared")
-                }
-                appState.query.queryText = ""
+                DebugLog.print("📋 [QueryResultsView] Table selection cleared - preserving queryText, clearing results")
                 appState.query.showQueryResults = false
             }
         }
