@@ -15,15 +15,52 @@ class LineNumberRulerView: NSRulerView {
     private var lineStartOffsets: [Int] = [0]
     private var cachedTextHash: Int = 0
 
+    // Cached drawing attributes - created once, reused for all draws
+    private lazy var textAttributes: [NSAttributedString.Key: Any] = [
+        .font: NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
+        .foregroundColor: NSColor.secondaryLabelColor
+    ]
+
+    // Cache digit width for right-alignment calculation (monospace so all digits same width)
+    private lazy var digitWidth: CGFloat = {
+        ("0" as NSString).size(withAttributes: textAttributes).width
+    }()
+
+    // Throttle scroll updates using CVDisplayLink timing
+    private var lastDrawTime: CFTimeInterval = 0
+    private let minDrawInterval: CFTimeInterval = 1.0 / 120.0  // Cap at 120fps
+
     init(scrollView: NSScrollView, textView: NSTextView) {
         self.textView = textView
         super.init(scrollView: scrollView, orientation: .verticalRuler)
         self.clientView = textView.enclosingScrollView?.documentView
         self.ruleThickness = 40
+
+        // Observe scroll events to redraw line numbers during scrolling
+        let contentView = scrollView.contentView
+        contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(scrollViewBoundsDidChange),
+            name: NSView.boundsDidChangeNotification,
+            object: contentView
+        )
     }
 
     required init(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func scrollViewBoundsDidChange(_ notification: Notification) {
+        // Throttle redraws to reduce CPU usage during fast scrolling
+        let currentTime = CACurrentMediaTime()
+        guard currentTime - lastDrawTime >= minDrawInterval else { return }
+        lastDrawTime = currentTime
+        needsDisplay = true
     }
 
     /// Rebuild line offset cache - O(n) but only when text changes
@@ -34,13 +71,17 @@ class LineNumberRulerView: NSRulerView {
         cachedTextHash = textHash
         lineStartOffsets = [0]
 
-        // Build array of line start positions
-        let nsText = text as NSString
-        let length = nsText.length
-        for i in 0..<length {
-            if nsText.character(at: i) == 0x0A {
-                lineStartOffsets.append(i + 1)
+        // Build array of line start positions using UTF-16 for NSRange compatibility
+        var index = text.startIndex
+        var utf16Offset = 0
+        while index < text.endIndex {
+            let char = text[index]
+            let charUTF16Length = String(char).utf16.count
+            if char == "\n" {
+                lineStartOffsets.append(utf16Offset + charUTF16Length)
             }
+            utf16Offset += charUTF16Length
+            index = text.index(after: index)
         }
     }
 
@@ -66,168 +107,95 @@ class LineNumberRulerView: NSRulerView {
               let context = NSGraphicsContext.current?.cgContext else { return }
 
         // Background color
-        let backgroundColor = NSColor.controlBackgroundColor
-        backgroundColor.setFill()
+        NSColor.controlBackgroundColor.setFill()
         context.fill(bounds)
 
         // Draw separator line
-        let separatorColor = NSColor.separatorColor
-        separatorColor.setStroke()
+        NSColor.separatorColor.setStroke()
         context.setLineWidth(0.5)
         context.move(to: CGPoint(x: bounds.maxX - 0.5, y: bounds.minY))
         context.addLine(to: CGPoint(x: bounds.maxX - 0.5, y: bounds.maxY))
         context.strokePath()
 
-        // Get visible rect
-        let visibleRect = textView.enclosingScrollView?.contentView.bounds ?? .zero
-
-        // Get text layout manager
         guard let layoutManager = textView.layoutManager,
               let textContainer = textView.textContainer else { return }
 
         let text = textView.string
 
-        // Draw line numbers for visible lines (same font as editor)
-        let textAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
-            .foregroundColor: NSColor.secondaryLabelColor
-        ]
-
-        // Handle empty text case - show line number 1 and 2
+        // Handle empty text case
         if text.isEmpty {
-            drawEmptyTextLineNumbers(layoutManager: layoutManager, textView: textView, attributes: textAttributes)
+            drawEmptyTextLineNumbers(layoutManager: layoutManager, textView: textView)
             return
         }
 
-        // Calculate and draw line numbers for non-empty text
-        drawLineNumbers(
-            text: text,
-            layoutManager: layoutManager,
-            textContainer: textContainer,
-            textView: textView,
-            visibleRect: visibleRect,
-            attributes: textAttributes
-        )
+        // Get visible rect from scroll view
+        let visibleRect = textView.enclosingScrollView?.contentView.bounds ?? .zero
+
+        // Rebuild line cache if text changed - O(n) but only when needed
+        rebuildLineCache(for: text)
+
+        // Get visible glyph range - this is optimized by NSLayoutManager
+        let visibleGlyphRange = layoutManager.glyphRange(forBoundingRect: visibleRect, in: textContainer)
+
+        // Use enumerateLineFragments for efficient line iteration - O(visible lines)
+        // This is much faster than manual glyph/character range calculations
+        var drawnLineNumbers = Set<Int>()
+        let containerInsetY = textView.textContainerInset.height
+        let scrollOffsetY = visibleRect.minY
+        let rightMargin = bounds.width - 8
+
+        layoutManager.enumerateLineFragments(forGlyphRange: visibleGlyphRange) { [self] (lineRect, _, _, glyphRange, _) in
+            // Get character index for this line fragment
+            let charIndex = layoutManager.characterIndexForGlyph(at: glyphRange.location)
+
+            // Use binary search to find line number - O(log m)
+            let lineNum = self.lineNumber(at: charIndex)
+
+            // Skip if we already drew this line number (handles wrapped lines)
+            guard !drawnLineNumbers.contains(lineNum) else { return }
+            drawnLineNumbers.insert(lineNum)
+
+            // Calculate Y position
+            let yPosition = lineRect.minY + containerInsetY - scrollOffsetY
+
+            // Draw line number - calculate x position based on digit count
+            let lineNumString = "\(lineNum)" as NSString
+            let digitCount = CGFloat(lineNumString.length)
+            let xPosition = rightMargin - (digitCount * self.digitWidth)
+
+            lineNumString.draw(at: NSPoint(x: xPosition, y: yPosition), withAttributes: self.textAttributes)
+        }
+
+        // Draw one more line number after the last visible line
+        if let lastLineNum = drawnLineNumbers.max() {
+            let nextLineNum = lastLineNum + 1
+            let font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            let lineHeight = layoutManager.defaultLineHeight(for: font)
+
+            // Get the rect for the last visible line to calculate next position
+            let lastCharIndex = lineStartOffsets[min(lastLineNum - 1, lineStartOffsets.count - 1)]
+            let lastGlyphIndex = layoutManager.glyphIndexForCharacter(at: min(lastCharIndex, layoutManager.numberOfGlyphs > 0 ? layoutManager.numberOfGlyphs - 1 : 0))
+            let lastLineRect = layoutManager.lineFragmentRect(forGlyphAt: lastGlyphIndex, effectiveRange: nil)
+
+            let yPosition = lastLineRect.minY + lineHeight + containerInsetY - scrollOffsetY
+
+            let nextLineNumString = "\(nextLineNum)" as NSString
+            let digitCount = CGFloat(nextLineNumString.length)
+            let xPosition = rightMargin - (digitCount * digitWidth)
+
+            nextLineNumString.draw(at: NSPoint(x: xPosition, y: yPosition), withAttributes: textAttributes)
+        }
     }
 
     // MARK: - Private Helpers
 
-    private func drawEmptyTextLineNumbers(
-        layoutManager: NSLayoutManager,
-        textView: NSTextView,
-        attributes: [NSAttributedString.Key: Any]
-    ) {
+    private func drawEmptyTextLineNumbers(layoutManager: NSLayoutManager, textView: NSTextView) {
         let font = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
         let lineHeight = layoutManager.defaultLineHeight(for: font)
+        let xPosition = bounds.width - digitWidth - 8
+        let baseY = textView.textContainerInset.height
 
-        // Draw line 1
-        let lineNumberString1 = "1" as NSString
-        let stringSize1 = lineNumberString1.size(withAttributes: attributes)
-        let drawPoint1 = NSPoint(
-            x: bounds.width - stringSize1.width - 8,
-            y: textView.textContainerInset.height
-        )
-        lineNumberString1.draw(at: drawPoint1, withAttributes: attributes)
-
-        // Draw line 2 (next line)
-        let lineNumberString2 = "2" as NSString
-        let stringSize2 = lineNumberString2.size(withAttributes: attributes)
-        let drawPoint2 = NSPoint(
-            x: bounds.width - stringSize2.width - 8,
-            y: textView.textContainerInset.height + lineHeight
-        )
-        lineNumberString2.draw(at: drawPoint2, withAttributes: attributes)
-    }
-
-    private func drawLineNumbers(
-        text: String,
-        layoutManager: NSLayoutManager,
-        textContainer: NSTextContainer,
-        textView: NSTextView,
-        visibleRect: CGRect,
-        attributes: [NSAttributedString.Key: Any]
-    ) {
-        // Rebuild line cache if text changed - O(n) but only when needed
-        rebuildLineCache(for: text)
-
-        // Calculate visible character range
-        let glyphRange = layoutManager.glyphRange(forBoundingRect: visibleRect, in: textContainer)
-        let characterRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
-
-        // Use binary search to find starting line number - O(log m) instead of O(n)
-        var lineNumber = lineNumber(at: characterRange.location)
-
-        // Find the line start index for the first visible line
-        let lineIndex = lineNumber - 1
-        var currentIndex = lineIndex < lineStartOffsets.count ? lineStartOffsets[lineIndex] : characterRange.location
-
-        var lastYPosition: CGFloat = 0
-        var lastLineHeight: CGFloat = 0
-        var lastLineNumber = lineNumber
-
-        let textLength = text.count
-        let maxCharRange = NSMaxRange(characterRange)
-
-        while currentIndex <= textLength {
-            // Handle the case where we're at the end of text
-            let charLength = (currentIndex < textLength) ? 1 : 0
-
-            // Get the glyph range for this line
-            let lineGlyphRange = layoutManager.glyphRange(
-                forCharacterRange: NSRange(location: currentIndex, length: charLength),
-                actualCharacterRange: nil
-            )
-
-            // Get the bounding rect for this line
-            let lineRect = layoutManager.boundingRect(forGlyphRange: lineGlyphRange, in: textContainer)
-
-            // Adjust for text view insets and scroll position
-            let yPosition = lineRect.minY + textView.textContainerInset.height - visibleRect.minY
-
-            // Store the last y position and line height for drawing the next line number
-            lastYPosition = yPosition
-            if lineRect.height > 0 {
-                lastLineHeight = lineRect.height
-            }
-
-            // Draw line number
-            let lineNumberString = "\(lineNumber)" as NSString
-            let stringSize = lineNumberString.size(withAttributes: attributes)
-
-            let drawPoint = NSPoint(
-                x: bounds.width - stringSize.width - 8,
-                y: yPosition
-            )
-            lineNumberString.draw(at: drawPoint, withAttributes: attributes)
-
-            // Store the last line number we drew
-            lastLineNumber = lineNumber
-
-            // Move to next line using cached offsets - O(1) lookup
-            lineNumber += 1
-            let nextLineIndex = lineNumber - 1
-            if nextLineIndex < lineStartOffsets.count {
-                currentIndex = lineStartOffsets[nextLineIndex]
-            } else {
-                break
-            }
-
-            // Check if we've gone beyond the visible range
-            if currentIndex > maxCharRange {
-                break
-            }
-        }
-
-        // Draw the next line number after the last line
-        if lastLineHeight > 0 {
-            let nextYPosition = lastYPosition + lastLineHeight
-            let nextLineNumberString = "\(lastLineNumber + 1)" as NSString
-            let stringSize = nextLineNumberString.size(withAttributes: attributes)
-            let drawPoint = NSPoint(
-                x: bounds.width - stringSize.width - 8,
-                y: nextYPosition
-            )
-            nextLineNumberString.draw(at: drawPoint, withAttributes: attributes)
-        }
+        ("1" as NSString).draw(at: NSPoint(x: xPosition, y: baseY), withAttributes: textAttributes)
+        ("2" as NSString).draw(at: NSPoint(x: xPosition, y: baseY + lineHeight), withAttributes: textAttributes)
     }
 }
