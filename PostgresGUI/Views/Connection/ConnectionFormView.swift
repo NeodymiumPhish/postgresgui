@@ -135,6 +135,11 @@ struct ConnectionFormView: View {
                     .textFieldStyle(.roundedBorder)
             }
 
+            formRow(label: "Database") {
+                TextField("postgres", text: $viewModel.database)
+                    .textFieldStyle(.roundedBorder)
+            }
+
             formRow(label: "Username") {
                 TextField("postgres", text: $viewModel.username)
                     .textFieldStyle(.roundedBorder)
@@ -142,11 +147,6 @@ struct ConnectionFormView: View {
 
             formRow(label: "Password") {
                 passwordField
-            }
-
-            formRow(label: "Database") {
-                TextField("postgres", text: $viewModel.database)
-                    .textFieldStyle(.roundedBorder)
             }
         }
     }
