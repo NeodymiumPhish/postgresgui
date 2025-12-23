@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "logo.png",
+      "filename" : "postgresgui-elephant.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
@@ -19,4 +19,3 @@
     "version" : 1
   }
 }
-

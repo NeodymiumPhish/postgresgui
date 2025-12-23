@@ -127,7 +127,7 @@ struct RootView: View {
             if let error = initializationError { Text(error) }
         }
         .alert(
-            "Connection \"\(appState.navigation.savedConnection?.displayName ?? "")\" created",
+            "Connection Created: \"\(appState.navigation.savedConnection?.displayName ?? "")\"",
             isPresented: Binding(
                 get: { appState.navigation.showConnectionSavedAlert },
                 set: { appState.navigation.showConnectionSavedAlert = $0 }
