@@ -82,36 +82,60 @@ class AppState {
     /// Fetch and cache table metadata (primary keys, column info)
     @MainActor
     private func fetchTableMetadata(for table: TableInfo) async {
-        var updatedTable = table
+        // Store table ID to verify selection hasn't changed
+        let tableId = table.id
+
+        var primaryKeyColumns: [String]?
+        var columnInfo: [ColumnInfo]?
 
         // Fetch primary key columns if not cached
-        if updatedTable.primaryKeyColumns == nil {
+        if table.primaryKeyColumns == nil {
             do {
-                let pkColumns = try await connection.databaseService.fetchPrimaryKeyColumns(
+                primaryKeyColumns = try await connection.databaseService.fetchPrimaryKeyColumns(
                     schema: table.schema,
                     table: table.name
                 )
-                updatedTable.primaryKeyColumns = pkColumns
             } catch {
                 DebugLog.print("⚠️ [AppState] Failed to fetch primary keys: \(error)")
             }
         }
 
+        // Check if user switched tables during primary key fetch
+        guard connection.selectedTable?.id == tableId else {
+            DebugLog.print("⚠️ [AppState] Table selection changed during metadata fetch, skipping update for \(table.schema).\(table.name)")
+            return
+        }
+
         // Fetch column info if not cached
-        if updatedTable.columnInfo == nil {
+        if table.columnInfo == nil {
             do {
-                let columnInfo = try await connection.databaseService.fetchColumnInfo(
+                columnInfo = try await connection.databaseService.fetchColumnInfo(
                     schema: table.schema,
                     table: table.name
                 )
-                updatedTable.columnInfo = columnInfo
             } catch {
                 DebugLog.print("⚠️ [AppState] Failed to fetch column info: \(error)")
             }
         }
 
-        // Update selectedTable with metadata
-        connection.selectedTable = updatedTable
+        // Final check: only update if this table is still selected (prevents race condition)
+        guard connection.selectedTable?.id == tableId else {
+            DebugLog.print("⚠️ [AppState] Table selection changed during metadata fetch, skipping update for \(table.schema).\(table.name)")
+            return
+        }
+
+        // Only update if we actually fetched new data
+        guard primaryKeyColumns != nil || columnInfo != nil else {
+            return
+        }
+
+        // Store in separate metadata cache (doesn't trigger List re-renders)
+        let existingCache = connection.tableMetadataCache[tableId]
+        connection.tableMetadataCache[tableId] = (
+            primaryKeys: primaryKeyColumns ?? existingCache?.primaryKeys,
+            columns: columnInfo ?? existingCache?.columns
+        )
+        DebugLog.print("✅ [AppState] Cached metadata for \(table.schema).\(table.name)")
     }
 
     // MARK: - Cleanup

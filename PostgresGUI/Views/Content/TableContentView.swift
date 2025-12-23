@@ -223,12 +223,20 @@ struct TableContentView: View {
             return
         }
 
-        if selectedTable.primaryKeyColumns == nil {
+        // Check metadata cache first
+        let cachedMetadata = appState.connection.tableMetadataCache[selectedTable.id]
+        if let pkColumns = cachedMetadata?.primaryKeys ?? selectedTable.primaryKeyColumns {
+            // Use cached metadata
+            if selectedTable.primaryKeyColumns == nil {
+                var updatedTable = selectedTable
+                updatedTable.primaryKeyColumns = pkColumns
+                appState.connection.selectedTable = updatedTable
+            }
+            showDeleteConfirmation = true
+        } else {
             Task {
                 await fetchPrimaryKeysAndShowDeleteDialog()
             }
-        } else {
-            showDeleteConfirmation = true
         }
     }
 
@@ -299,13 +307,25 @@ struct TableContentView: View {
             return
         }
 
-        if selectedTable.primaryKeyColumns == nil || selectedTable.columnInfo == nil {
+        // Check metadata cache first
+        let cachedMetadata = appState.connection.tableMetadataCache[selectedTable.id]
+        let pkColumns = cachedMetadata?.primaryKeys ?? selectedTable.primaryKeyColumns
+        let colInfo = cachedMetadata?.columns ?? selectedTable.columnInfo
+
+        if pkColumns != nil && colInfo != nil {
+            // Use cached metadata - update selectedTable if needed
+            if selectedTable.primaryKeyColumns == nil || selectedTable.columnInfo == nil {
+                var updatedTable = selectedTable
+                if selectedTable.primaryKeyColumns == nil { updatedTable.primaryKeyColumns = pkColumns }
+                if selectedTable.columnInfo == nil { updatedTable.columnInfo = colInfo }
+                appState.connection.selectedTable = updatedTable
+            }
+            self.rowToEdit = rowToEdit
+            showRowEditor = true
+        } else {
             Task {
                 await fetchPrimaryKeysAndShowEditor(rowToEdit)
             }
-        } else {
-            self.rowToEdit = rowToEdit
-            showRowEditor = true
         }
     }
 

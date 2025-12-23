@@ -39,6 +39,10 @@ class ConnectionState {
     var tables: [TableInfo] = []
     var isLoadingTables: Bool = false
 
+    // Separate metadata cache to avoid triggering List re-renders
+    // Key: table ID (schema.name), Value: (primaryKeyColumns, columnInfo)
+    var tableMetadataCache: [String: (primaryKeys: [String]?, columns: [ColumnInfo]?)] = [:]
+
     /// Clean up resources when window is closing
     func cleanupOnWindowClose() async {
         guard isConnected else { return }
@@ -54,6 +58,7 @@ class ConnectionState {
         selectedTable = nil
         databases = []
         tables = []
+        tableMetadataCache = [:]
 
         DebugLog.print("✅ Cleanup completed")
     }
