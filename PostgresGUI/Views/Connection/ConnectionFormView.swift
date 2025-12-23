@@ -112,12 +112,10 @@ struct ConnectionFormView: View {
 
     private var individualFieldsView: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if viewModel.isEditing {
-                nameFieldRow(
-                    showField: $viewModel.showIndividualNameField,
-                    name: $viewModel.individualName
-                )
-            }
+            nameFieldRow(
+                showField: $viewModel.showIndividualNameField,
+                name: $viewModel.individualName
+            )
 
             formRow(label: "Host", alignment: .top) {
                 TextEditor(text: $viewModel.host)
@@ -200,12 +198,10 @@ struct ConnectionFormView: View {
 
     private var connectionStringView: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if viewModel.isEditing {
-                nameFieldRow(
-                    showField: $viewModel.showConnectionStringNameField,
-                    name: $viewModel.connectionStringName
-                )
-            }
+            nameFieldRow(
+                showField: $viewModel.showConnectionStringNameField,
+                name: $viewModel.connectionStringName
+            )
 
             formRow(label: "Connection String", alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {

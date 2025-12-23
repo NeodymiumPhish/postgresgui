@@ -362,12 +362,16 @@ class ConnectionFormViewModel {
                 modelContext.insert(profile)
                 try modelContext.save()
 
-                // Auto-connect if first connection
+                // Auto-connect if first connection, otherwise show alert
                 let descriptor = FetchDescriptor<ConnectionProfile>()
                 let allConnections = try modelContext.fetch(descriptor)
 
                 if allConnections.count == 1 {
                     await autoConnect(to: profile, password: details.password)
+                } else {
+                    // Show connection saved alert with Connect/Dismiss options
+                    appState.navigation.savedConnection = profile
+                    appState.navigation.showConnectionSavedAlert = true
                 }
             }
 
