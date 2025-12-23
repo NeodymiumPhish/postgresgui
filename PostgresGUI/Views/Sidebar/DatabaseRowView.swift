@@ -11,8 +11,14 @@ struct DatabaseRowView: View {
     @State private var isHovered = false
     @State private var isButtonHovered = false
     @State private var showDeleteConfirmation = false
+    @State private var showCannotDeleteAlert = false
     @State private var deleteError: String?
     @State private var isDeleting = false
+
+    /// Check if this database is currently selected/connected
+    private var isCurrentDatabase: Bool {
+        appState.connection.selectedDatabase?.name == database.name
+    }
 
     var body: some View {
         NavigationLink(value: database.id) {
@@ -29,7 +35,7 @@ struct DatabaseRowView: View {
         }
         .contextMenu {
             Button(role: .destructive) {
-                showDeleteConfirmation = true
+                requestDelete()
             } label: {
                 Label("Delete Database...", systemImage: "trash")
             }
@@ -58,12 +64,17 @@ struct DatabaseRowView: View {
         } message: {
             if let error = deleteError { Text(error) }
         }
+        .alert("Cannot Delete Database", isPresented: $showCannotDeleteAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Cannot delete '\(database.name)' because it is currently selected. Please select a different database first.")
+        }
     }
 
     private var menuButton: some View {
         Menu {
             Button(role: .destructive) {
-                showDeleteConfirmation = true
+                requestDelete()
             } label: {
                 Label("Delete Database...", systemImage: "trash")
             }
@@ -78,6 +89,15 @@ struct DatabaseRowView: View {
         .onHover { isButtonHovered = $0 }
     }
 
+    /// Handle delete request - show error if current database, otherwise show confirmation
+    private func requestDelete() {
+        if isCurrentDatabase {
+            showCannotDeleteAlert = true
+        } else {
+            showDeleteConfirmation = true
+        }
+    }
+
     private func deleteDatabase(_ database: DatabaseInfo) async {
         DebugLog.print("[DatabaseRowView] Starting delete for database: \(database.name)")
         isDeleting = true
@@ -89,13 +109,6 @@ struct DatabaseRowView: View {
         do {
             guard appState.connection.currentConnection != nil else {
                 DebugLog.print("[DatabaseRowView] No current connection, aborting delete")
-                return
-            }
-
-            // Prevent deleting the currently connected database
-            if appState.connection.databaseService.connectedDatabase == database.name {
-                DebugLog.print("[DatabaseRowView] Cannot delete currently connected database")
-                deleteError = "Cannot delete '\(database.name)' while connected to it. Please switch to a different database first."
                 return
             }
 
