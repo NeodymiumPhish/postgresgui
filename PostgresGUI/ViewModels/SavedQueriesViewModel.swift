@@ -142,11 +142,13 @@ class SavedQueriesViewModel {
             appState.query.queryText = ""
             appState.query.currentSavedQueryId = newQuery.id
             appState.query.lastSavedAt = newQuery.updatedAt
+            appState.query.currentQueryName = newQuery.name
             appState.query.showQueryResults = false
             appState.query.queryResults = []
             appState.query.queryColumnNames = nil
             appState.query.queryError = nil
             appState.query.queryExecutionTime = nil
+            appState.query.statusMessage = nil
 
             DebugLog.print("📝 [SavedQueriesViewModel] Created new query: \(newQuery.name)")
         } catch {
@@ -158,13 +160,15 @@ class SavedQueriesViewModel {
         appState.query.queryText = query.queryText
         appState.query.currentSavedQueryId = query.id
         appState.query.lastSavedAt = query.updatedAt
+        appState.query.currentQueryName = query.name
 
-        // Clear previous results
+        // Clear previous results and status
         appState.query.showQueryResults = false
         appState.query.queryResults = []
         appState.query.queryColumnNames = nil
         appState.query.queryError = nil
         appState.query.queryExecutionTime = nil
+        appState.query.statusMessage = nil
 
         DebugLog.print("📂 [SavedQueriesViewModel] Loaded query: \(query.name)")
     }
@@ -192,6 +196,7 @@ class SavedQueriesViewModel {
             if appState.query.currentSavedQueryId == query.id {
                 appState.query.currentSavedQueryId = nil
                 appState.query.lastSavedAt = nil
+                appState.query.currentQueryName = nil
             }
             modelContext.delete(query)
         }
@@ -213,6 +218,7 @@ class SavedQueriesViewModel {
                 if appState.query.currentSavedQueryId == query.id {
                     appState.query.currentSavedQueryId = nil
                     appState.query.lastSavedAt = nil
+                    appState.query.currentQueryName = nil
                 }
                 modelContext.delete(query)
             }

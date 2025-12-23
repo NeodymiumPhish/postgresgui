@@ -18,7 +18,7 @@ struct QueryEditorView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Toolbar with execute button and stats
-            HStack(spacing: 16) {
+            HStack(spacing: 4) {
                 Button(action: executeQuery) {
                     Label {
                         Text("Run Query")
@@ -34,17 +34,14 @@ struct QueryEditorView: View {
                 Button(action: saveQuery) {
                     Text("Save Query")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.bordered)
+                .clipShape(Capsule())
                 .keyboardShortcut("s", modifiers: [.command])
 
                 Spacer()
 
-                // Show saved timestamp on the right
-                if let savedAt = appState.query.lastSavedAt {
-                    Text("Saved \(savedAt.formatted(date: .omitted, time: .shortened))")
-                        .foregroundColor(.secondary)
-                        .font(.subheadline)
-                }
+                // Dynamic status display
+                statusView
             }
             .padding(Constants.Spacing.small)
             .background(Color(NSColor.controlBackgroundColor))
@@ -71,6 +68,24 @@ struct QueryEditorView: View {
         }
     }
 
+    @ViewBuilder
+    private var statusView: some View {
+        if appState.query.isExecutingQuery {
+            Text("Running...")
+                .foregroundColor(.secondary)
+                .font(.subheadline)
+        } else if let statusMessage = appState.query.statusMessage {
+            Text(statusMessage)
+                .foregroundColor(.secondary)
+                .font(.subheadline)
+                .lineLimit(1)
+        } else if let queryName = appState.query.currentQueryName {
+            Text(queryName)
+                .foregroundColor(.secondary)
+                .font(.subheadline)
+        }
+    }
+
     private func saveQuery() {
         let queryText = appState.query.queryText.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -81,6 +96,7 @@ struct QueryEditorView: View {
         }
 
         let now = Date()
+        var savedQueryName: String?
 
         // Check if we're updating an existing saved query
         if let existingId = appState.query.currentSavedQueryId {
@@ -91,6 +107,7 @@ struct QueryEditorView: View {
             if let existingQuery = try? modelContext.fetch(descriptor).first {
                 existingQuery.queryText = queryText
                 existingQuery.updatedAt = now
+                savedQueryName = existingQuery.name
                 DebugLog.print("💾 [QueryEditorView] Updated existing query: \(existingQuery.name)")
             }
         } else {
@@ -106,12 +123,22 @@ struct QueryEditorView: View {
 
             // Update state to track this query
             appState.query.currentSavedQueryId = savedQuery.id
+            savedQueryName = queryName
 
             DebugLog.print("💾 [QueryEditorView] Saved new query: \(queryName)")
         }
 
         // Update saved timestamp
         appState.query.lastSavedAt = now
+
+        // Update query name for idle display
+        appState.query.currentQueryName = savedQueryName
+
+        // Show saved status with time including seconds
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm:ss a"
+        let timeString = formatter.string(from: now)
+        appState.query.setTemporaryStatus("Saved \(timeString)")
 
         // Save context
         do {
@@ -151,7 +178,11 @@ struct QueryEditorView: View {
                 appState.query.showQueryResults = true
 
                 let endTime = Date()
-                appState.query.queryExecutionTime = endTime.timeIntervalSince(startTime)
+                let executionTime = endTime.timeIntervalSince(startTime)
+                appState.query.queryExecutionTime = executionTime
+
+                // Show success status with execution time
+                appState.query.setTemporaryStatus("Executed in \(QueryState.formatExecutionTime(executionTime))")
 
                 DebugLog.print("✅ [QueryEditorView] Query executed successfully, showing results")
 
@@ -167,6 +198,13 @@ struct QueryEditorView: View {
 
                 let endTime = Date()
                 appState.query.queryExecutionTime = endTime.timeIntervalSince(startTime)
+
+                // Show truncated error message
+                let errorMessage = PostgresError.extractDetailedMessage(error)
+                let truncatedError = errorMessage.count > 50
+                    ? String(errorMessage.prefix(47)) + "..."
+                    : errorMessage
+                appState.query.setTemporaryStatus("Error: \(truncatedError)")
 
                 DebugLog.print("❌ [QueryEditorView] Query execution failed: \(error)")
             }

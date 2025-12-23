@@ -52,13 +52,4 @@ class QueryEditorViewModel {
 
         appState.query.isExecutingQuery = false
     }
-
-    /// Format execution time for display
-    func formatExecutionTime(_ timeInterval: TimeInterval) -> String {
-        if timeInterval < 1.0 {
-            return String(format: "%.0f ms", timeInterval * 1000)
-        } else {
-            return String(format: "%.2f s", timeInterval)
-        }
-    }
 }
