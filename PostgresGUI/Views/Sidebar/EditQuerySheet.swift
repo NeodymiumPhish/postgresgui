@@ -11,6 +11,10 @@ struct EditQuerySheet: View {
     @Environment(AppState.self) private var appState
     @State private var editedName: String = ""
 
+    private var canSave: Bool {
+        !editedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             Text("Rename Query")
@@ -18,6 +22,7 @@ struct EditQuerySheet: View {
 
             TextField("Query Name", text: $editedName)
                 .textFieldStyle(.roundedBorder)
+                .onSubmit { if canSave { save() } }
 
             HStack {
                 Button("Cancel") { dismiss() }
@@ -25,21 +30,23 @@ struct EditQuerySheet: View {
 
                 Spacer()
 
-                Button("Save") {
-                    query.name = editedName
-                    query.updatedAt = Date()
-                    // Update toolbar if this is the currently selected query
-                    if appState.query.currentSavedQueryId == query.id {
-                        appState.query.currentQueryName = editedName
-                    }
-                    dismiss()
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(editedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button("Save", action: save)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canSave)
             }
         }
         .padding()
         .frame(width: 300)
         .onAppear { editedName = query.name }
+    }
+
+    private func save() {
+        query.name = editedName
+        query.updatedAt = Date()
+        // Update toolbar if this is the currently selected query
+        if appState.query.currentSavedQueryId == query.id {
+            appState.query.currentQueryName = editedName
+        }
+        dismiss()
     }
 }
