@@ -68,7 +68,7 @@ struct TabBarView: View {
             }
             return connection.displayName
         }
-        return "New Tab"
+        return "New Tab \(tab.order + 1)"
     }
 
     private func selectTab(_ tab: TabState) {
@@ -122,6 +122,7 @@ struct TabItemView: View {
             Text(connectionName)
                 .font(.system(size: 11))
                 .lineLimit(1)
+                .truncationMode(.middle)
                 .foregroundColor(isActive ? .primary : .secondary)
 
             Button(action: onClose) {
@@ -132,6 +133,7 @@ struct TabItemView: View {
             .buttonStyle(.plain)
             .frame(width: 14, height: 14)
         }
+        .frame(maxWidth: 180)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(
