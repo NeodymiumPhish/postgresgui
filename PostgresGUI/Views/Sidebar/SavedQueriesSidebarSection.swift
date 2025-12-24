@@ -42,6 +42,14 @@ struct SavedQueriesSidebarSection: View {
             if viewModel == nil {
                 viewModel = SavedQueriesViewModel(appState: appState)
             }
+            // Sync initial selection from restored saved query
+            if let savedQueryId = appState.query.currentSavedQueryId {
+                selectedQueryIDs = [savedQueryId]
+                // Auto-expand folder containing this query
+                if let query = savedQueries.first(where: { $0.id == savedQueryId }) {
+                    viewModel?.expandFolderContaining(query)
+                }
+            }
         }
     }
 
