@@ -162,6 +162,9 @@ struct QueryEditorView: View {
             appState.query.currentSavedQueryId = savedQuery.id
             savedQueryName = queryName
 
+            // Update tab with new saved query ID
+            tabManager.updateActiveTab(savedQueryId: savedQuery.id)
+
             DebugLog.print("💾 [QueryEditorView] Saved new query: \(queryName)")
         }
 

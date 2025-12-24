@@ -89,9 +89,14 @@ class TabManager {
         }
     }
 
-    func updateActiveTab(connectionId: UUID? = nil, databaseName: String? = nil, queryText: String? = nil) {
+    func updateActiveTab(connectionId: UUID? = nil, databaseName: String? = nil, queryText: String? = nil, savedQueryId: UUID? = nil) {
         guard let tabService = tabService, let activeTab = activeTab else { return }
-        tabService.updateTab(activeTab, connectionId: connectionId, databaseName: databaseName, queryText: queryText)
+        tabService.updateTab(activeTab, connectionId: connectionId, databaseName: databaseName, queryText: queryText, savedQueryId: savedQueryId)
+    }
+
+    func clearActiveTabSavedQueryId() {
+        guard let tabService = tabService, let activeTab = activeTab else { return }
+        tabService.clearSavedQueryId(activeTab)
     }
 
     func saveCurrentState() {

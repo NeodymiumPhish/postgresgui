@@ -68,7 +68,8 @@ struct TabBarView: View {
         tabManager.updateActiveTab(
             connectionId: appState.connection.currentConnection?.id,
             databaseName: appState.connection.selectedDatabase?.name,
-            queryText: appState.query.queryText
+            queryText: appState.query.queryText,
+            savedQueryId: appState.query.currentSavedQueryId
         )
 
         // Switch to new tab

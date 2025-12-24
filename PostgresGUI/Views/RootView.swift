@@ -84,7 +84,8 @@ struct RootView: View {
             tabManager.updateActiveTab(
                 connectionId: appState.connection.currentConnection?.id,
                 databaseName: appState.connection.selectedDatabase?.name,
-                queryText: appState.query.queryText
+                queryText: appState.query.queryText,
+                savedQueryId: appState.query.currentSavedQueryId
             )
             // Create new tab inheriting from current
             tabManager.createNewTab(inheritingFrom: tabManager.activeTab)
@@ -112,7 +113,8 @@ struct RootView: View {
                     tabManager.updateActiveTab(
                         connectionId: appState.connection.currentConnection?.id,
                         databaseName: appState.connection.selectedDatabase?.name,
-                        queryText: appState.query.queryText
+                        queryText: appState.query.queryText,
+                        savedQueryId: appState.query.currentSavedQueryId
                     )
                     await appState.cleanupOnWindowClose()
                 }
@@ -177,8 +179,10 @@ struct RootView: View {
 
         DebugLog.print("🚀 [RootView] Restoring connection: \(connection.displayName)")
 
-        // Restore query text from active tab
+        // Restore query text and saved query selection from active tab
         appState.query.queryText = activeTab.queryText
+        appState.query.currentSavedQueryId = activeTab.savedQueryId
+        restoreSavedQueryMetadata(for: activeTab.savedQueryId)
 
         // Connect to database
         loadingState.setPhase(.connectingToDatabase)
@@ -224,14 +228,32 @@ struct RootView: View {
         await TableRefreshService.loadTables(for: database, connection: connection, appState: appState)
     }
 
+    private func restoreSavedQueryMetadata(for savedQueryId: UUID?) {
+        guard let savedQueryId = savedQueryId else {
+            appState.query.currentQueryName = nil
+            appState.query.lastSavedAt = nil
+            return
+        }
+
+        let descriptor = FetchDescriptor<SavedQuery>(
+            predicate: #Predicate { $0.id == savedQueryId }
+        )
+        if let savedQuery = try? modelContext.fetch(descriptor).first {
+            appState.query.currentQueryName = savedQuery.name
+            appState.query.lastSavedAt = savedQuery.updatedAt
+        }
+    }
+
     private func handleTabChange(_ tab: TabState?) async {
         guard let tab = tab else { return }
 
         DebugLog.print("📑 [RootView] Tab changed to: \(tab.id)")
 
-        // Restore query text
+        // Restore query text and saved query selection
         let previousQueryText = appState.query.queryText
         appState.query.queryText = tab.queryText
+        appState.query.currentSavedQueryId = tab.savedQueryId
+        restoreSavedQueryMetadata(for: tab.savedQueryId)
         if previousQueryText != tab.queryText {
             DebugLog.print("📝 [RootView] queryText changed from: \"\(previousQueryText.prefix(30))...\" to: \"\(tab.queryText.prefix(30))...\" (tab restore)")
         }

@@ -14,6 +14,7 @@ final class TabState: Identifiable {
     var connectionId: UUID?
     var databaseName: String?
     var queryText: String
+    var savedQueryId: UUID?
     var isActive: Bool
     var order: Int
     var createdAt: Date
@@ -24,6 +25,7 @@ final class TabState: Identifiable {
         connectionId: UUID? = nil,
         databaseName: String? = nil,
         queryText: String = "",
+        savedQueryId: UUID? = nil,
         isActive: Bool = false,
         order: Int = 0,
         createdAt: Date = Date(),
@@ -33,6 +35,7 @@ final class TabState: Identifiable {
         self.connectionId = connectionId
         self.databaseName = databaseName
         self.queryText = queryText
+        self.savedQueryId = savedQueryId
         self.isActive = isActive
         self.order = order
         self.createdAt = createdAt

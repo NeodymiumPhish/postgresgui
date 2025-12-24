@@ -11,6 +11,7 @@ import SwiftData
 /// Sidebar section for saved queries with folder support
 struct SavedQueriesSidebarSection: View {
     @Environment(AppState.self) private var appState
+    @Environment(TabManager.self) private var tabManager
     @Environment(\.modelContext) private var modelContext
 
     let savedQueries: [SavedQuery]
@@ -144,6 +145,10 @@ struct SavedQueriesSidebarSection: View {
                 newIDs: newIDs,
                 savedQueries: savedQueries
             )
+            // Clear tab's savedQueryId when deselecting
+            if newIDs.isEmpty && !oldIDs.isEmpty {
+                tabManager.clearActiveTabSavedQueryId()
+            }
         }
         .onChange(of: appState.query.currentSavedQueryId) { _, newID in
             selectedQueryIDs = viewModel.handleCurrentQueryIdChange(

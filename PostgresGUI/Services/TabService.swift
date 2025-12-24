@@ -13,7 +13,8 @@ protocol TabServiceProtocol {
     func getActiveTab() -> TabState?
     func setActiveTab(_ tab: TabState)
     func createTab(inheritingFrom tab: TabState?) -> TabState
-    func updateTab(_ tab: TabState, connectionId: UUID?, databaseName: String?, queryText: String?)
+    func updateTab(_ tab: TabState, connectionId: UUID?, databaseName: String?, queryText: String?, savedQueryId: UUID?)
+    func clearSavedQueryId(_ tab: TabState)
     func deleteTab(_ tab: TabState)
     func save()
 }
@@ -79,7 +80,7 @@ class TabService: TabServiceProtocol {
         return newTab
     }
 
-    func updateTab(_ tab: TabState, connectionId: UUID?, databaseName: String?, queryText: String?) {
+    func updateTab(_ tab: TabState, connectionId: UUID?, databaseName: String?, queryText: String?, savedQueryId: UUID?) {
         if let connectionId = connectionId {
             tab.connectionId = connectionId
         }
@@ -89,6 +90,14 @@ class TabService: TabServiceProtocol {
         if let queryText = queryText {
             tab.queryText = queryText
         }
+        if let savedQueryId = savedQueryId {
+            tab.savedQueryId = savedQueryId
+        }
+        save()
+    }
+
+    func clearSavedQueryId(_ tab: TabState) {
+        tab.savedQueryId = nil
         save()
     }
 

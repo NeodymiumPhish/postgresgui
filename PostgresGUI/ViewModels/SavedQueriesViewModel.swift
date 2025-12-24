@@ -269,6 +269,15 @@ class SavedQueriesViewModel {
         newIDs: Set<SavedQuery.ID>,
         savedQueries: [SavedQuery]
     ) {
+        // Handle deselection (clicked outside)
+        if newIDs.isEmpty && !oldIDs.isEmpty {
+            appState.query.currentSavedQueryId = nil
+            appState.query.lastSavedAt = nil
+            appState.query.currentQueryName = nil
+            DebugLog.print("📂 [SavedQueriesViewModel] Deselected query (clicked outside)")
+            return
+        }
+
         // Load query when a single item is clicked (not added to existing selection)
         if newIDs.count == 1, let newID = newIDs.first,
            !oldIDs.contains(newID),
