@@ -8,6 +8,7 @@ import SwiftUI
 struct EditQuerySheet: View {
     @Bindable var query: SavedQuery
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appState
     @State private var editedName: String = ""
 
     var body: some View {
@@ -27,6 +28,10 @@ struct EditQuerySheet: View {
                 Button("Save") {
                     query.name = editedName
                     query.updatedAt = Date()
+                    // Update toolbar if this is the currently selected query
+                    if appState.query.currentSavedQueryId == query.id {
+                        appState.query.currentQueryName = editedName
+                    }
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
