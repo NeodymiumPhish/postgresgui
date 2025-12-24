@@ -13,6 +13,7 @@ struct RootView: View {
     @State private var loadingState = LoadingState()
     @State private var tabManager = TabManager()
     @State private var initializationError: String?
+    @State private var tabChangeTask: Task<Void, Never>?
     @Query private var connections: [ConnectionProfile]
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -75,23 +76,29 @@ struct RootView: View {
             await initializeApp()
         }
         .onReceive(NotificationCenter.default.publisher(for: .tabDidChange)) { notification in
-            Task {
+            // Cancel any in-progress tab change to prevent race conditions
+            tabChangeTask?.cancel()
+            tabChangeTask = Task {
                 await handleTabChange(notification.object as? TabState)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .createNewTab)) { _ in
-            // Save current state before creating new tab
-            tabManager.updateActiveTab(
-                connectionId: appState.connection.currentConnection?.id,
-                databaseName: appState.connection.selectedDatabase?.name,
-                queryText: appState.query.queryText,
-                savedQueryId: appState.query.currentSavedQueryId
-            )
+            // Save only query state before creating new tab - use tab's stored connection/database
+            // to avoid overwriting with stale UI state during rapid switching
+            if let activeTab = tabManager.activeTab {
+                tabManager.updateActiveTab(
+                    connectionId: activeTab.connectionId,
+                    databaseName: activeTab.databaseName,
+                    queryText: appState.query.queryText,
+                    savedQueryId: appState.query.currentSavedQueryId
+                )
+            }
             // Create new tab inheriting from current
             tabManager.createNewTab(inheritingFrom: tabManager.activeTab)
             // Switch to the new tab
             if let newTab = tabManager.activeTab {
-                Task {
+                tabChangeTask?.cancel()
+                tabChangeTask = Task {
                     await handleTabChange(newTab)
                 }
             }
@@ -101,7 +108,8 @@ struct RootView: View {
             tabManager.closeTab(activeTab)
             // Switch to the new active tab
             if let newActiveTab = tabManager.activeTab {
-                Task {
+                tabChangeTask?.cancel()
+                tabChangeTask = Task {
                     await handleTabChange(newActiveTab)
                 }
             }
@@ -110,12 +118,15 @@ struct RootView: View {
             if newPhase == .background {
                 // Window is closing - save tab state and cleanup connection
                 Task { @MainActor in
-                    tabManager.updateActiveTab(
-                        connectionId: appState.connection.currentConnection?.id,
-                        databaseName: appState.connection.selectedDatabase?.name,
-                        queryText: appState.query.queryText,
-                        savedQueryId: appState.query.currentSavedQueryId
-                    )
+                    // Use tab's stored connection/database to avoid stale UI state
+                    if let activeTab = tabManager.activeTab {
+                        tabManager.updateActiveTab(
+                            connectionId: activeTab.connectionId,
+                            databaseName: activeTab.databaseName,
+                            queryText: appState.query.queryText,
+                            savedQueryId: appState.query.currentSavedQueryId
+                        )
+                    }
                     await appState.cleanupOnWindowClose()
                 }
             }
@@ -246,6 +257,10 @@ struct RootView: View {
 
     private func handleTabChange(_ tab: TabState?) async {
         guard let tab = tab else { return }
+        guard !Task.isCancelled else {
+            DebugLog.print("📑 [RootView] Tab change cancelled before start")
+            return
+        }
 
         DebugLog.print("📑 [RootView] Tab changed to: \(tab.id)")
 
@@ -279,17 +294,30 @@ struct RootView: View {
 
         // Connect if different connection or not connected
         if appState.connection.currentConnection?.id != connectionId || !appState.connection.databaseService.isConnected {
+            DebugLog.print("🔌 [RootView] Tab switch requires connection to: \(connection.displayName)")
             let connectionService = ConnectionService(
                 appState: appState,
                 keychainService: KeychainServiceImpl()
             )
 
             let result = await connectionService.connect(to: connection, saveAsLast: false)
+
+            // Check if cancelled after async operation
+            guard !Task.isCancelled else {
+                DebugLog.print("📑 [RootView] Tab change cancelled after connection")
+                appState.connection.isLoadingTables = false
+                return
+            }
+
             if case .failure(let error) = result {
+                DebugLog.print("❌ [RootView] Tab switch connection failed: \(error)")
                 initializationError = PostgresError.extractDetailedMessage(error)
                 appState.connection.isLoadingTables = false
                 return
             }
+            DebugLog.print("✅ [RootView] Tab switch connection successful")
+        } else {
+            DebugLog.print("🔌 [RootView] Tab switch reusing existing connection to: \(connection.displayName)")
         }
 
         // Load databases
@@ -298,6 +326,13 @@ struct RootView: View {
         } catch {
             DebugLog.print("Failed to load databases: \(error)")
             initializationError = PostgresError.extractDetailedMessage(error)
+            appState.connection.isLoadingTables = false
+            return
+        }
+
+        // Check if cancelled after database fetch
+        guard !Task.isCancelled else {
+            DebugLog.print("📑 [RootView] Tab change cancelled after fetching databases")
             appState.connection.isLoadingTables = false
             return
         }

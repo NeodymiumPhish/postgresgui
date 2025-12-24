@@ -74,13 +74,17 @@ struct TabBarView: View {
     private func selectTab(_ tab: TabState) {
         guard tab.id != tabManager.activeTab?.id else { return }
 
-        // Save current state before switching
-        tabManager.updateActiveTab(
-            connectionId: appState.connection.currentConnection?.id,
-            databaseName: appState.connection.selectedDatabase?.name,
-            queryText: appState.query.queryText,
-            savedQueryId: appState.query.currentSavedQueryId
-        )
+        // Save only query state before switching - don't save connection/database
+        // as those are already stored in the tab and should only be updated
+        // when the user explicitly changes them (not during rapid tab switching)
+        if let activeTab = tabManager.activeTab {
+            tabManager.updateActiveTab(
+                connectionId: activeTab.connectionId,
+                databaseName: activeTab.databaseName,
+                queryText: appState.query.queryText,
+                savedQueryId: appState.query.currentSavedQueryId
+            )
+        }
 
         // Switch to new tab
         tabManager.switchToTab(tab)
