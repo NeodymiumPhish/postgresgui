@@ -13,6 +13,8 @@ struct QueryEditorView: View {
     @Environment(TabManager.self) private var tabManager
     @Environment(\.modelContext) private var modelContext
     @State private var showNoDatabaseAlert = false
+    @State private var showSaveErrorAlert = false
+    @State private var saveErrorMessage = ""
     @State private var saveTask: Task<Void, Never>?
 
     var body: some View {
@@ -30,13 +32,6 @@ struct QueryEditorView: View {
                 .clipShape(Capsule())
                 .tint(.green)
                 .keyboardShortcut(.return, modifiers: [.command])
-
-                Button(action: saveQuery) {
-                    Text("Save Query")
-                }
-                .buttonStyle(.bordered)
-                .clipShape(Capsule())
-                .keyboardShortcut("s", modifiers: [.command])
 
                 Spacer()
 
@@ -57,14 +52,28 @@ struct QueryEditorView: View {
         } message: {
             Text("Select a database from the sidebar before running queries.")
         }
+        .alert("Failed to Save Query", isPresented: $showSaveErrorAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(saveErrorMessage)
+        }
         .onChange(of: appState.query.queryText) { _, newText in
-            // Debounced save of query text to tab state
+            // Cancel previous save task
             saveTask?.cancel()
+
+            // Debounced auto-save (500ms)
             saveTask = Task {
-                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second debounce
-                guard !Task.isCancelled else { return }
-                tabManager.updateActiveTab(connectionId: nil, databaseName: nil, queryText: newText)
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled else {
+                    DebugLog.print("💾 [QueryEditorView] Auto-save cancelled (new keystroke)")
+                    return
+                }
+                DebugLog.print("💾 [QueryEditorView] Auto-save triggered after debounce")
+                await saveQueryWithRetry()
             }
+
+            // Update tab state immediately
+            tabManager.updateActiveTab(connectionId: nil, databaseName: nil, queryText: newText)
         }
     }
 
@@ -86,7 +95,35 @@ struct QueryEditorView: View {
         }
     }
 
-    private func saveQuery() {
+    @MainActor
+    private func saveQueryWithRetry() async {
+        let maxRetries = 2
+        var lastError: Error?
+
+        for attempt in 1...maxRetries {
+            do {
+                try saveQuery()
+                DebugLog.print("💾 [QueryEditorView] Auto-save successful")
+                return
+            } catch {
+                lastError = error
+                DebugLog.print("❌ [QueryEditorView] Save attempt \(attempt)/\(maxRetries) failed: \(error)")
+                if attempt < maxRetries {
+                    DebugLog.print("💾 [QueryEditorView] Retrying save in 100ms...")
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+            }
+        }
+
+        // All retries failed, show alert
+        if let error = lastError {
+            DebugLog.print("❌ [QueryEditorView] All save attempts failed, showing alert")
+            saveErrorMessage = error.localizedDescription
+            showSaveErrorAlert = true
+        }
+    }
+
+    private func saveQuery() throws {
         let queryText = appState.query.queryText.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Don't save empty queries
@@ -134,18 +171,9 @@ struct QueryEditorView: View {
         // Update query name for idle display
         appState.query.currentQueryName = savedQueryName
 
-        // Show saved status with time including seconds
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm:ss a"
-        let timeString = formatter.string(from: now)
-        appState.query.setTemporaryStatus("Saved \(timeString)")
-
-        // Save context
-        do {
-            try modelContext.save()
-        } catch {
-            DebugLog.print("❌ [QueryEditorView] Failed to save query: \(error)")
-        }
+        // Save context - throws on failure
+        try modelContext.save()
+        DebugLog.print("💾 [QueryEditorView] Context saved to SwiftData")
     }
 
     private func executeQuery() {
