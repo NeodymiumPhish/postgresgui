@@ -96,6 +96,8 @@ struct ConnectionsDatabasesSidebar: View {
             tabManager.updateActiveTab(connectionId: newConnection?.id, databaseName: nil, queryText: nil)
         }
         .onChange(of: appState.connection.selectedDatabase) { _, newDatabase in
+            // Sync local selection state when selectedDatabase changes (e.g., from tab switch)
+            selectedDatabaseID = newDatabase?.id
             tabManager.updateActiveTab(connectionId: nil, databaseName: newDatabase?.name, queryText: nil)
         }
         .alert("Connection Failed", isPresented: $showConnectionError) {
