@@ -15,19 +15,29 @@ struct TabBarView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 1) {
-                    ForEach(tabManager.tabs) { tab in
-                        TabItemView(
-                            tab: tab,
-                            isActive: tab.id == tabManager.activeTab?.id,
-                            connectionName: connectionName(for: tab),
-                            onSelect: { selectTab(tab) },
-                            onClose: { closeTab(tab) }
-                        )
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 1) {
+                        ForEach(tabManager.tabs) { tab in
+                            TabItemView(
+                                tab: tab,
+                                isActive: tab.id == tabManager.activeTab?.id,
+                                connectionName: connectionName(for: tab),
+                                onSelect: { selectTab(tab) },
+                                onClose: { closeTab(tab) }
+                            )
+                            .id(tab.id)
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
+                .onChange(of: tabManager.activeTab?.id) { _, newId in
+                    if let newId = newId {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            proxy.scrollTo(newId, anchor: .trailing)
+                        }
                     }
                 }
-                .padding(.horizontal, 4)
             }
 
             Spacer()
@@ -42,9 +52,9 @@ struct TabBarView: View {
         }
         .frame(height: 32)
         .background(Color(NSColor.controlBackgroundColor))
-        .overlay(alignment: .top) {
-            Divider()
-        }
+        // .overlay(alignment: .top) { // ghazi 12/24/25 - remove the top divider
+        //     Divider()
+        // }
         .overlay(alignment: .bottom) {
             Divider()
         }

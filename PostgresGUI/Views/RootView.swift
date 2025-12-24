@@ -258,6 +258,9 @@ struct RootView: View {
             DebugLog.print("📝 [RootView] queryText changed from: \"\(previousQueryText.prefix(30))...\" to: \"\(tab.queryText.prefix(30))...\" (tab restore)")
         }
 
+        // Set loading state BEFORE clearing tables to prevent "No tables found" flash
+        appState.connection.isLoadingTables = true
+
         // Clear current state
         appState.connection.selectedTable = nil
         appState.connection.tables = []
@@ -270,6 +273,7 @@ struct RootView: View {
             appState.connection.currentConnection = nil
             appState.connection.selectedDatabase = nil
             appState.connection.databases = []
+            appState.connection.isLoadingTables = false
             return
         }
 
@@ -283,6 +287,7 @@ struct RootView: View {
             let result = await connectionService.connect(to: connection, saveAsLast: false)
             if case .failure(let error) = result {
                 initializationError = PostgresError.extractDetailedMessage(error)
+                appState.connection.isLoadingTables = false
                 return
             }
         }
@@ -293,6 +298,7 @@ struct RootView: View {
         } catch {
             DebugLog.print("Failed to load databases: \(error)")
             initializationError = PostgresError.extractDetailedMessage(error)
+            appState.connection.isLoadingTables = false
             return
         }
 
@@ -301,6 +307,9 @@ struct RootView: View {
            let database = appState.connection.databases.first(where: { $0.name == databaseName }) {
             appState.connection.selectedDatabase = database
             await loadTables(for: database, connection: connection)
+        } else {
+            // No database selected in tab, stop loading
+            appState.connection.isLoadingTables = false
         }
     }
 }
