@@ -138,23 +138,33 @@ class DetailContentViewModel {
     func performDelete() async {
         guard let selectedTable = appState.connection.selectedTable else { return }
 
-        // Get selected rows
-        let selectedRows = appState.query.queryResults.filter { appState.query.selectedRowIDs.contains($0.id) }
+        // Get selected rows with their indices for potential rollback
+        let deletedIDs = appState.query.selectedRowIDs
+        let rowsWithIndices: [(index: Int, row: TableRow)] = appState.query.queryResults
+            .enumerated()
+            .filter { deletedIDs.contains($0.element.id) }
+            .map { (index: $0.offset, row: $0.element) }
 
-        // Perform delete
+        guard !rowsWithIndices.isEmpty else { return }
+
+        // Optimistic UI update: remove rows immediately
+        appState.query.queryResults.removeAll { deletedIDs.contains($0.id) }
+        appState.query.selectedRowIDs = []
+
+        // Perform backend delete
         let result = await rowOperations.deleteRows(
             table: selectedTable,
-            rows: selectedRows,
+            rows: rowsWithIndices.map { $0.row },
             databaseService: appState.connection.databaseService
         )
 
-        switch result {
-        case .success:
-            // Remove deleted rows from the UI
-            let deletedIDs = Set(selectedRows.map { $0.id })
-            appState.query.queryResults.removeAll { deletedIDs.contains($0.id) }
-            appState.query.selectedRowIDs = []
-        case .failure(let error):
+        // Rollback on failure
+        if case .failure(let error) = result {
+            // Restore rows at their original indices
+            for (index, row) in rowsWithIndices.sorted(by: { $0.index < $1.index }) {
+                let insertIndex = min(index, appState.query.queryResults.count)
+                appState.query.queryResults.insert(row, at: insertIndex)
+            }
             deleteError = error.localizedDescription
         }
     }
