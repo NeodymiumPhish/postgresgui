@@ -44,6 +44,26 @@ class DetailContentViewModel {
         self.queryService = queryService
     }
 
+    // MARK: - Table Metadata Helpers
+
+    /// Updates the selected table with metadata if not already set
+    private func updateSelectedTableMetadata(
+        primaryKeys: [String]? = nil,
+        columnInfo: [ColumnInfo]? = nil
+    ) {
+        guard let selectedTable = appState.connection.selectedTable else { return }
+
+        let needsPKUpdate = primaryKeys != nil && selectedTable.primaryKeyColumns == nil
+        let needsColInfoUpdate = columnInfo != nil && selectedTable.columnInfo == nil
+
+        guard needsPKUpdate || needsColInfoUpdate else { return }
+
+        var updatedTable = selectedTable
+        if needsPKUpdate { updatedTable.primaryKeyColumns = primaryKeys }
+        if needsColInfoUpdate { updatedTable.columnInfo = columnInfo }
+        appState.connection.selectedTable = updatedTable
+    }
+
     // MARK: - JSON Viewer
 
     func openJSONView() {
@@ -70,12 +90,6 @@ class DetailContentViewModel {
             return
         }
 
-        // Check for primary key (metadata is fetched when query runs)
-        guard let pkColumns = selectedTable.primaryKeyColumns, !pkColumns.isEmpty else {
-            deleteError = RowOperationError.noPrimaryKey.localizedDescription
-            return
-        }
-
         // Validate row selection
         let result = rowOperations.validateRowSelection(
             selectedRowIDs: appState.query.selectedRowIDs,
@@ -84,9 +98,40 @@ class DetailContentViewModel {
 
         switch result {
         case .success:
-            showDeleteConfirmation = true
+            // Check metadata cache first, then selectedTable
+            let cachedMetadata = appState.connection.tableMetadataCache[selectedTable.id]
+            let pkColumns = cachedMetadata?.primaryKeys ?? selectedTable.primaryKeyColumns
+
+            if let pkColumns = pkColumns, !pkColumns.isEmpty {
+                updateSelectedTableMetadata(primaryKeys: pkColumns)
+                showDeleteConfirmation = true
+            } else {
+                // Fetch primary keys if not cached
+                Task {
+                    await fetchPrimaryKeysAndShowDeleteDialog(table: selectedTable)
+                }
+            }
         case .failure(let error):
             deleteError = error.localizedDescription
+        }
+    }
+
+    private func fetchPrimaryKeysAndShowDeleteDialog(table: TableInfo) async {
+        do {
+            let pkColumns = try await appState.connection.databaseService.fetchPrimaryKeyColumns(
+                schema: table.schema,
+                table: table.name
+            )
+
+            guard !pkColumns.isEmpty else {
+                deleteError = RowOperationError.noPrimaryKey.localizedDescription
+                return
+            }
+
+            updateSelectedTableMetadata(primaryKeys: pkColumns)
+            showDeleteConfirmation = true
+        } catch {
+            deleteError = "Failed to fetch table metadata: \(error.localizedDescription)"
         }
     }
 
@@ -124,12 +169,6 @@ class DetailContentViewModel {
             return
         }
 
-        // Check for primary key (metadata is fetched when query runs)
-        guard let pkColumns = selectedTable.primaryKeyColumns, !pkColumns.isEmpty else {
-            editError = RowOperationError.noPrimaryKey.localizedDescription
-            return
-        }
-
         // Validate we have column names
         guard appState.query.queryColumnNames != nil else {
             editError = "No query results available"
@@ -144,14 +183,59 @@ class DetailContentViewModel {
 
         switch result {
         case .success(let selectedRows):
+            // Check if multiple rows are selected
+            if selectedRows.count > 1 {
+                editError = "Please select only one row to edit"
+                return
+            }
+
             guard let rowToEdit = selectedRows.first else {
                 editError = "No row selected"
                 return
             }
-            self.rowToEdit = rowToEdit
-            showRowEditor = true
+
+            // Check metadata cache first, then selectedTable
+            let cachedMetadata = appState.connection.tableMetadataCache[selectedTable.id]
+            let pkColumns = cachedMetadata?.primaryKeys ?? selectedTable.primaryKeyColumns
+            let colInfo = cachedMetadata?.columns ?? selectedTable.columnInfo
+
+            if let pkColumns = pkColumns, !pkColumns.isEmpty, colInfo != nil {
+                updateSelectedTableMetadata(primaryKeys: pkColumns, columnInfo: colInfo)
+                self.rowToEdit = rowToEdit
+                showRowEditor = true
+            } else {
+                // Fetch metadata if not cached
+                Task {
+                    await fetchMetadataAndShowEditor(table: selectedTable, row: rowToEdit)
+                }
+            }
         case .failure(let error):
             editError = error.localizedDescription
+        }
+    }
+
+    private func fetchMetadataAndShowEditor(table: TableInfo, row: TableRow) async {
+        do {
+            let pkColumns = try await appState.connection.databaseService.fetchPrimaryKeyColumns(
+                schema: table.schema,
+                table: table.name
+            )
+
+            let columnInfo = try await appState.connection.databaseService.fetchColumnInfo(
+                schema: table.schema,
+                table: table.name
+            )
+
+            guard !pkColumns.isEmpty else {
+                editError = RowOperationError.noPrimaryKey.localizedDescription
+                return
+            }
+
+            updateSelectedTableMetadata(primaryKeys: pkColumns, columnInfo: columnInfo)
+            self.rowToEdit = row
+            showRowEditor = true
+        } catch {
+            editError = "Failed to fetch table metadata: \(error.localizedDescription)"
         }
     }
 

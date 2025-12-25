@@ -8,7 +8,6 @@
 import Foundation
 
 /// Service for handling row operations (delete, update, validation)
-/// Extracts common logic from DetailContentView and TableContentView
 @MainActor
 class RowOperationsService: RowOperationsServiceProtocol {
 
