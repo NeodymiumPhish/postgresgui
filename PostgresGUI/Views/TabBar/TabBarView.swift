@@ -137,7 +137,7 @@ struct TabItemView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: 8)
                 .fill(isActive ? Color.secondary.opacity(0.3) : (isHovered ? Color.secondary.opacity(0.15) : Color.clear))
         )
         .onHover { isHovered = $0 }
