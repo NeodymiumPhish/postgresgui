@@ -53,6 +53,9 @@ class QueryState {
     var currentQueryTask: Task<Void, Never>? = nil
     var queryCounter: Int = 0
 
+    // Results version tracking (for optimistic update rollback safety)
+    var resultsVersion: Int = 0
+
     /// Set a temporary status message that auto-reverts after the specified duration
     func setTemporaryStatus(_ message: String, duration: TimeInterval = 3.0) {
         statusTimer?.cancel()

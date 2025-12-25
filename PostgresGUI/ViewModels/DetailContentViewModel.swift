@@ -147,6 +147,9 @@ class DetailContentViewModel {
 
         guard !rowsWithIndices.isEmpty else { return }
 
+        // Capture results version before async operation
+        let versionBeforeDelete = appState.query.resultsVersion
+
         // Optimistic UI update: remove rows immediately
         appState.query.queryResults.removeAll { deletedIDs.contains($0.id) }
         appState.query.selectedRowIDs = []
@@ -158,12 +161,14 @@ class DetailContentViewModel {
             databaseService: appState.connection.databaseService
         )
 
-        // Rollback on failure
+        // Rollback on failure (only if results haven't been replaced by a refresh)
         if case .failure(let error) = result {
-            // Restore rows at their original indices
-            for (index, row) in rowsWithIndices.sorted(by: { $0.index < $1.index }) {
-                let insertIndex = min(index, appState.query.queryResults.count)
-                appState.query.queryResults.insert(row, at: insertIndex)
+            if appState.query.resultsVersion == versionBeforeDelete {
+                // Safe to rollback - results haven't changed
+                for (index, row) in rowsWithIndices.sorted(by: { $0.index < $1.index }) {
+                    let insertIndex = min(index, appState.query.queryResults.count)
+                    appState.query.queryResults.insert(row, at: insertIndex)
+                }
             }
             deleteError = error.localizedDescription
         }
@@ -299,6 +304,7 @@ class DetailContentViewModel {
 
         // Update state based on result
         if result.isSuccess {
+            appState.query.resultsVersion += 1
             appState.query.queryResults = result.rows
             appState.query.queryColumnNames = result.columnNames.isEmpty ? nil : result.columnNames
             appState.query.showQueryResults = true
