@@ -53,16 +53,19 @@ class AppState {
         query.queryError = nil
         query.queryExecutionTime = nil
 
-        // Execute query
+        // Execute query (fetch +1 to detect if more pages exist)
         let result = await queryService.executeTableQuery(
             for: table,
-            limit: query.rowsPerPage,
+            limit: query.rowsPerPage + 1,
             offset: query.currentPage * query.rowsPerPage
         )
 
         // Update state based on result
         if result.isSuccess {
-            query.queryResults = result.rows
+            // Check if we got more rows than requested (indicates next page exists)
+            query.hasNextPage = result.rows.count > query.rowsPerPage
+            // Trim to actual page size
+            query.queryResults = query.hasNextPage ? Array(result.rows.prefix(query.rowsPerPage)) : result.rows
             query.queryColumnNames = result.columnNames.isEmpty ? nil : result.columnNames
             query.showQueryResults = true
             query.queryExecutionTime = result.executionTime

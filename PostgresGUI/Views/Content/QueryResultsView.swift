@@ -87,8 +87,10 @@ struct QueryResultsView: View {
             // Results or error display
             resultsContent
 
-            // Pagination row
-            paginationBar
+            // Pagination row (only show if there's more than one page)
+            if appState.query.currentPage > 0 || appState.query.hasNextPage {
+                paginationBar
+            }
         }
         .onChange(of: appState.connection.selectedTable?.id) { oldValue, newValue in
             // Clear results immediately when table changes (prevents column mismatch crashes)
@@ -190,7 +192,7 @@ struct QueryResultsView: View {
                     Image(systemName: "chevron.right")
                 }
                 .buttonStyle(.borderless)
-                .disabled(appState.query.queryResults.count < appState.query.rowsPerPage || appState.query.isExecutingQuery)
+                .disabled(!appState.query.hasNextPage || appState.query.isExecutingQuery)
             }
         }
         .padding(.horizontal, 12)

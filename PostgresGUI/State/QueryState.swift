@@ -48,6 +48,7 @@ class QueryState {
     // Pagination state
     var currentPage: Int = 0
     var rowsPerPage: Int = Constants.Pagination.defaultRowsPerPage
+    var hasNextPage: Bool = false
 
     // Query execution management (for cancellation and race condition prevention)
     var currentQueryTask: Task<Void, Never>? = nil
@@ -88,6 +89,7 @@ class QueryState {
         queryExecutionTime = nil
         selectedRowIDs = []
         currentPage = 0
+        hasNextPage = false
         currentSavedQueryId = nil
         lastSavedAt = nil
         currentQueryName = nil
