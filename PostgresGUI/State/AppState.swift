@@ -57,7 +57,7 @@ class AppState {
         let result = await queryService.executeTableQuery(
             for: table,
             limit: query.rowsPerPage,
-            offset: 0
+            offset: query.currentPage * query.rowsPerPage
         )
 
         // Update state based on result

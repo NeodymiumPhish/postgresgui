@@ -85,49 +85,10 @@ struct QueryResultsView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Results or error display
-            if let errorMessage = appState.query.queryErrorMessage {
-                ContentUnavailableView {
-                    Label {
-                        Text("Query Failed")
-                            .font(.title3)
-                    } icon: {
-                        Image(systemName: "exclamationmark.triangle")
-                            .foregroundColor(.red)
-                    }
-                } description: {
-                    Text(errorMessage)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if appState.query.isExecutingQuery {
-                // Show loading state while query executes
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if appState.query.queryResults.isEmpty {
-                // Show empty table with headers if column names are available
-                if let columnNames = getColumnNames(), !columnNames.isEmpty {
-                    // Empty table with overlay empty state message
-                    emptyTableWithHeaders(columnNames: columnNames)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .overlay(alignment: .center) {
-                            ContentUnavailableView(
-                                "Empty Table",
-                                systemImage: "tablecells",
-                                description: Text("Query returned no rows")
-                            )
-                        }
-                } else {
-                    ContentUnavailableView(
-                        "Empty Table",
-                        systemImage: "tablecells",
-                        description: Text("Query returned no rows")
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            } else {
-                // Display results using SwiftUI Table
-                resultsTable
-            }
+            resultsContent
+
+            // Pagination row
+            paginationBar
         }
         .onChange(of: appState.connection.selectedTable?.id) { oldValue, newValue in
             // Clear results immediately when table changes (prevents column mismatch crashes)
@@ -135,6 +96,7 @@ struct QueryResultsView: View {
                 appState.query.queryResults = []
                 appState.query.queryColumnNames = nil
                 appState.query.queryError = nil
+                appState.query.currentPage = 0
                 sortOrder = []
             }
 
@@ -150,6 +112,106 @@ struct QueryResultsView: View {
                 DebugLog.print("📋 [QueryResultsView] Table selection cleared - preserving queryText, clearing results")
                 appState.query.showQueryResults = false
             }
+        }
+    }
+
+    @ViewBuilder
+    private var resultsContent: some View {
+        if let errorMessage = appState.query.queryErrorMessage {
+            ContentUnavailableView {
+                Label {
+                    Text("Query Failed")
+                        .font(.title3)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundColor(.red)
+                }
+            } description: {
+                Text(errorMessage)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if appState.query.isExecutingQuery {
+            // Show loading state while query executes
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if appState.query.queryResults.isEmpty {
+            // Show empty table with headers if column names are available
+            if let columnNames = getColumnNames(), !columnNames.isEmpty {
+                // Empty table with overlay empty state message
+                emptyTableWithHeaders(columnNames: columnNames)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay(alignment: .center) {
+                        ContentUnavailableView(
+                            "Empty Table",
+                            systemImage: "tablecells",
+                            description: Text("Query returned no rows")
+                        )
+                    }
+            } else {
+                ContentUnavailableView(
+                    "Empty Table",
+                    systemImage: "tablecells",
+                    description: Text("Query returned no rows")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        } else {
+            // Display results using SwiftUI Table
+            resultsTable
+        }
+    }
+
+    @ViewBuilder
+    private var paginationBar: some View {
+        HStack {
+            Text("\(appState.query.queryResults.count) rows")
+                .font(.system(.body, design: .monospaced))
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            HStack(spacing: 12) {
+                Button {
+                    goToPreviousPage()
+                } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .buttonStyle(.borderless)
+                .disabled(appState.query.currentPage == 0)
+
+                Text("Page \(appState.query.currentPage + 1)")
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundStyle(.secondary)
+
+                Button {
+                    goToNextPage()
+                } label: {
+                    Image(systemName: "chevron.right")
+                }
+                .buttonStyle(.borderless)
+                .disabled(appState.query.queryResults.count < appState.query.rowsPerPage)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.bar)
+    }
+
+    private func goToPreviousPage() {
+        guard appState.query.currentPage > 0,
+              let table = appState.connection.selectedTable else { return }
+        appState.query.currentPage -= 1
+        Task {
+            await appState.executeTableQuery(for: table)
+        }
+    }
+
+    private func goToNextPage() {
+        guard let table = appState.connection.selectedTable else { return }
+        appState.query.currentPage += 1
+        Task {
+            await appState.executeTableQuery(for: table)
         }
     }
 
