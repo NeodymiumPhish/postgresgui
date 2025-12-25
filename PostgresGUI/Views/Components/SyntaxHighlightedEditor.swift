@@ -216,6 +216,7 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
             textView.string = text
             textView.setSelectedRange(selectedRange)
             context.coordinator.applyHighlighting(to: textView, isDark: isDark)
+            context.coordinator.lineNumberRuler?.needsDisplay = true
         } else if colorSchemeChanged {
             context.coordinator.applyHighlighting(to: textView, isDark: isDark)
         }
