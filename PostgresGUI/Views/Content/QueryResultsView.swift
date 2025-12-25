@@ -178,7 +178,7 @@ struct QueryResultsView: View {
                     Image(systemName: "chevron.left")
                 }
                 .buttonStyle(.borderless)
-                .disabled(appState.query.currentPage == 0)
+                .disabled(appState.query.currentPage == 0 || appState.query.isExecutingQuery)
 
                 Text("Page \(appState.query.currentPage + 1)")
                     .font(.system(.body, design: .monospaced))
@@ -190,7 +190,7 @@ struct QueryResultsView: View {
                     Image(systemName: "chevron.right")
                 }
                 .buttonStyle(.borderless)
-                .disabled(appState.query.queryResults.count < appState.query.rowsPerPage)
+                .disabled(appState.query.queryResults.count < appState.query.rowsPerPage || appState.query.isExecutingQuery)
             }
         }
         .padding(.horizontal, 12)
