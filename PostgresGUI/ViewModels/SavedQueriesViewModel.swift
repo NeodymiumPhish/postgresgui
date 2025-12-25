@@ -215,32 +215,7 @@ class SavedQueriesViewModel {
     }
 
     func deleteFolder(_ folder: QueryFolder, deleteQueries: Bool, modelContext: ModelContext) {
-        if deleteQueries {
-            // Delete all queries in the folder
-            for query in folder.queries ?? [] {
-                if appState.query.currentSavedQueryId == query.id {
-                    appState.query.currentSavedQueryId = nil
-                    appState.query.lastSavedAt = nil
-                    appState.query.currentQueryName = nil
-                }
-                modelContext.delete(query)
-            }
-        } else {
-            // Move queries out of the folder
-            for query in folder.queries ?? [] {
-                query.folder = nil
-            }
-        }
-
-        modelContext.delete(folder)
-
-        do {
-            try modelContext.save()
-            DebugLog.print("🗑️ [SavedQueriesViewModel] Deleted folder: \(folder.name)")
-        } catch {
-            DebugLog.print("❌ [SavedQueriesViewModel] Failed to delete folder: \(error)")
-        }
-
+        deleteFolders([folder], deleteQueries: deleteQueries, modelContext: modelContext)
         folderToDelete = nil
     }
 
@@ -267,8 +242,18 @@ class SavedQueriesViewModel {
     func handleSelectionChange(
         oldIDs: Set<SavedQuery.ID>,
         newIDs: Set<SavedQuery.ID>,
-        savedQueries: [SavedQuery]
+        savedQueries: [SavedQuery],
+        folders: [QueryFolder] = []
     ) {
+        // Debug: Log selection changes
+        let oldNames = oldIDs.compactMap { id in savedQueries.first(where: { $0.id == id })?.name }
+        let newNames = newIDs.compactMap { id in savedQueries.first(where: { $0.id == id })?.name }
+        let expandedFolderNames = expandedFolders.compactMap { id in folders.first(where: { $0.id == id })?.name }
+        DebugLog.print("🔵 [Selection] Query selection changed:")
+        DebugLog.print("   Old: \(oldNames.isEmpty ? "none" : oldNames.joined(separator: ", ")) (\(oldIDs.count) items)")
+        DebugLog.print("   New: \(newNames.isEmpty ? "none" : newNames.joined(separator: ", ")) (\(newIDs.count) items)")
+        DebugLog.print("📁 [Selection] Expanded folders: \(expandedFolderNames.isEmpty ? "none" : expandedFolderNames.joined(separator: ", "))")
+
         // Handle deselection (clicked outside)
         if newIDs.isEmpty && !oldIDs.isEmpty {
             appState.query.currentSavedQueryId = nil
@@ -321,5 +306,47 @@ class SavedQueriesViewModel {
     ) {
         let queries = savedQueries.filter { selectedQueryIDs.contains($0.id) }
         queriesToDelete = queries
+    }
+
+    // MARK: - Folder Deletion
+
+    var foldersToDelete: [QueryFolder] = []
+
+    func prepareToDeleteSelectedFolders(
+        selectedFolders: [QueryFolder]
+    ) {
+        foldersToDelete = selectedFolders
+        DebugLog.print("🗑️ [SavedQueriesViewModel] Preparing to delete \(selectedFolders.count) folders: \(selectedFolders.map { $0.name }.joined(separator: ", "))")
+    }
+
+    func deleteFolders(_ folders: [QueryFolder], deleteQueries: Bool, modelContext: ModelContext) {
+        for folder in folders {
+            if deleteQueries {
+                // Delete all queries in the folder
+                for query in folder.queries ?? [] {
+                    if appState.query.currentSavedQueryId == query.id {
+                        appState.query.currentSavedQueryId = nil
+                        appState.query.lastSavedAt = nil
+                        appState.query.currentQueryName = nil
+                    }
+                    modelContext.delete(query)
+                }
+            } else {
+                // Move queries out of the folder
+                for query in folder.queries ?? [] {
+                    query.folder = nil
+                }
+            }
+            modelContext.delete(folder)
+        }
+
+        do {
+            try modelContext.save()
+            DebugLog.print("🗑️ [SavedQueriesViewModel] Deleted \(folders.count) folders")
+        } catch {
+            DebugLog.print("❌ [SavedQueriesViewModel] Failed to delete folders: \(error)")
+        }
+
+        foldersToDelete = []
     }
 }

@@ -8,10 +8,12 @@ import SwiftUI
 struct SavedQueryRowView: View {
     let query: SavedQuery
     let isSelected: Bool
-    let selectedCount: Int
+    let selectedQueryCount: Int
+    let selectedFolderCount: Int
     let onEdit: () -> Void
     let onDelete: () -> Void
-    let onDeleteSelected: () -> Void
+    let onDeleteSelectedQueries: () -> Void
+    let onDeleteSelectedFolders: () -> Void
     let onDuplicate: () -> Void
     let onMoveToFolder: () -> Void
 
@@ -19,7 +21,15 @@ struct SavedQueryRowView: View {
     @State private var isButtonHovered = false
 
     private var showMultiSelectActions: Bool {
-        isSelected && selectedCount > 1
+        isSelected && (selectedQueryCount > 1 || selectedFolderCount > 0)
+    }
+
+    private var hasMultipleQueries: Bool {
+        selectedQueryCount > 1
+    }
+
+    private var hasFolders: Bool {
+        selectedFolderCount > 0
     }
 
     var body: some View {
@@ -36,97 +46,82 @@ struct SavedQueryRowView: View {
         .padding(.horizontal, 6)
         .tag(query.id)
         .onHover { isHovered = $0 }
-        .contextMenu {
-            if !showMultiSelectActions {
-                Button {
-                    DebugLog.print("✏️ [SavedQueryRowView] Rename tapped for: \(query.name)")
-                    onEdit()
-                } label: {
-                    Label("Rename...", systemImage: "pencil")
-                }
+        .contextMenu { menuContent }
+    }
 
-                Button {
-                    DebugLog.print("📋 [SavedQueryRowView] Duplicate tapped for: \(query.name)")
-                    onDuplicate()
-                } label: {
-                    Label("Duplicate", systemImage: "doc.on.doc")
-                }
+    // MARK: - Shared Menu Content
 
-                Divider()
+    @ViewBuilder
+    private var menuContent: some View {
+        if !showMultiSelectActions {
+            Button {
+                DebugLog.print("✏️ [SavedQueryRowView] Rename tapped for: \(query.name)")
+                onEdit()
+            } label: {
+                Label("Rename...", systemImage: "pencil")
             }
 
             Button {
-                DebugLog.print("📁 [SavedQueryRowView] Move to folder tapped for: \(showMultiSelectActions ? "\(selectedCount) queries" : query.name)")
-                onMoveToFolder()
+                DebugLog.print("📋 [SavedQueryRowView] Duplicate tapped for: \(query.name)")
+                onDuplicate()
             } label: {
-                Label(showMultiSelectActions ? "Move \(selectedCount) to Folder..." : "Move to Folder...", systemImage: "folder")
+                Label("Duplicate", systemImage: "doc.on.doc")
             }
 
             Divider()
+        }
 
-            if showMultiSelectActions {
-                Button(role: .destructive) {
-                    DebugLog.print("🗑️ [SavedQueryRowView] Delete \(selectedCount) selected queries tapped")
-                    onDeleteSelected()
-                } label: {
-                    Label("Delete \(selectedCount) Queries...", systemImage: "trash")
-                }
-            } else {
-                Button(role: .destructive) {
-                    DebugLog.print("🗑️ [SavedQueryRowView] Delete tapped for: \(query.name)")
-                    onDelete()
-                } label: {
-                    Label("Delete...", systemImage: "trash")
-                }
+        // Only show move option if we have queries (not just folders)
+        if selectedQueryCount > 0 {
+            Button {
+                DebugLog.print("📁 [SavedQueryRowView] Move to folder tapped for: \(hasMultipleQueries ? "\(selectedQueryCount) queries" : query.name)")
+                onMoveToFolder()
+            } label: {
+                Label(hasMultipleQueries ? "Move \(selectedQueryCount) to Folder..." : "Move to Folder...", systemImage: "folder")
+            }
+
+            Divider()
+        }
+
+        // Delete options - separate for folders and queries
+        if hasFolders {
+            Button(role: .destructive) {
+                DebugLog.print("🗑️ [SavedQueryRowView] Delete \(selectedFolderCount) selected folders tapped")
+                onDeleteSelectedFolders()
+            } label: {
+                Label(selectedFolderCount == 1 ? "Delete Folder..." : "Delete \(selectedFolderCount) Folders...", systemImage: "trash")
+            }
+        }
+
+        if hasMultipleQueries {
+            Button(role: .destructive) {
+                DebugLog.print("🗑️ [SavedQueryRowView] Delete \(selectedQueryCount) selected queries tapped")
+                onDeleteSelectedQueries()
+            } label: {
+                Label("Delete \(selectedQueryCount) Queries...", systemImage: "trash")
+            }
+        } else if !showMultiSelectActions {
+            Button(role: .destructive) {
+                DebugLog.print("🗑️ [SavedQueryRowView] Delete tapped for: \(query.name)")
+                onDelete()
+            } label: {
+                Label("Delete...", systemImage: "trash")
+            }
+        } else if selectedQueryCount == 1 {
+            // Single query selected along with folders
+            Button(role: .destructive) {
+                DebugLog.print("🗑️ [SavedQueryRowView] Delete tapped for: \(query.name)")
+                onDelete()
+            } label: {
+                Label("Delete Query...", systemImage: "trash")
             }
         }
     }
 
+    // MARK: - Menu Button
+
     private var menuButton: some View {
-        Menu {
-            if !showMultiSelectActions {
-                Button {
-                    DebugLog.print("✏️ [SavedQueryRowView] Rename tapped for: \(query.name)")
-                    onEdit()
-                } label: {
-                    Label("Rename...", systemImage: "pencil")
-                }
-
-                Button {
-                    DebugLog.print("📋 [SavedQueryRowView] Duplicate tapped for: \(query.name)")
-                    onDuplicate()
-                } label: {
-                    Label("Duplicate", systemImage: "doc.on.doc")
-                }
-
-                Divider()
-            }
-
-            Button {
-                DebugLog.print("📁 [SavedQueryRowView] Move to folder tapped for: \(showMultiSelectActions ? "\(selectedCount) queries" : query.name)")
-                onMoveToFolder()
-            } label: {
-                Label(showMultiSelectActions ? "Move \(selectedCount) to Folder..." : "Move to Folder...", systemImage: "folder")
-            }
-
-            Divider()
-
-            if showMultiSelectActions {
-                Button(role: .destructive) {
-                    DebugLog.print("🗑️ [SavedQueryRowView] Delete \(selectedCount) selected queries tapped")
-                    onDeleteSelected()
-                } label: {
-                    Label("Delete \(selectedCount) Queries...", systemImage: "trash")
-                }
-            } else {
-                Button(role: .destructive) {
-                    DebugLog.print("🗑️ [SavedQueryRowView] Delete tapped for: \(query.name)")
-                    onDelete()
-                } label: {
-                    Label("Delete...", systemImage: "trash")
-                }
-            }
-        } label: {
+        Menu { menuContent } label: {
             Image(systemName: "ellipsis")
                 .foregroundColor(isButtonHovered ? .primary : .secondary)
                 .padding(6)

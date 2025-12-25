@@ -20,6 +20,26 @@ struct SavedQueriesSidebarSection: View {
     @Binding var selectedQueryIDs: Set<SavedQuery.ID>
     @State private var viewModel: SavedQueriesViewModel?
 
+    /// IDs in selection that match actual queries
+    private var selectedQueries: [SavedQuery] {
+        savedQueries.filter { selectedQueryIDs.contains($0.id) }
+    }
+
+    /// IDs in selection that match folders (not queries)
+    private var selectedFolders: [QueryFolder] {
+        folders.filter { selectedQueryIDs.contains($0.id) }
+    }
+
+    /// Count of actual queries selected (excludes folder IDs)
+    private var selectedQueryCount: Int {
+        selectedQueries.count
+    }
+
+    /// Count of folders selected
+    private var selectedFolderCount: Int {
+        selectedFolders.count
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if let viewModel = viewModel {
@@ -151,7 +171,8 @@ struct SavedQueriesSidebarSection: View {
             viewModel.handleSelectionChange(
                 oldIDs: oldIDs,
                 newIDs: newIDs,
-                savedQueries: savedQueries
+                savedQueries: savedQueries,
+                folders: folders
             )
             // Clear tab's savedQueryId when deselecting
             if newIDs.isEmpty && !oldIDs.isEmpty {
@@ -249,6 +270,47 @@ struct SavedQueriesSidebarSection: View {
                 }
             }
         }
+        // Confirmation dialog for deleting multiple folders
+        .confirmationDialog(
+            viewModel.foldersToDelete.count == 1 ? "Delete Folder?" : "Delete \(viewModel.foldersToDelete.count) Folders?",
+            isPresented: Binding(
+                get: { !viewModel.foldersToDelete.isEmpty },
+                set: { if !$0 { viewModel.foldersToDelete = [] } }
+            )
+        ) {
+            Button("Delete Folders Only", role: .destructive) {
+                viewModel.deleteFolders(viewModel.foldersToDelete, deleteQueries: false, modelContext: modelContext)
+                // Clear folder IDs from selection
+                for folder in viewModel.foldersToDelete {
+                    selectedQueryIDs.remove(folder.id)
+                }
+            }
+            Button("Delete Folders and Queries", role: .destructive) {
+                viewModel.deleteFolders(viewModel.foldersToDelete, deleteQueries: true, modelContext: modelContext)
+                // Clear folder IDs from selection
+                for folder in viewModel.foldersToDelete {
+                    selectedQueryIDs.remove(folder.id)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                viewModel.foldersToDelete = []
+            }
+        } message: {
+            let totalQueryCount = viewModel.foldersToDelete.reduce(0) { $0 + ($1.queries?.count ?? 0) }
+            if viewModel.foldersToDelete.count == 1, let folder = viewModel.foldersToDelete.first {
+                if totalQueryCount > 0 {
+                    Text("The folder \"\(folder.name)\" contains \(totalQueryCount) queries. What would you like to do?")
+                } else {
+                    Text("Are you sure you want to delete the folder \"\(folder.name)\"?")
+                }
+            } else {
+                if totalQueryCount > 0 {
+                    Text("These \(viewModel.foldersToDelete.count) folders contain \(totalQueryCount) queries total. What would you like to do?")
+                } else {
+                    Text("Are you sure you want to delete \(viewModel.foldersToDelete.count) folders?")
+                }
+            }
+        }
     }
 
     // MARK: - Folder Disclosure Group
@@ -282,13 +344,19 @@ struct SavedQueriesSidebarSection: View {
         SavedQueryRowView(
             query: query,
             isSelected: selectedQueryIDs.contains(query.id),
-            selectedCount: selectedQueryIDs.count,
+            selectedQueryCount: selectedQueryCount,
+            selectedFolderCount: selectedFolderCount,
             onEdit: { viewModel.queryToEdit = query },
             onDelete: { viewModel.queriesToDelete = [query] },
-            onDeleteSelected: {
+            onDeleteSelectedQueries: {
                 viewModel.prepareToDeleteSelected(
                     selectedQueryIDs: selectedQueryIDs,
                     savedQueries: savedQueries
+                )
+            },
+            onDeleteSelectedFolders: {
+                viewModel.prepareToDeleteSelectedFolders(
+                    selectedFolders: selectedFolders
                 )
             },
             onDuplicate: {
