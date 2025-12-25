@@ -204,6 +204,7 @@ struct QueryResultsView: View {
         guard appState.query.currentPage > 0,
               let table = appState.connection.selectedTable else { return }
         appState.query.currentPage -= 1
+        appState.query.hasNextPage = true  // We know there's a next page since we came from it
         Task {
             await appState.executeTableQuery(for: table)
         }
