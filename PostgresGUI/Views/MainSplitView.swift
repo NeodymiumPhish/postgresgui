@@ -120,6 +120,27 @@ struct MainSplitView: View {
         .navigationTitle(appState.connection.selectedDatabase?.name ?? "")
         .searchable(text: $searchText, prompt: "Filter results")
         .modifier(DetailContentModalsWrapper(viewModel: viewModel))
+        .overlay(alignment: .bottomTrailing) {
+            if let toast = appState.query.mutationToast {
+                MutationToastView(
+                    data: toast,
+                    onViewTable: {
+                        // Find and select the table
+                        if let tableName = toast.tableName,
+                           let table = appState.connection.tables.first(where: { $0.name == tableName }) {
+                            appState.connection.selectedTable = table
+                        }
+                        appState.query.dismissMutationToast()
+                    },
+                    onDismiss: {
+                        appState.query.dismissMutationToast()
+                    }
+                )
+                .padding(20)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: appState.query.mutationToast != nil)
     }
 }
 

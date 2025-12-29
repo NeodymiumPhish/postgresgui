@@ -190,6 +190,8 @@ struct QueryEditorView: View {
         }
 
         let queryText = appState.query.queryText
+        let queryType = QueryTypeDetector.detect(queryText)
+        let tableName = QueryTypeDetector.extractTableName(queryText)
 
         Task {
             // Set loading state - but keep previous results visible to prevent flicker
@@ -201,21 +203,29 @@ struct QueryEditorView: View {
             let startTime = Date()
 
             do {
-                DebugLog.print("📊 [QueryEditorView] Executing query...")
+                DebugLog.print("📊 [QueryEditorView] Executing query (type: \(queryType))...")
                 let (results, columnNames) = try await appState.connection.databaseService.executeQuery(queryText)
-                // Update results atomically - this prevents empty state flash
-                appState.query.queryResults = results
-                appState.query.queryColumnNames = columnNames.isEmpty ? nil : columnNames
-                appState.query.showQueryResults = true
 
                 let endTime = Date()
                 let executionTime = endTime.timeIntervalSince(startTime)
                 appState.query.queryExecutionTime = executionTime
 
-                // Show success status with execution time
-                appState.query.setTemporaryStatus("Executed in \(QueryState.formatExecutionTime(executionTime))")
-
-                DebugLog.print("✅ [QueryEditorView] Query executed successfully, showing results")
+                if queryType.isMutation && results.isEmpty {
+                    // Mutation query with no returned rows: keep previous results, show toast
+                    appState.query.showMutationToast(
+                        type: queryType,
+                        tableName: tableName
+                    )
+                    appState.query.setTemporaryStatus("Executed in \(QueryState.formatExecutionTime(executionTime))")
+                    DebugLog.print("✅ [QueryEditorView] Mutation query executed, showing toast")
+                } else {
+                    // Query returned rows (SELECT, or mutation with RETURNING): show results
+                    appState.query.queryResults = results
+                    appState.query.queryColumnNames = columnNames.isEmpty ? nil : columnNames
+                    appState.query.showQueryResults = true
+                    appState.query.setTemporaryStatus("Executed in \(QueryState.formatExecutionTime(executionTime))")
+                    DebugLog.print("✅ [QueryEditorView] Query executed, showing \(results.count) results")
+                }
 
                 // Refresh tables list if query modified schema
                 if Self.isSchemaModifyingQuery(queryText) {

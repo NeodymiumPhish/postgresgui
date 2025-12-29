@@ -45,6 +45,10 @@ class QueryState {
     var statusMessage: String? = nil
     var statusTimer: Task<Void, Never>? = nil
 
+    // Mutation toast state
+    var mutationToast: MutationToastData? = nil
+    var toastTimer: Task<Void, Never>? = nil
+
     // Pagination state
     var currentPage: Int = 0
     var rowsPerPage: Int = Constants.Pagination.defaultRowsPerPage
@@ -66,6 +70,28 @@ class QueryState {
             guard !Task.isCancelled else { return }
             self.statusMessage = nil
         }
+    }
+
+    /// Show mutation toast notification
+    func showMutationToast(type: QueryType, tableName: String?, duration: TimeInterval = 5.0) {
+        toastTimer?.cancel()
+        mutationToast = MutationToastData(
+            title: type.successTitle,
+            tableName: tableName,
+            queryType: type
+        )
+        toastTimer = Task {
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            self.mutationToast = nil
+        }
+    }
+
+    /// Dismiss mutation toast
+    func dismissMutationToast() {
+        toastTimer?.cancel()
+        toastTimer = nil
+        mutationToast = nil
     }
 
     /// Cancel the current running query
@@ -96,6 +122,9 @@ class QueryState {
         statusTimer?.cancel()
         statusTimer = nil
         statusMessage = nil
+        toastTimer?.cancel()
+        toastTimer = nil
+        mutationToast = nil
     }
 
     /// Clean up when window closes
