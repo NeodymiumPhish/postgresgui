@@ -165,12 +165,8 @@ class SavedQueriesViewModel {
         appState.query.lastSavedAt = query.updatedAt
         appState.query.currentQueryName = query.name
 
-        // Clear previous results and status
-        appState.query.showQueryResults = false
-        appState.query.queryResults = []
-        appState.query.queryColumnNames = nil
-        appState.query.queryError = nil
-        appState.query.queryExecutionTime = nil
+        // Don't clear results - they should remain until user runs a different query
+        // Only clear the status message since it's no longer relevant
         appState.query.statusMessage = nil
 
         DebugLog.print("📂 [SavedQueriesViewModel] Loaded query: \(query.name)")
