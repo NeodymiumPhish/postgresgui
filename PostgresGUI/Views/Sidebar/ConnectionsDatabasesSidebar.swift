@@ -5,13 +5,8 @@
 //  Created by ghazi on 11/28/25.
 //
 
-import SwiftUI
 import SwiftData
-
-enum SidebarViewMode: String, CaseIterable {
-    case connections
-    case queries
-}
+import SwiftUI
 
 struct ConnectionsDatabasesSidebar: View {
     @Environment(AppState.self) private var appState
@@ -20,43 +15,83 @@ struct ConnectionsDatabasesSidebar: View {
     @Environment(\.modelContext) private var modelContext
 
     @Query private var connections: [ConnectionProfile]
-    @Query(sort: \SavedQuery.updatedAt, order: .reverse) private var savedQueries: [SavedQuery]
-    @Query(sort: \QueryFolder.name) private var queryFolders: [QueryFolder]
 
-    @State private var selectedDatabaseID: DatabaseInfo.ID?
-    @State private var selectedQueryIDs: Set<SavedQuery.ID> = []
     @State private var connectionError: String?
     @State private var showConnectionError = false
+    @State private var hasRestoredConnection = false
+
+    // Database dropdown state
+    @State private var showDatabaseDropdown = false
     @State private var showCreateDatabaseForm = false
     @State private var newDatabaseName = ""
     @State private var createDatabaseError: String?
-    @State private var hasRestoredConnection = false
+    @State private var databaseToDelete: DatabaseInfo?
+    @State private var deleteError: String?
 
     /// Static flag to ensure auto-restore only happens once per app session
     private static var hasRestoredConnectionGlobally = false
 
     var body: some View {
-        Group {
-            switch appState.navigation.sidebarViewMode {
-            case .connections:
-                ConnectionsSidebarSection(
-                    selectedDatabaseID: $selectedDatabaseID,
-                    showCreateDatabaseForm: $showCreateDatabaseForm,
-                    connections: connections,
-                    onConnect: connect,
-                    onLoadTables: loadTables
-                )
-            case .queries:
-                SavedQueriesSidebarSection(
-                    savedQueries: savedQueries,
-                    folders: queryFolders,
-                    selectedQueryIDs: $selectedQueryIDs
-                )
+        VStack(spacing: 0) {
+            ConnectionDatabasePicker(
+                showDatabaseDropdown: $showDatabaseDropdown,
+                onShowConnectionsList: {
+                    appState.navigation.showConnectionsList()
+                },
+                onSelectDatabase: { database in
+                    selectDatabase(database, persistSelection: true)
+                },
+                onDeleteDatabase: { database in
+                    databaseToDelete = database
+                },
+                onCreateDatabase: {
+                    showCreateDatabaseForm = true
+                },
+                onDeleteError: { error in
+                    deleteError = error
+                }
+            )
+
+            TablesListIsolated(
+                tables: appState.connection.tables,
+                selectedTable: Binding(
+                    get: { appState.connection.selectedTable },
+                    set: { appState.connection.selectedTable = $0 }
+                ),
+                isLoadingTables: appState.connection.isLoadingTables,
+                selectedDatabase: appState.connection.selectedDatabase,
+                refreshTablesAction: {
+                    await TableRefreshService.refresh(appState: appState)
+                }
+            )
+        }
+        .onChange(of: appState.connection.currentConnection) { oldValue, newValue in
+            if oldValue != nil && newValue != oldValue {
+                UserDefaults.standard.removeObject(
+                    forKey: Constants.UserDefaultsKeys.lastDatabaseName)
+                appState.connection.selectedDatabase = nil
             }
         }
-        .padding(.top, 8)
-        .overlay(alignment: .top) {
-            Divider()
+        .task {
+            await waitForInitialLoad()
+            await restoreLastConnection()
+        }
+        .onChange(of: appState.connection.currentConnection) { _, newConnection in
+            tabManager.updateActiveTab(
+                connectionId: newConnection?.id, databaseName: nil, queryText: nil)
+        }
+        .onChange(of: appState.connection.selectedDatabase) { _, newDatabase in
+            tabManager.updateActiveTab(
+                connectionId: nil, databaseName: newDatabase?.name, queryText: nil)
+        }
+        .alert("Connection Failed", isPresented: $showConnectionError) {
+            Button("OK", role: .cancel) {
+                connectionError = nil
+            }
+        } message: {
+            if let error = connectionError {
+                Text(error)
+            }
         }
         .alert("Create Database", isPresented: $showCreateDatabaseForm) {
             TextField("Database Name", text: $newDatabaseName)
@@ -81,33 +116,56 @@ struct ConnectionsDatabasesSidebar: View {
                 Text(error)
             }
         }
-        .onChange(of: appState.connection.currentConnection) { oldValue, newValue in
-            if oldValue != nil && newValue != oldValue {
-                UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
-                selectedDatabaseID = nil
-                appState.connection.selectedDatabase = nil
+        .confirmationDialog(
+            "Delete Database?",
+            isPresented: Binding(
+                get: { databaseToDelete != nil },
+                set: { if !$0 { databaseToDelete = nil } }
+            ),
+            presenting: databaseToDelete
+        ) { database in
+            Button("Delete", role: .destructive) {
+                Task {
+                    await deleteDatabase(database)
+                }
             }
+            Button("Cancel", role: .cancel) {
+                databaseToDelete = nil
+            }
+        } message: { database in
+            Text("Are you sure you want to delete '\(database.name)'? This action cannot be undone.")
         }
-        .task {
-            await waitForInitialLoad()
-            await restoreLastConnection()
-        }
-        .onChange(of: appState.connection.currentConnection) { _, newConnection in
-            tabManager.updateActiveTab(connectionId: newConnection?.id, databaseName: nil, queryText: nil)
-        }
-        .onChange(of: appState.connection.selectedDatabase) { _, newDatabase in
-            // Sync local selection state when selectedDatabase changes (e.g., from tab switch)
-            selectedDatabaseID = newDatabase?.id
-            tabManager.updateActiveTab(connectionId: nil, databaseName: newDatabase?.name, queryText: nil)
-        }
-        .alert("Connection Failed", isPresented: $showConnectionError) {
+        .alert("Error Deleting Database", isPresented: Binding(
+            get: { deleteError != nil },
+            set: { if !$0 { deleteError = nil } }
+        )) {
             Button("OK", role: .cancel) {
-                connectionError = nil
+                deleteError = nil
             }
         } message: {
-            if let error = connectionError {
+            if let error = deleteError {
                 Text(error)
             }
+        }
+    }
+
+    // MARK: - Database Selection
+
+    /// Unified database selection logic used by both user selection and restore
+    private func selectDatabase(_ database: DatabaseInfo, persistSelection: Bool) {
+        appState.connection.selectedDatabase = database
+        appState.connection.tables = []
+        appState.connection.isLoadingTables = true
+        appState.connection.selectedTable = nil
+
+        if persistSelection {
+            UserDefaults.standard.set(
+                database.name, forKey: Constants.UserDefaultsKeys.lastDatabaseName)
+            tabManager.updateActiveTab(connectionId: nil, databaseName: database.name, queryText: nil)
+        }
+
+        Task {
+            await loadTables(for: database)
         }
     }
 
@@ -121,16 +179,14 @@ struct ConnectionsDatabasesSidebar: View {
         if appState.connection.currentConnection != nil {
             hasRestoredConnection = true
             Self.hasRestoredConnectionGlobally = true
-            if let database = appState.connection.selectedDatabase {
-                selectedDatabaseID = database.id
-            }
         }
     }
 
     private func restoreLastConnection() async {
         guard !hasRestoredConnection,
-              !Self.hasRestoredConnectionGlobally,
-              appState.connection.currentConnection == nil else { return }
+            !Self.hasRestoredConnectionGlobally,
+            appState.connection.currentConnection == nil
+        else { return }
 
         hasRestoredConnection = true
         Self.hasRestoredConnectionGlobally = true
@@ -139,8 +195,11 @@ struct ConnectionsDatabasesSidebar: View {
 
         guard !connections.isEmpty else { return }
 
-        guard let lastConnectionIdString = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.lastConnectionId),
-              let lastConnectionId = UUID(uuidString: lastConnectionIdString) else {
+        guard
+            let lastConnectionIdString = UserDefaults.standard.string(
+                forKey: Constants.UserDefaultsKeys.lastConnectionId),
+            let lastConnectionId = UUID(uuidString: lastConnectionIdString)
+        else {
             if connections.count == 1, let onlyConnection = connections.first {
                 await connect(to: onlyConnection)
             }
@@ -186,7 +245,8 @@ struct ConnectionsDatabasesSidebar: View {
 
     private func refreshDatabasesAsync() async {
         do {
-            appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
+            appState.connection.databases = try await appState.connection.databaseService
+                .fetchDatabases()
             await restoreLastDatabase()
         } catch {
             DebugLog.print("Failed to refresh databases: \(error)")
@@ -194,44 +254,52 @@ struct ConnectionsDatabasesSidebar: View {
     }
 
     private func restoreLastDatabase() async {
-        guard appState.connection.selectedDatabase == nil, !appState.connection.databases.isEmpty else { return }
+        guard appState.connection.selectedDatabase == nil, !appState.connection.databases.isEmpty
+        else { return }
 
-        guard let lastDatabaseName = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.lastDatabaseName),
-              !lastDatabaseName.isEmpty else { return }
+        guard
+            let lastDatabaseName = UserDefaults.standard.string(
+                forKey: Constants.UserDefaultsKeys.lastDatabaseName),
+            !lastDatabaseName.isEmpty
+        else { return }
 
-        guard let lastDatabase = appState.connection.databases.first(where: { $0.name == lastDatabaseName }) else {
+        guard
+            let lastDatabase = appState.connection.databases.first(where: {
+                $0.name == lastDatabaseName
+            })
+        else {
             UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
             return
         }
 
-        selectedDatabaseID = lastDatabase.id
-        appState.connection.selectedDatabase = lastDatabase
-        appState.connection.tables = []
-        appState.connection.isLoadingTables = true
-        appState.connection.selectedTable = nil
-
-        await loadTables(for: lastDatabase)
+        selectDatabase(lastDatabase, persistSelection: false)
     }
 
     private func loadTables(for database: DatabaseInfo) async {
         guard let connection = appState.connection.currentConnection else { return }
-        await TableRefreshService.loadTables(for: database, connection: connection, appState: appState)
+        await TableRefreshService.loadTables(
+            for: database, connection: connection, appState: appState)
     }
 
     private func createDatabase() async {
-        guard !newDatabaseName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            createDatabaseError = "Database name cannot be empty"
-            return
-        }
-
-        let databaseName = newDatabaseName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !newDatabaseName.isEmpty else { return }
 
         do {
-            try await appState.connection.databaseService.createDatabase(name: databaseName)
+            try await appState.connection.databaseService.createDatabase(name: newDatabaseName)
+            appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
             newDatabaseName = ""
-            await refreshDatabasesAsync()
         } catch {
-            createDatabaseError = error.localizedDescription
+            createDatabaseError = PostgresError.extractDetailedMessage(error)
+        }
+    }
+
+    private func deleteDatabase(_ database: DatabaseInfo) async {
+        do {
+            try await appState.connection.databaseService.deleteDatabase(name: database.name)
+            appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
+            databaseToDelete = nil
+        } catch {
+            deleteError = PostgresError.extractDetailedMessage(error)
         }
     }
 }

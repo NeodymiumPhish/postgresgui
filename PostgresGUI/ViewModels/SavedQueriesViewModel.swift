@@ -113,18 +113,10 @@ class SavedQueriesViewModel {
     // MARK: - Query Actions
 
     func createNewQuery(savedQueries: [SavedQuery], modelContext: ModelContext) {
-        // Find the next available number for "Untitled Query X"
-        let existingNumbers = savedQueries
-            .compactMap { query -> Int? in
-                if query.name == "Untitled Query" {
-                    return 1
-                }
-                guard query.name.hasPrefix("Untitled Query ") else { return nil }
-                let suffix = query.name.dropFirst("Untitled Query ".count)
-                return Int(suffix)
-            }
-        let nextNumber = (existingNumbers.max() ?? 0) + 1
-        let queryName = nextNumber == 1 ? "Untitled Query" : "Untitled Query \(nextNumber)"
+        // Generate query name with timestamp
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yy-MM-dd H:mm:ss"
+        let queryName = "Query \(formatter.string(from: Date()))"
 
         // Create new saved query entry
         let newQuery = SavedQuery(

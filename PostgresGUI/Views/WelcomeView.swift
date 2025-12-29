@@ -6,11 +6,9 @@
 //
 
 import SwiftUI
-import SwiftData
 
 struct WelcomeView: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.modelContext) private var modelContext
     
     var body: some View {
         VStack(spacing: Constants.Spacing.large) {
@@ -24,85 +22,24 @@ struct WelcomeView: View {
                 .foregroundStyle(.secondary)
                 .accessibilityIdentifier("welcomeText")
             
-            VStack(spacing: Constants.Spacing.small) {
-                Button(action: connectToLocalhost) {
-                    HStack {
-                        Text("Connect to localhost")
-                        Spacer()
-                        Image(systemName: "desktopcomputer")
-                    }
-                    .frame(minWidth: 160, maxWidth: 200)
-                    .padding(.vertical, 6)
+            Button(action: showConnectionForm) {
+                HStack {
+                    Text("Connect to Server...")
+                    Spacer()
+                    Image(systemName: "server.rack")
                 }
-                .buttonStyle(.glassProminent)
-                .controlSize(.large)
-                .accessibilityIdentifier("connectToLocalhostButton")
-
-                Button(action: showConnectionForm) {
-                    HStack {
-                        Text("Connect to Server")
-                        Spacer()
-                        Image(systemName: "server.rack")
-                    }
-                    .frame(minWidth: 160, maxWidth: 200)
-                    .padding(.vertical, 6)
-                }
-                .buttonStyle(.glassProminent)
-                .tint(.secondary)
-                .controlSize(.large)
-                .accessibilityIdentifier("connectToServerButton")
+                .frame(minWidth: 160, maxWidth: 200)
+                .padding(.vertical, 6)
             }
+            .buttonStyle(.glass)
+            .tint(.primary)
+            .controlSize(.large)
+            .accessibilityIdentifier("connectToServerButton")
         }
         .frame(minWidth: 500, maxWidth: .infinity, minHeight: 500, maxHeight: .infinity)
         .padding(.horizontal)
         .padding(.vertical)
         .padding(.bottom, 24)
-    }
-    
-    private func connectToLocalhost() {
-        Task {
-            await connectToLocalhostAsync()
-        }
-    }
-    
-    private func connectToLocalhostAsync() async {
-        let localhostProfile = ConnectionProfile.localhost()
-
-        do {
-            // First attempt: try without password (trust mode)
-            try await appState.connection.databaseService.connect(
-                host: localhostProfile.host,
-                port: localhostProfile.port,
-                username: localhostProfile.username,
-                password: "", // Empty password for trust mode
-                database: localhostProfile.database,
-                sslMode: localhostProfile.sslModeEnum
-            )
-
-            // Success - save profile and connect
-            modelContext.insert(localhostProfile)
-            try? modelContext.save()
-
-            appState.connection.currentConnection = localhostProfile
-            appState.navigation.isShowingWelcomeScreen = false
-
-            // Load databases
-            await loadDatabases()
-
-        } catch {
-            // If passwordless fails, prompt for password
-            // For now, show connection form with localhost pre-filled
-            appState.showConnectionForm()
-        }
-    }
-
-    private func loadDatabases() async {
-        do {
-            appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
-        } catch {
-            // Handle error
-            DebugLog.print("Failed to load databases: \(error)")
-        }
     }
     
     private func showConnectionForm() {

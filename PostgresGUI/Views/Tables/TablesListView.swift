@@ -45,7 +45,7 @@ struct TablesListIsolated: View {
         let _ = {
             DebugLog.print("🔍 [TablesListView] Body computed - isLoadingTables: \(isLoadingTables), tablesCount: \(tables.count), selectedTable: \(selectedTable?.name ?? "nil")")
         }()
-        
+
         Group {
             if isLoadingTables {
                 ProgressView()
@@ -65,13 +65,15 @@ struct TablesListIsolated: View {
                         Image(systemName: "tablecells")
                             .foregroundColor(.secondary)
                         Text(table.name)
-                            .font(.headline)
+                            .lineLimit(1)
                         Spacer()
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 1)
                     .padding(.horizontal, 6)
                     .tag(table)
+                    .listRowSeparator(.visible)
                 }
+                .padding(.top, 12)
                 .onChange(of: selectedTable?.id) { oldValue, newValue in
                     DebugLog.print("🔍 [TablesListView] selectedTable changed - old: \(oldValue ?? "nil"), new: \(newValue ?? "nil")")
                 }
@@ -93,19 +95,6 @@ struct TablesListIsolated: View {
                 }
             }
         }
-        // .toolbar {
-        //     // ToolbarItem(placement: .automatic) {
-        //     //     Button(action: {
-        //     //         Task {
-        //     //             await refreshTables()
-        //     //         }
-        //     //     }) {
-        //     //         Image(systemName: "arrow.clockwise")
-        //     //     }
-        //     //     .disabled(appState.isLoadingTables || appState.selectedDatabase == nil)
-        //     //     .keyboardShortcut(.init("r"), modifiers: [.command])
-        //     // }
-        // }
     }
 }
 

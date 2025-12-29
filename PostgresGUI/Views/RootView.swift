@@ -191,9 +191,12 @@ struct RootView: View {
         DebugLog.print("🚀 [RootView] Restoring connection: \(connection.displayName)")
 
         // Restore query text and saved query selection from active tab
+        // Set flag to prevent auto-save from creating duplicate queries
+        appState.query.isRestoringFromTab = true
         appState.query.queryText = activeTab.queryText
         appState.query.currentSavedQueryId = activeTab.savedQueryId
         restoreSavedQueryMetadata(for: activeTab.savedQueryId)
+        appState.query.isRestoringFromTab = false
 
         // Connect to database
         loadingState.setPhase(.connectingToDatabase)
@@ -265,10 +268,13 @@ struct RootView: View {
         DebugLog.print("📑 [RootView] Tab changed to: \(tab.id)")
 
         // Restore query text and saved query selection
+        // Set flag to prevent auto-save from creating duplicate queries
         let previousQueryText = appState.query.queryText
+        appState.query.isRestoringFromTab = true
         appState.query.queryText = tab.queryText
         appState.query.currentSavedQueryId = tab.savedQueryId
         restoreSavedQueryMetadata(for: tab.savedQueryId)
+        appState.query.isRestoringFromTab = false
         if previousQueryText != tab.queryText {
             DebugLog.print("📝 [RootView] queryText changed from: \"\(previousQueryText.prefix(30))...\" to: \"\(tab.queryText.prefix(30))...\" (tab restore)")
         }

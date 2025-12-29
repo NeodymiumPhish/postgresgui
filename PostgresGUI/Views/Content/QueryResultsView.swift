@@ -92,6 +92,7 @@ struct QueryResultsView: View {
                 paginationBar
             }
         }
+        .padding(.leading, 4)
         .onChange(of: appState.connection.selectedTable?.id) { oldValue, newValue in
             // Clear results immediately when table changes (prevents column mismatch crashes)
             if oldValue != newValue {
@@ -196,8 +197,11 @@ struct QueryResultsView: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
         .background(.bar)
+        .overlay(alignment: .top) {
+            Divider()
+        }
     }
 
     private func goToPreviousPage() {

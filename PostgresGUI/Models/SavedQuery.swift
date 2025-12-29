@@ -41,8 +41,10 @@ final class SavedQuery: Identifiable {
 }
 
 extension SavedQuery {
-    /// Generates a default query name
+    /// Generates a default query name using timestamp format
     static func generateName(from queryText: String) -> String {
-        return "Untitled Query"
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yy-MM-dd H:mm:ss"
+        return "Query \(formatter.string(from: Date()))"
     }
 }

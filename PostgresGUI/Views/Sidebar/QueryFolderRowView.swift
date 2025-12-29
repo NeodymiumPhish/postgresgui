@@ -23,8 +23,8 @@ struct QueryFolderRowView: View {
             menuButton
                 .opacity(isHovered ? 1 : 0)
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 6)
+        .padding(.vertical, 1)
+        .padding(.horizontal, 2)
         .onHover { isHovered = $0 }
         .contextMenu {
             Button {

@@ -27,13 +27,13 @@ struct ConnectionsListView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Header with title
+                // Header
                 HStack {
                     Text("Connections")
                         .font(.title2)
                         .fontWeight(.semibold)
                     Spacer()
-                    
+
                     Button {
                         appState.navigation.connectionToEdit = nil
                         appState.showConnectionForm()
@@ -43,10 +43,10 @@ struct ConnectionsListView: View {
                     .buttonStyle(.borderless)
                 }
                 .padding()
-                
+
                 Divider()
-                
-                // Connections List
+
+                // List
                 if connections.isEmpty {
                     Spacer()
                     ContentUnavailableView {
@@ -131,9 +131,8 @@ struct ConnectionsListView: View {
         }
         .frame(width: 600, height: 500)
     }
-    
+
     private func connect(to connection: ConnectionProfile) async {
-        // Create connection service (will be injected via DI container in Phase 6)
         let connectionService = ConnectionService(
             appState: appState,
             keychainService: KeychainServiceImpl()
@@ -150,21 +149,16 @@ struct ConnectionsListView: View {
             showConnectionError = true
         }
     }
-    
+
     private func deleteConnection(_ connection: ConnectionProfile) async {
         DebugLog.print("🗑️  [ConnectionsListView] Deleting connection: \(connection.displayName)")
 
         do {
-            // Check if this is the currently active connection
             let isActiveConnection = appState.connection.currentConnection?.id == connection.id
-
-            // Check if this is the last connection before deletion
             let wasLastConnection = connections.count == 1
 
-            // Delete password from Keychain
             try KeychainService.deletePassword(for: connection.id)
 
-            // Disconnect if this is the active connection
             if isActiveConnection {
                 await appState.connection.databaseService.disconnect()
                 appState.connection.currentConnection = nil
@@ -172,21 +166,18 @@ struct ConnectionsListView: View {
                 appState.connection.tables = []
                 appState.connection.databases = []
 
-                // Clear last connection ID if this was the last connection
                 if let lastConnectionIdString = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.lastConnectionId),
                    lastConnectionIdString == connection.id.uuidString {
                     UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastConnectionId)
                 }
             }
 
-            // Delete from SwiftData
             modelContext.delete(connection)
             try modelContext.save()
 
             DebugLog.print("✅ [ConnectionsListView] Connection deleted successfully")
             connectionToDelete = nil
 
-            // If this was the last connection, close modal and show welcome screen
             if wasLastConnection {
                 appState.navigation.isShowingWelcomeScreen = true
                 UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastConnectionId)
@@ -203,16 +194,17 @@ struct ConnectionsListView: View {
     }
 }
 
+// MARK: - Connection Row
+
 private struct ConnectionRowView: View {
     let connection: ConnectionProfile
     let isActive: Bool
     let onConnect: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
-    
-    @State private var isHovered = false
+
     @State private var isButtonHovered = false
-    
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
@@ -225,24 +217,20 @@ private struct ConnectionRowView: View {
                             .font(.caption)
                     }
                 }
-                
+
                 HStack(spacing: 12) {
                     Label(connection.rootDomain, systemImage: "server.rack")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    
+
                     Label(formatPort(connection.port), systemImage: "network")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Label(connection.database, systemImage: "cylinder.split.1x2.fill")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
             }
-            
+
             Spacer()
-            
+
             Button {
                 onConnect()
             } label: {
@@ -254,14 +242,14 @@ private struct ConnectionRowView: View {
             }
             .buttonStyle(.glass)
             .tint(isActive ? .green : nil)
-            
+
             Menu {
                 Button {
                     onEdit()
                 } label: {
                     Label("Edit...", systemImage: "pencil")
                 }
-                
+
                 Button(role: .destructive) {
                     onDelete()
                 } label: {
@@ -282,34 +270,27 @@ private struct ConnectionRowView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        // .background(isHovered ? Color.secondary.opacity(0.1) : Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .contentShape(Rectangle())
         .contextMenu {
             Button {
                 onConnect()
             } label: {
                 Label("Connect", systemImage: "powerplug")
             }
-            
+
             Button {
                 onEdit()
             } label: {
                 Label("Edit...", systemImage: "pencil")
             }
-            
+
             Button(role: .destructive) {
                 onDelete()
             } label: {
                 Label("Delete...", systemImage: "trash")
             }
         }
-        .onHover { hovering in
-            isHovered = hovering
-        }
     }
-    
-    /// Format port number without comma separators
+
     private func formatPort(_ port: Int) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .none
@@ -317,4 +298,3 @@ private struct ConnectionRowView: View {
         return formatter.string(from: NSNumber(value: port)) ?? String(port)
     }
 }
-

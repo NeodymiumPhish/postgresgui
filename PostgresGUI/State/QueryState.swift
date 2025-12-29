@@ -13,6 +13,7 @@ import Foundation
 class QueryState {
     // Query editor state
     var queryText: String = ""
+    var isRestoringFromTab: Bool = false
     var queryResults: [TableRow] = []
     var queryColumnNames: [String]? = nil
     var isExecutingQuery: Bool = false

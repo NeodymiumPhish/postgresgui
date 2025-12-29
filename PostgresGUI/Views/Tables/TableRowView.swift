@@ -47,8 +47,6 @@ struct TableRowView: View {
                     isButtonHovered = hovering
                 }
             }
-            .padding(.vertical, 4)
-            .padding(.horizontal, 6)
         }
         .contextMenu {
             Button(role: .destructive) {

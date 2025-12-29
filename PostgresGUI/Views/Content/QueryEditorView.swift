@@ -58,18 +58,23 @@ struct QueryEditorView: View {
             Text(saveErrorMessage)
         }
         .onChange(of: appState.query.queryText) { _, newText in
+            // Capture restoration flag now (before debounce)
+            let isRestoring = appState.query.isRestoringFromTab
+
             // Cancel previous save task
             saveTask?.cancel()
 
-            // Debounced auto-save (500ms)
-            saveTask = Task {
-                try? await Task.sleep(for: .milliseconds(500))
-                guard !Task.isCancelled else {
-                    DebugLog.print("💾 [QueryEditorView] Auto-save cancelled (new keystroke)")
-                    return
+            // Debounced auto-save (500ms) - skip if restoring from tab
+            if !isRestoring {
+                saveTask = Task {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    guard !Task.isCancelled else {
+                        DebugLog.print("💾 [QueryEditorView] Auto-save cancelled (new keystroke)")
+                        return
+                    }
+                    DebugLog.print("💾 [QueryEditorView] Auto-save triggered after debounce")
+                    await saveQueryWithRetry()
                 }
-                DebugLog.print("💾 [QueryEditorView] Auto-save triggered after debounce")
-                await saveQueryWithRetry()
             }
 
             // Update tab state immediately

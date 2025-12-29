@@ -5,8 +5,8 @@
 //  Created by ghazi on 11/28/25.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 /// Sidebar section for saved queries with folder support
 struct SavedQueriesSidebarSection: View {
@@ -43,17 +43,33 @@ struct SavedQueriesSidebarSection: View {
     var body: some View {
         VStack(spacing: 0) {
             if let viewModel = viewModel {
-                // Title
-                Text("Saved Queries")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 10)
-                    .padding(.top, 8)
-                    .padding(.bottom, 4)
+                // Header group: Title + Search
+                VStack(spacing: 8) {
+                    // Title with New Query button
+                    HStack {
+                        Text("Queries")
+                            .font(.headline)
 
-                // Search and sort header
-                searchAndSortHeader(viewModel: viewModel)
+                        Button {
+                            viewModel.createNewQuery(
+                                savedQueries: savedQueries, modelContext: modelContext)
+                            if let newQueryId = appState.query.currentSavedQueryId {
+                                selectedQueryIDs = [newQueryId]
+                            }
+                        } label: {
+                            Image(systemName: "plus.circle")
+                                .font(.system(size: 12))
+                        }
+                        .buttonStyle(.plain)
+
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.top, 12)
+
+                    // Search and sort header
+                    searchAndSortHeader(viewModel: viewModel)
+                }
 
                 queryList(viewModel: viewModel)
             }
@@ -77,27 +93,38 @@ struct SavedQueriesSidebarSection: View {
 
     @ViewBuilder
     private func searchAndSortHeader(viewModel: SavedQueriesViewModel) -> some View {
-        HStack(spacing: 6) {
-            HStack(spacing: 4) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                TextField("Filter", text: Binding(
+        HStack(spacing: 4) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+
+            TextField(
+                "Filter queries",
+                text: Binding(
                     get: { viewModel.searchText },
                     set: { viewModel.searchText = $0 }
-                ))
-                .font(.system(size: 12))
-                .textFieldStyle(.plain)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color(nsColor: .quaternaryLabelColor).opacity(0.5))
-            .clipShape(Capsule())
+                )
+            )
+            .font(.system(size: 12))
+            .textFieldStyle(.plain)
 
             sortMenu(viewModel: viewModel)
         }
+        .padding(.leading, 8)
+        .padding(.trailing, 4)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(Color(nsColor: .textBackgroundColor))
+        )
+        .overlay(
+            Capsule()
+                .stroke(Color.secondary, lineWidth: 0.5)
+                .shadow(color: Color.black.opacity(0.15), radius: 1, x: 0, y: 1)
+                .clipShape(Capsule())
+        )
+        .clipShape(Capsule())
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
     }
 
     // MARK: - Sort Menu
@@ -119,12 +146,20 @@ struct SavedQueriesSidebarSection: View {
                 }
             }
         } label: {
-            Image(systemName: "line.3.horizontal.decrease")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-                .padding(6)
-                .background(Color(nsColor: .quaternaryLabelColor).opacity(0.5))
-                .clipShape(Circle())
+            HStack(spacing: 2) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .font(.system(size: 11))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8))
+            }
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .contentShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(Color.secondary.opacity(0.5), lineWidth: 0.5)
+            )
         }
         .buttonStyle(.plain)
     }
@@ -160,6 +195,7 @@ struct SavedQueriesSidebarSection: View {
                 }
             }
         }
+        .contentMargins(.top, 0, for: .scrollContent)
         .onDeleteCommand {
             guard !selectedQueryIDs.isEmpty else { return }
             viewModel.prepareToDeleteSelected(
@@ -185,42 +221,33 @@ struct SavedQueriesSidebarSection: View {
                 savedQueries: savedQueries
             )
         }
-        .safeAreaInset(edge: .bottom) {
-            Button {
-                viewModel.createNewQuery(savedQueries: savedQueries, modelContext: modelContext)
-                // Select the newly created query
-                if let newQueryId = appState.query.currentSavedQueryId {
-                    selectedQueryIDs = [newQueryId]
-                }
-            } label: {
-                Label("New Query", systemImage: "plus")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 100, style: .continuous))
-            .padding()
-            .buttonStyle(.glass)
-        }
-        .sheet(item: Binding(
-            get: { viewModel.queryToEdit },
-            set: { viewModel.queryToEdit = $0 }
-        )) { query in
+        .sheet(
+            item: Binding(
+                get: { viewModel.queryToEdit },
+                set: { viewModel.queryToEdit = $0 }
+            )
+        ) { query in
             EditQuerySheet(query: query)
         }
-        .sheet(item: Binding(
-            get: { viewModel.folderToEdit },
-            set: { viewModel.folderToEdit = $0 }
-        )) { folder in
+        .sheet(
+            item: Binding(
+                get: { viewModel.folderToEdit },
+                set: { viewModel.folderToEdit = $0 }
+            )
+        ) { folder in
             EditFolderSheet(folder: folder)
         }
-        .sheet(isPresented: Binding(
-            get: { !viewModel.queriesToMove.isEmpty },
-            set: { if !$0 { viewModel.queriesToMove = [] } }
-        )) {
+        .sheet(
+            isPresented: Binding(
+                get: { !viewModel.queriesToMove.isEmpty },
+                set: { if !$0 { viewModel.queriesToMove = [] } }
+            )
+        ) {
             MoveToFolderSheet(queries: viewModel.queriesToMove, folders: folders)
         }
         .confirmationDialog(
-            viewModel.queriesToDelete.count == 1 ? "Delete Query?" : "Delete \(viewModel.queriesToDelete.count) Queries?",
+            viewModel.queriesToDelete.count == 1
+                ? "Delete Query?" : "Delete \(viewModel.queriesToDelete.count) Queries?",
             isPresented: Binding(
                 get: { !viewModel.queriesToDelete.isEmpty },
                 set: { if !$0 { viewModel.queriesToDelete = [] } }
@@ -235,9 +262,13 @@ struct SavedQueriesSidebarSection: View {
             }
         } message: {
             if viewModel.queriesToDelete.count == 1, let query = viewModel.queriesToDelete.first {
-                Text("Are you sure you want to delete \"\(query.name)\"? This action cannot be undone.")
+                Text(
+                    "Are you sure you want to delete \"\(query.name)\"? This action cannot be undone."
+                )
             } else {
-                Text("Are you sure you want to delete \(viewModel.queriesToDelete.count) queries? This action cannot be undone.")
+                Text(
+                    "Are you sure you want to delete \(viewModel.queriesToDelete.count) queries? This action cannot be undone."
+                )
             }
         }
         .confirmationDialog(
@@ -264,7 +295,9 @@ struct SavedQueriesSidebarSection: View {
             if let folder = viewModel.folderToDelete {
                 let queryCount = folder.queries?.count ?? 0
                 if queryCount > 0 {
-                    Text("The folder \"\(folder.name)\" contains \(queryCount) queries. What would you like to do?")
+                    Text(
+                        "The folder \"\(folder.name)\" contains \(queryCount) queries. What would you like to do?"
+                    )
                 } else {
                     Text("Are you sure you want to delete the folder \"\(folder.name)\"?")
                 }
@@ -272,21 +305,24 @@ struct SavedQueriesSidebarSection: View {
         }
         // Confirmation dialog for deleting multiple folders
         .confirmationDialog(
-            viewModel.foldersToDelete.count == 1 ? "Delete Folder?" : "Delete \(viewModel.foldersToDelete.count) Folders?",
+            viewModel.foldersToDelete.count == 1
+                ? "Delete Folder?" : "Delete \(viewModel.foldersToDelete.count) Folders?",
             isPresented: Binding(
                 get: { !viewModel.foldersToDelete.isEmpty },
                 set: { if !$0 { viewModel.foldersToDelete = [] } }
             )
         ) {
             Button("Delete Folders Only", role: .destructive) {
-                viewModel.deleteFolders(viewModel.foldersToDelete, deleteQueries: false, modelContext: modelContext)
+                viewModel.deleteFolders(
+                    viewModel.foldersToDelete, deleteQueries: false, modelContext: modelContext)
                 // Clear folder IDs from selection
                 for folder in viewModel.foldersToDelete {
                     selectedQueryIDs.remove(folder.id)
                 }
             }
             Button("Delete Folders and Queries", role: .destructive) {
-                viewModel.deleteFolders(viewModel.foldersToDelete, deleteQueries: true, modelContext: modelContext)
+                viewModel.deleteFolders(
+                    viewModel.foldersToDelete, deleteQueries: true, modelContext: modelContext)
                 // Clear folder IDs from selection
                 for folder in viewModel.foldersToDelete {
                     selectedQueryIDs.remove(folder.id)
@@ -296,18 +332,26 @@ struct SavedQueriesSidebarSection: View {
                 viewModel.foldersToDelete = []
             }
         } message: {
-            let totalQueryCount = viewModel.foldersToDelete.reduce(0) { $0 + ($1.queries?.count ?? 0) }
+            let totalQueryCount = viewModel.foldersToDelete.reduce(0) {
+                $0 + ($1.queries?.count ?? 0)
+            }
             if viewModel.foldersToDelete.count == 1, let folder = viewModel.foldersToDelete.first {
                 if totalQueryCount > 0 {
-                    Text("The folder \"\(folder.name)\" contains \(totalQueryCount) queries. What would you like to do?")
+                    Text(
+                        "The folder \"\(folder.name)\" contains \(totalQueryCount) queries. What would you like to do?"
+                    )
                 } else {
                     Text("Are you sure you want to delete the folder \"\(folder.name)\"?")
                 }
             } else {
                 if totalQueryCount > 0 {
-                    Text("These \(viewModel.foldersToDelete.count) folders contain \(totalQueryCount) queries total. What would you like to do?")
+                    Text(
+                        "These \(viewModel.foldersToDelete.count) folders contain \(totalQueryCount) queries total. What would you like to do?"
+                    )
                 } else {
-                    Text("Are you sure you want to delete \(viewModel.foldersToDelete.count) folders?")
+                    Text(
+                        "Are you sure you want to delete \(viewModel.foldersToDelete.count) folders?"
+                    )
                 }
             }
         }
@@ -316,7 +360,9 @@ struct SavedQueriesSidebarSection: View {
     // MARK: - Folder Disclosure Group
 
     @ViewBuilder
-    private func folderDisclosureGroup(folder: QueryFolder, viewModel: SavedQueriesViewModel) -> some View {
+    private func folderDisclosureGroup(folder: QueryFolder, viewModel: SavedQueriesViewModel)
+        -> some View
+    {
         DisclosureGroup(
             isExpanded: Binding(
                 get: { viewModel.expandedFolders.contains(folder.id) },

@@ -111,7 +111,7 @@ class LineNumberRulerView: NSRulerView {
         context.fill(bounds)
 
         // Draw separator line
-        NSColor.separatorColor.setStroke()
+        NSColor.tertiaryLabelColor.setStroke()
         context.setLineWidth(0.5)
         context.move(to: CGPoint(x: bounds.maxX - 0.5, y: bounds.minY))
         context.addLine(to: CGPoint(x: bounds.maxX - 0.5, y: bounds.maxY))

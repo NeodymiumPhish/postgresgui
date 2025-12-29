@@ -42,8 +42,8 @@ struct SavedQueryRowView: View {
             menuButton
                 .opacity(isHovered ? 1 : 0)
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 6)
+        .padding(.vertical, 1)
+        .padding(.horizontal, 2)
         .tag(query.id)
         .onHover { isHovered = $0 }
         .contextMenu { menuContent }
@@ -74,10 +74,15 @@ struct SavedQueryRowView: View {
         // Only show move option if we have queries (not just folders)
         if selectedQueryCount > 0 {
             Button {
-                DebugLog.print("📁 [SavedQueryRowView] Move to folder tapped for: \(hasMultipleQueries ? "\(selectedQueryCount) queries" : query.name)")
+                DebugLog.print(
+                    "📁 [SavedQueryRowView] Move to folder tapped for: \(hasMultipleQueries ? "\(selectedQueryCount) queries" : query.name)"
+                )
                 onMoveToFolder()
             } label: {
-                Label(hasMultipleQueries ? "Move \(selectedQueryCount) to Folder..." : "Move to Folder...", systemImage: "folder")
+                Label(
+                    hasMultipleQueries
+                        ? "Move \(selectedQueryCount) to Folder..." : "Move to Folder...",
+                    systemImage: "folder")
             }
 
             Divider()
@@ -86,16 +91,21 @@ struct SavedQueryRowView: View {
         // Delete options - separate for folders and queries
         if hasFolders {
             Button(role: .destructive) {
-                DebugLog.print("🗑️ [SavedQueryRowView] Delete \(selectedFolderCount) selected folders tapped")
+                DebugLog.print(
+                    "🗑️ [SavedQueryRowView] Delete \(selectedFolderCount) selected folders tapped")
                 onDeleteSelectedFolders()
             } label: {
-                Label(selectedFolderCount == 1 ? "Delete Folder..." : "Delete \(selectedFolderCount) Folders...", systemImage: "trash")
+                Label(
+                    selectedFolderCount == 1
+                        ? "Delete Folder..." : "Delete \(selectedFolderCount) Folders...",
+                    systemImage: "trash")
             }
         }
 
         if hasMultipleQueries {
             Button(role: .destructive) {
-                DebugLog.print("🗑️ [SavedQueryRowView] Delete \(selectedQueryCount) selected queries tapped")
+                DebugLog.print(
+                    "🗑️ [SavedQueryRowView] Delete \(selectedQueryCount) selected queries tapped")
                 onDeleteSelectedQueries()
             } label: {
                 Label("Delete \(selectedQueryCount) Queries...", systemImage: "trash")
@@ -121,7 +131,9 @@ struct SavedQueryRowView: View {
     // MARK: - Menu Button
 
     private var menuButton: some View {
-        Menu { menuContent } label: {
+        Menu {
+            menuContent
+        } label: {
             Image(systemName: "ellipsis")
                 .foregroundColor(isButtonHovered ? .primary : .secondary)
                 .padding(6)

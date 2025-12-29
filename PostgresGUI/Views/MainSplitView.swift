@@ -5,13 +5,20 @@
 //  Created by ghazi on 11/28/25.
 //
 
+import SwiftData
 import SwiftUI
 
 struct MainSplitView: View {
     @Environment(AppState.self) private var appState
     @Environment(TabManager.self) private var tabManager
+    @Environment(\.modelContext) private var modelContext
+
+    @Query(sort: \SavedQuery.updatedAt, order: .reverse) private var savedQueries: [SavedQuery]
+    @Query(sort: \QueryFolder.name) private var queryFolders: [QueryFolder]
+
     @State private var searchText: String = ""
     @State private var viewModel: DetailContentViewModel?
+    @State private var selectedQueryIDs: Set<SavedQuery.ID> = []
 
     var body: some View {
         @Bindable var appState = appState
@@ -23,33 +30,6 @@ struct MainSplitView: View {
                     ideal: Constants.ColumnWidth.sidebarIdeal,
                     max: Constants.ColumnWidth.sidebarMax
                 )
-                .toolbar {
-                    ToolbarItem(placement: .secondaryAction) {
-                        HStack(spacing: 0) {
-                            Button {
-                                appState.navigation.sidebarViewMode = .connections
-                            } label: {
-                                Label("Connections", systemImage: "cylinder.split.1x2.fill")
-                                    .labelStyle(.iconOnly)
-                            }
-                            .frame(width: 32, height: 24)
-                            .background(appState.navigation.sidebarViewMode == .connections ? Color.secondary.opacity(0.2) : Color.clear)
-                            .clipShape(Capsule())
-                            .contentShape(Capsule())
-
-                            Button {
-                                appState.navigation.sidebarViewMode = .queries
-                            } label: {
-                                Label("Queries", systemImage: "text.document")
-                                    .labelStyle(.iconOnly)
-                            }
-                            .frame(width: 32, height: 24)
-                            .background(appState.navigation.sidebarViewMode == .queries ? Color.secondary.opacity(0.2) : Color.clear)
-                            .clipShape(Capsule())
-                            .contentShape(Capsule())
-                        }
-                    }
-                }
         } detail: {
             VStack(spacing: 0) {
                 if tabManager.tabs.count > 1 {
@@ -57,44 +37,38 @@ struct MainSplitView: View {
                 }
 
                 VSplitView {
-                    // Row 1: 2 resizable columns
-                    HSplitView {
-                        // Column 1: Table list - isolated from query state
-                        TablesListIsolated(
-                            tables: appState.connection.tables,
-                            selectedTable: Binding(
-                                get: { appState.connection.selectedTable },
-                                set: { appState.connection.selectedTable = $0 }
-                            ),
-                            isLoadingTables: appState.connection.isLoadingTables,
-                            selectedDatabase: appState.connection.selectedDatabase,
-                            refreshTablesAction: {
-                                await TableRefreshService.refresh(appState: appState)
-                            }
-                        )
-                        .frame(minWidth: 250, maxWidth: 320)
-
-                        // Column 2: Query results with toolbar
-                        VStack(spacing: 0) {
-                            if let viewModel = viewModel {
-                                QueryResultsView(
-                                    searchText: searchText,
-                                    onDeleteKeyPressed: {
-                                        viewModel.deleteSelectedRows()
-                                    },
-                                    onSpaceKeyPressed: {
-                                        viewModel.openJSONView()
-                                    }
-                                )
-                            } else {
-                                QueryResultsView(searchText: searchText)
-                            }
+                    // Row 1: Query results
+                    VStack(spacing: 0) {
+                        if let viewModel = viewModel {
+                            QueryResultsView(
+                                searchText: searchText,
+                                onDeleteKeyPressed: {
+                                    viewModel.deleteSelectedRows()
+                                },
+                                onSpaceKeyPressed: {
+                                    viewModel.openJSONView()
+                                }
+                            )
+                        } else {
+                            QueryResultsView(searchText: searchText)
                         }
-                        // .frame(minWidth: 250)
-                    }.frame(minHeight: 400)
+                    }
+                    .frame(minHeight: 300)
 
-                    QueryEditorView()
-                        .frame(minHeight: 250)
+                    // Row 2: Queries list + Query editor
+                    HSplitView {
+                        // Column 1: Saved queries list
+                        SavedQueriesSidebarSection(
+                            savedQueries: savedQueries,
+                            folders: queryFolders,
+                            selectedQueryIDs: $selectedQueryIDs
+                        )
+                        .frame(minWidth: 200, maxWidth: 260)
+
+                        // Column 2: Query editor
+                        QueryEditorView()
+                    }
+                    .frame(minHeight: 250)
                 }
             }
             .toolbar {
@@ -125,10 +99,22 @@ struct MainSplitView: View {
                 MutationToastView(
                     data: toast,
                     onViewTable: {
-                        // Find and select the table
+                        // Find and select the table, then refresh its data
                         if let tableName = toast.tableName,
-                           let table = appState.connection.tables.first(where: { $0.name == tableName }) {
+                            let table = appState.connection.tables.first(where: {
+                                $0.name == tableName
+                            })
+                        {
+                            let wasAlreadySelected = appState.connection.selectedTable?.id == table.id
                             appState.connection.selectedTable = table
+
+                            // Only explicitly execute if table was already selected
+                            // (onChange in QueryResultsView won't fire if selectedTable didn't change)
+                            if wasAlreadySelected {
+                                Task {
+                                    await appState.executeTableQuery(for: table)
+                                }
+                            }
                         }
                         appState.query.dismissMutationToast()
                     },
@@ -140,7 +126,9 @@ struct MainSplitView: View {
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: appState.query.mutationToast != nil)
+        .animation(
+            .spring(response: 0.35, dampingFraction: 0.7),
+            value: appState.query.mutationToast != nil)
     }
 }
 
@@ -157,4 +145,3 @@ struct DetailContentModalsWrapper: ViewModifier {
         }
     }
 }
-
