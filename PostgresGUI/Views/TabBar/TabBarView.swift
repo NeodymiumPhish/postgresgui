@@ -12,6 +12,7 @@ struct TabBarView: View {
     @Environment(TabManager.self) private var tabManager
     @Environment(AppState.self) private var appState
     @Query private var connections: [ConnectionProfile]
+    @Query private var savedQueries: [SavedQuery]
 
     var body: some View {
         HStack(spacing: 0) {
@@ -61,6 +62,13 @@ struct TabBarView: View {
     }
 
     private func connectionName(for tab: TabState) -> String {
+        // If tab has a saved query, use its name
+        if let savedQueryId = tab.savedQueryId,
+           let savedQuery = savedQueries.first(where: { $0.id == savedQueryId }) {
+            return savedQuery.name
+        }
+
+        // Otherwise show connection / database
         if let connectionId = tab.connectionId,
            let connection = connections.first(where: { $0.id == connectionId }) {
             if let dbName = tab.databaseName {
