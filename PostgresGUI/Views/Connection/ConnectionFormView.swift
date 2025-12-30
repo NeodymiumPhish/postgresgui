@@ -106,6 +106,23 @@ struct ConnectionFormView: View {
         } message: {
             Text(viewModel.keychainAlertMessage)
         }
+        .alert(
+            "Connection Created: \"\(viewModel.savedConnectionProfile?.displayName ?? "")\"",
+            isPresented: $viewModel.showConnectionSavedAlert
+        ) {
+            Button("Not Now", role: .cancel) {
+                viewModel.dismissSavedConnectionAlert()
+                dismiss()
+            }
+            Button("Connect") {
+                Task {
+                    await viewModel.connectToSavedConnection()
+                    dismiss()
+                }
+            }
+        } message: {
+            Text("Connect now?")
+        }
     }
 
     // MARK: - Individual Fields View

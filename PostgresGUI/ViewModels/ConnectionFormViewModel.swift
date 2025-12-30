@@ -65,6 +65,11 @@ class ConnectionFormViewModel {
     var showKeychainAlert: Bool = false
     var keychainAlertMessage: String = ""
 
+    // Connection saved alert state
+    var showConnectionSavedAlert: Bool = false
+    var savedConnectionProfile: ConnectionProfile?
+    private var savedConnectionPassword: String = ""
+
     // MARK: - Computed Properties
 
     var isEditing: Bool {
@@ -370,8 +375,10 @@ class ConnectionFormViewModel {
                     await autoConnect(to: profile, password: details.password)
                 } else {
                     // Show connection saved alert with Connect/Dismiss options
-                    appState.navigation.savedConnection = profile
-                    appState.navigation.showConnectionSavedAlert = true
+                    savedConnectionProfile = profile
+                    savedConnectionPassword = details.password
+                    showConnectionSavedAlert = true
+                    return false  // Don't dismiss yet - wait for alert response
                 }
             }
 
@@ -415,6 +422,24 @@ class ConnectionFormViewModel {
 
     func showConnectionsList() {
         appState.showConnectionsList()
+    }
+
+    /// Called when user chooses to connect from the "Connection Saved" alert
+    func connectToSavedConnection() async {
+        guard let profile = savedConnectionProfile else { return }
+        await autoConnect(to: profile, password: savedConnectionPassword)
+        clearSavedConnectionState()
+    }
+
+    /// Called when user chooses "Not Now" from the "Connection Saved" alert
+    func dismissSavedConnectionAlert() {
+        clearSavedConnectionState()
+    }
+
+    private func clearSavedConnectionState() {
+        savedConnectionProfile = nil
+        savedConnectionPassword = ""
+        showConnectionSavedAlert = false
     }
 
     // MARK: - Private Helpers

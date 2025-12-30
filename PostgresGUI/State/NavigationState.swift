@@ -21,10 +21,6 @@ class NavigationState {
     var connectionToEdit: ConnectionProfile? = nil
     var connectionFormOpenedFromList: Bool = false
 
-    // Connection saved alert state
-    var showConnectionSavedAlert: Bool = false
-    var savedConnection: ConnectionProfile? = nil
-
     // Sheet management helpers - ensure only one sheet is shown at a time
     func showConnectionForm() {
         // Track if we came from the connections list

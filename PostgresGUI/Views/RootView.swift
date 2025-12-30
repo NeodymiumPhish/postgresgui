@@ -139,25 +139,6 @@ struct RootView: View {
         } message: {
             if let error = initializationError { Text(error) }
         }
-        .alert(
-            "Connection Created: \"\(appState.navigation.savedConnection?.displayName ?? "")\"",
-            isPresented: Binding(
-                get: { appState.navigation.showConnectionSavedAlert },
-                set: { appState.navigation.showConnectionSavedAlert = $0 }
-            )
-        ) {
-            Button("Not Now", role: .cancel) {
-                appState.navigation.savedConnection = nil
-            }
-            Button("Connect") {
-                if let connection = appState.navigation.savedConnection {
-                    appState.connection.currentConnection = connection
-                }
-                appState.navigation.savedConnection = nil
-            }
-        } message: {
-            Text("Connect now?")
-        }
     }
 
     private func initializeApp() async {
