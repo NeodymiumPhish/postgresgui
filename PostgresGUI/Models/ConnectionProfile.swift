@@ -44,76 +44,11 @@ final class ConnectionProfile: Identifiable {
 }
 
 extension ConnectionProfile {
-    /// Creates a default localhost connection profile
-    static func localhost() -> ConnectionProfile {
-        ConnectionProfile(
-            name: nil,
-            host: "localhost",
-            port: Constants.PostgreSQL.defaultPort,
-            username: Constants.PostgreSQL.defaultUsername,
-            database: Constants.PostgreSQL.defaultDatabase
-        )
-    }
-
-    /// Generate a connection string from this profile
-    /// - Parameter includePassword: Whether to include the password in the connection string
-    /// - Returns: A PostgreSQL connection string
-    func toConnectionString(includePassword: Bool = false) -> String {
-        let password: String?
-        if includePassword {
-            password = try? KeychainService.getPassword(for: id)
-        } else {
-            password = nil
-        }
-        let sslModeEnum = SSLMode(rawValue: sslMode) ?? .default
-        return ConnectionStringParser.build(
-            username: username,
-            password: password,
-            host: host,
-            port: port,
-            database: database,
-            sslMode: sslModeEnum
-        )
-    }
-
     /// Get the SSL mode as an enum
     var sslModeEnum: SSLMode {
         SSLMode(rawValue: sslMode) ?? .default
     }
 
-    /// Create a ConnectionProfile from a connection string
-    /// - Parameters:
-    ///   - connectionString: The PostgreSQL connection string to parse
-    ///   - name: The name to assign to this connection profile
-    ///   - id: Optional UUID for the profile (defaults to a new UUID)
-    /// - Returns: A tuple containing the ConnectionProfile and the password (if present in the connection string)
-    /// - Throws: ConnectionStringParser.ParseError if the connection string is invalid
-    static func from(
-        connectionString: String,
-        name: String?,
-        id: UUID = UUID()
-    ) throws -> (profile: ConnectionProfile, password: String?) {
-        let parsed = try ConnectionStringParser.parse(connectionString)
-
-        let profile = ConnectionProfile(
-            id: id,
-            name: name,
-            host: parsed.host,
-            port: parsed.port,
-            username: parsed.username ?? Constants.PostgreSQL.defaultUsername,
-            database: parsed.database ?? Constants.PostgreSQL.defaultDatabase,
-            sslMode: parsed.sslMode
-        )
-
-        return (profile: profile, password: parsed.password)
-    }
-
-    /// Extract the domain from the host
-    /// Returns the host as-is (which is the domain), handling both domain names and IP addresses
-    var domain: String {
-        return host
-    }
-    
     /// Extract the root domain from the host
     /// Returns the root domain (e.g., "symcloud.net" from "postgresguitest.idb-node-01.symcloud.net")
     /// For localhost or IP addresses, returns the host as-is
@@ -145,6 +80,6 @@ extension ConnectionProfile {
         if let name = name, !name.isEmpty {
             return name
         }
-        return domain
+        return host
     }
 }
