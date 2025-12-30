@@ -223,6 +223,14 @@ struct QueryEditorView: View {
                     )
                     appState.query.setTemporaryStatus("Executed in \(QueryState.formatExecutionTime(executionTime))")
                     DebugLog.print("✅ [QueryEditorView] Mutation query executed, showing toast")
+
+                    // Refresh table results if mutation was on the currently selected table
+                    if let selectedTable = appState.connection.selectedTable,
+                       let mutatedTable = tableName,
+                       selectedTable.name.lowercased() == mutatedTable.lowercased() {
+                        DebugLog.print("🔄 [QueryEditorView] Refreshing selected table after mutation")
+                        await appState.executeTableQuery(for: selectedTable)
+                    }
                 } else {
                     // Query returned rows (SELECT, or mutation with RETURNING): show results
                     appState.query.queryResults = results
@@ -241,6 +249,18 @@ struct QueryEditorView: View {
                 // Refresh tables list if query modified schema
                 if Self.isSchemaModifyingQuery(queryText) {
                     await refreshTables(database: database)
+
+                    // Clear results if dropped table was the selected table
+                    if Self.isDropTableQuery(queryText),
+                       let selectedTable = appState.connection.selectedTable,
+                       let droppedTable = tableName,
+                       selectedTable.name.lowercased() == droppedTable.lowercased() {
+                        DebugLog.print("🗑️ [QueryEditorView] Dropped selected table, clearing results")
+                        appState.connection.selectedTable = nil
+                        appState.query.queryResults = []
+                        appState.query.queryColumnNames = nil
+                        appState.query.showQueryResults = false
+                    }
                 }
             } catch {
                 appState.query.queryError = error
@@ -277,6 +297,11 @@ struct QueryEditorView: View {
         return patterns.contains { pattern in
             upperSQL.range(of: pattern, options: .regularExpression) != nil
         }
+    }
+
+    /// Check if SQL is a DROP TABLE statement
+    private static func isDropTableQuery(_ sql: String) -> Bool {
+        sql.uppercased().range(of: "DROP\\s+TABLE", options: .regularExpression) != nil
     }
 
     /// Refresh the tables list for the current database

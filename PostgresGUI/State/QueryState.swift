@@ -16,6 +16,7 @@ class QueryState {
     var isRestoringFromTab: Bool = false
     var queryResults: [TableRow] = []
     var queryColumnNames: [String]? = nil
+    var cachedResultsTableId: String? = nil  // Tracks which table the cached results belong to
     var isExecutingQuery: Bool = false
     var queryError: Error? = nil
     var showQueryResults: Bool = false
@@ -110,6 +111,7 @@ class QueryState {
         queryText = ""
         queryResults = []
         queryColumnNames = nil
+        cachedResultsTableId = nil
         isExecutingQuery = false
         queryError = nil
         showQueryResults = false

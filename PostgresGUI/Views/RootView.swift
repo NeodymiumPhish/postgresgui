@@ -184,6 +184,10 @@ struct RootView: View {
             appState.query.queryResults = cachedResults
             appState.query.queryColumnNames = activeTab.cachedColumnNames
             appState.query.showQueryResults = true
+            // Set the table ID so QueryResultsView knows these results belong to this table
+            if let schema = activeTab.selectedTableSchema, let name = activeTab.selectedTableName {
+                appState.query.cachedResultsTableId = "\(schema).\(name)"
+            }
             DebugLog.print("📊 [RootView] Restored \(cachedResults.count) cached query results on app launch")
         }
 
@@ -273,9 +277,16 @@ struct RootView: View {
             appState.query.queryResults = cachedResults
             appState.query.queryColumnNames = tab.cachedColumnNames
             appState.query.showQueryResults = true
+            // Set the table ID so QueryResultsView knows these results belong to this table
+            if let schema = tab.selectedTableSchema, let name = tab.selectedTableName {
+                appState.query.cachedResultsTableId = "\(schema).\(name)"
+            } else {
+                appState.query.cachedResultsTableId = nil
+            }
         } else {
             appState.query.queryResults = []
             appState.query.queryColumnNames = nil
+            appState.query.cachedResultsTableId = nil
         }
 
         // If tab has no connection, just clear and return

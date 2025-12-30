@@ -97,12 +97,12 @@ struct QueryResultsView: View {
         .onChange(of: appState.connection.selectedTable?.id) { oldValue, newValue in
             let table = appState.connection.selectedTable
 
-            // Check if we already have results (e.g., restored from tab cache)
-            let hasExistingResults = !appState.query.queryResults.isEmpty
+            // Check if we already have results for THIS specific table (e.g., restored from tab cache)
+            let hasCachedResultsForThisTable = !appState.query.queryResults.isEmpty
+                && appState.query.cachedResultsTableId == newValue
 
-            // Clear results when table changes, UNLESS we already have cached results
-            // (This prevents clearing results that were just restored from tab)
-            if oldValue != newValue && !hasExistingResults {
+            // Clear results when table changes, UNLESS we have cached results for this table
+            if oldValue != newValue && !hasCachedResultsForThisTable {
                 appState.query.queryColumnNames = nil
                 appState.query.queryError = nil
                 appState.query.currentPage = 0
@@ -115,16 +115,20 @@ struct QueryResultsView: View {
                 name: table?.name
             )
 
-            // Execute query when a table is selected, UNLESS we already have results
+            // Execute query when a table is selected
             if let table = table, table.id != lastExecutedTableID {
                 lastExecutedTableID = table.id
 
-                // Skip query if we already have cached results for this table
-                if hasExistingResults {
-                    DebugLog.print("📋 [QueryResultsView] Skipping query - using cached results")
+                // Skip query only if we have cached results for THIS specific table
+                if hasCachedResultsForThisTable {
+                    DebugLog.print("📋 [QueryResultsView] Skipping query - using cached results for table \(table.name)")
                 } else {
                     Task { @MainActor in
                         await appState.executeTableQuery(for: table)
+                        // Only update cache tracking if this table is still selected
+                        // (prevents race condition when rapidly switching tables)
+                        guard appState.connection.selectedTable?.id == table.id else { return }
+                        appState.query.cachedResultsTableId = table.id
                         // Cache results to tab for restoration on tab switch
                         tabManager.updateActiveTabResults(
                             results: appState.query.queryResults,
@@ -138,6 +142,7 @@ struct QueryResultsView: View {
                 DebugLog.print("📋 [QueryResultsView] Table selection cleared - preserving queryText, clearing results")
                 appState.query.showQueryResults = false
                 appState.query.queryResults = []
+                appState.query.cachedResultsTableId = nil
                 // Clear cached results in tab
                 tabManager.updateActiveTabResults(results: nil, columnNames: nil)
             }
