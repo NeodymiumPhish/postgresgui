@@ -69,29 +69,48 @@ struct ConnectionDatabasePicker: View {
 
     // MARK: - Database Picker
 
+    private var noDatabaseSelected: Bool {
+        appState.connection.isConnected && appState.connection.selectedDatabase == nil
+    }
+
+    @ViewBuilder
     private var databasePickerButton: some View {
         Button {
             showDatabaseDropdown.toggle()
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "cylinder.split.1x2")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
-                Text(appState.connection.selectedDatabase?.name ?? "Database")
-                    .font(.system(size: PickerFontSize.label))
-                    .foregroundColor(
-                        appState.connection.selectedDatabase != nil ? .primary : .secondary
-                    )
-                    .lineLimit(1)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: PickerFontSize.chevron))
-                    .foregroundColor(.secondary)
+            if noDatabaseSelected {
+                PhaseAnimator([0.4, 1.0]) { phase in
+                    databaseButtonContent(opacity: phase)
+                } animation: { _ in
+                    .easeInOut(duration: 0.8)
+                }
+            } else {
+                databaseButtonContent(opacity: 1.0)
             }
         }
         .buttonStyle(.plain)
         .disabled(!appState.connection.isConnected)
         .popover(isPresented: $showDatabaseDropdown, arrowEdge: .bottom) {
             databaseDropdownContent
+        }
+    }
+
+    private func databaseButtonContent(opacity: Double) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "cylinder.split.1x2")
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+                .opacity(opacity)
+            Text(appState.connection.selectedDatabase?.name ?? "No Database")
+                .font(.system(size: PickerFontSize.label))
+                .foregroundColor(
+                    appState.connection.selectedDatabase != nil ? .primary : .secondary
+                )
+                .opacity(opacity)
+                .lineLimit(1)
+            Image(systemName: "chevron.down")
+                .font(.system(size: PickerFontSize.chevron))
+                .foregroundColor(.secondary)
         }
     }
 
