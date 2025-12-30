@@ -420,10 +420,6 @@ class ConnectionFormViewModel {
         }
     }
 
-    func showConnectionsList() {
-        appState.showConnectionsList()
-    }
-
     /// Called when user chooses to connect from the "Connection Saved" alert
     func connectToSavedConnection() async {
         guard let profile = savedConnectionProfile else { return }

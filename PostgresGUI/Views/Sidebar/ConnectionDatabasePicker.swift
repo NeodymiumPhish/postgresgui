@@ -19,8 +19,16 @@ private enum PickerFontSize {
 struct ConnectionDatabasePicker: View {
     @Environment(AppState.self) private var appState
 
+    // Connection dropdown
+    @Binding var showConnectionDropdown: Bool
+    let connections: [ConnectionProfile]
+    let onSelectConnection: (ConnectionProfile) -> Void
+    let onEditConnection: (ConnectionProfile) -> Void
+    let onDeleteConnection: (ConnectionProfile) -> Void
+    let onCreateConnection: () -> Void
+
+    // Database dropdown
     @Binding var showDatabaseDropdown: Bool
-    let onShowConnectionsList: () -> Void
     let onSelectDatabase: (DatabaseInfo) -> Void
     let onDeleteDatabase: (DatabaseInfo) -> Void
     let onCreateDatabase: () -> Void
@@ -29,34 +37,167 @@ struct ConnectionDatabasePicker: View {
     var body: some View {
         HStack(spacing: 6) {
             connectionButton
-            separatorChevron
-            databasePickerButton
+            if hasConnection {
+                separatorChevron
+                databasePickerButton
+            }
         }
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(.horizontal, 24)
         .padding(.vertical, 8)
         .background(Color(nsColor: .quaternarySystemFill))
     }
+    
+    private var hasConnection: Bool {
+        appState.connection.currentConnection != nil
+    }
 
     // MARK: - Connection Button
 
+    private var noConnectionSelected: Bool {
+        !hasConnection
+    }
+
+    @ViewBuilder
     private var connectionButton: some View {
         Button {
-            onShowConnectionsList()
+            showConnectionDropdown.toggle()
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "globe")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
-                Text(appState.connection.currentConnection?.displayName ?? "No Connection")
-                    .font(.system(size: PickerFontSize.label))
-                    .foregroundColor(
-                        appState.connection.currentConnection != nil ? .primary : .secondary
-                    )
-                    .lineLimit(1)
+            if noConnectionSelected {
+                PhaseAnimator([0.4, 1.0]) { phase in
+                    connectionButtonContent(opacity: phase)
+                } animation: { _ in
+                    .easeInOut(duration: 0.8)
+                }
+            } else {
+                connectionButtonContent(opacity: 1.0)
             }
         }
         .buttonStyle(.plain)
+        .popover(isPresented: $showConnectionDropdown, arrowEdge: .bottom) {
+            connectionDropdownContent
+        }
+    }
+    
+    private func connectionButtonContent(opacity: Double) -> some View {
+        HStack(spacing: 6) {
+            if hasConnection {
+                Image(systemName: "globe")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+            } else {
+                Text("⚠️")
+                    .font(.system(size: 12))
+            }
+            Text(appState.connection.currentConnection?.displayName ?? "Select Connection")
+                .font(.system(size: PickerFontSize.label))
+                .foregroundColor(
+                    appState.connection.currentConnection != nil ? .primary : .secondary
+                )
+                .opacity(opacity)
+                .lineLimit(1)
+            Image(systemName: "chevron.down")
+                .font(.system(size: PickerFontSize.chevron))
+                .foregroundColor(.secondary)
+        }
+    }
+
+    // MARK: - Connection Dropdown
+
+    private var connectionDropdownContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if connections.isEmpty {
+                Text("No connections")
+                    .font(.system(size: PickerFontSize.dropdownItem))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(connections.sorted { $0.displayName < $1.displayName }) { connection in
+                            connectionRow(connection)
+                        }
+                    }
+                }
+                .frame(maxHeight: 200)
+            }
+
+            Divider()
+                .padding(.vertical, 4)
+
+            newConnectionButton
+        }
+        .padding(.vertical, 8)
+        .frame(minWidth: 200)
+    }
+
+    private var newConnectionButton: some View {
+        Button {
+            showConnectionDropdown = false
+            onCreateConnection()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "plus.circle")
+                    .font(.system(size: PickerFontSize.dropdownItem))
+                Text("New Connection")
+                    .font(.system(size: PickerFontSize.dropdownItem))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func connectionRow(_ connection: ConnectionProfile) -> some View {
+        let isActive = appState.connection.currentConnection?.id == connection.id
+
+        HStack(spacing: 8) {
+            Image(systemName: isActive ? "checkmark" : "")
+                .font(.system(size: PickerFontSize.checkmark, weight: .semibold))
+                .frame(width: 12)
+                .foregroundColor(.accentColor)
+
+            Text(connection.displayName)
+                .font(.system(size: PickerFontSize.dropdownItem))
+                .frame(maxWidth: 200, alignment: .leading)
+                .lineLimit(1)
+
+            Button {
+                showConnectionDropdown = false
+                onEditConnection(connection)
+            } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: PickerFontSize.deleteIcon))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Edit connection")
+
+            Button {
+                showConnectionDropdown = false
+                onDeleteConnection(connection)
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: PickerFontSize.deleteIcon))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Delete connection")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(isActive ? Color.accentColor.opacity(0.1) : Color.clear)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if !isActive {
+                onSelectConnection(connection)
+                showConnectionDropdown = false
+            }
+        }
     }
 
     // MARK: - Separator

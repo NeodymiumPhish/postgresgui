@@ -39,37 +39,14 @@ struct RootView: View {
         .sheet(isPresented: Binding(
             get: { appState.navigation.isShowingConnectionForm },
             set: { newValue in
-                if newValue {
-                    // Close other sheet before opening this one
-                    appState.navigation.isShowingConnectionsList = false
-                }
                 appState.navigation.isShowingConnectionForm = newValue
                 if !newValue {
-                    // If form was opened from connections list, return to it
-                    // (unless this was the first connection from welcome screen)
-                    if appState.navigation.connectionFormOpenedFromList {
-                        appState.navigation.isShowingConnectionsList = true
-                    }
                     // Clear state when sheet is dismissed
                     appState.navigation.connectionToEdit = nil
-                    appState.navigation.connectionFormOpenedFromList = false
                 }
             }
         )) {
             ConnectionFormView(connectionToEdit: appState.navigation.connectionToEdit)
-                .environment(appState)
-        }
-        .sheet(isPresented: Binding(
-            get: { appState.navigation.isShowingConnectionsList },
-            set: { newValue in
-                if newValue {
-                    // Close other sheet before opening this one
-                    appState.navigation.isShowingConnectionForm = false
-                }
-                appState.navigation.isShowingConnectionsList = newValue
-            }
-        )) {
-            ConnectionsListView()
                 .environment(appState)
         }
         .task {

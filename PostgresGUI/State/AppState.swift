@@ -34,10 +34,6 @@ class AppState {
         navigation.showConnectionForm()
     }
 
-    func showConnectionsList() {
-        navigation.showConnectionsList()
-    }
-
     // MARK: - Query Execution
 
     /// Centralized query execution to prevent race conditions when rapidly switching tables

@@ -107,7 +107,7 @@ struct ConnectionFormView: View {
             Text(viewModel.keychainAlertMessage)
         }
         .alert(
-            "Connection Created: \"\(viewModel.savedConnectionProfile?.displayName ?? "")\"",
+            "Connection Created",
             isPresented: $viewModel.showConnectionSavedAlert
         ) {
             Button("Not Now", role: .cancel) {
@@ -121,7 +121,11 @@ struct ConnectionFormView: View {
                 }
             }
         } message: {
-            Text("Connect now?")
+            VStack(spacing: 8) {
+                Text(viewModel.savedConnectionProfile?.displayName ?? "")
+                    .fontWeight(.medium)
+                Text("Connect now?")
+            }
         }
     }
 
