@@ -97,17 +97,21 @@ struct ConnectionDatabasePicker: View {
 
     private func databaseButtonContent(opacity: Double) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: "cylinder.split.1x2")
-                .font(.system(size: 14))
-                .foregroundColor(.secondary)
-                .opacity(opacity)
-            Text(appState.connection.selectedDatabase?.name ?? "No Database")
-                .font(.system(size: PickerFontSize.label))
-                .foregroundColor(
-                    appState.connection.selectedDatabase != nil ? .primary : .secondary
-                )
-                .opacity(opacity)
-                .lineLimit(1)
+            if let database = appState.connection.selectedDatabase {
+                Image(systemName: "cylinder.split.1x2")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+                Text(database.name)
+                    .font(.system(size: PickerFontSize.label))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+            } else {
+                Text("⚠️ No Database")
+                    .font(.system(size: PickerFontSize.label))
+                    .foregroundColor(.secondary)
+                    .opacity(opacity)
+                    .lineLimit(1)
+            }
             Image(systemName: "chevron.down")
                 .font(.system(size: PickerFontSize.chevron))
                 .foregroundColor(.secondary)
