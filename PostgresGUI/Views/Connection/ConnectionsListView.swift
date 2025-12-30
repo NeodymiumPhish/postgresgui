@@ -2,7 +2,9 @@
 //  ConnectionsListView.swift
 //  PostgresGUI
 //
-//  Created by ghazi on 11/28/25.
+//  View for managing saved database connections.
+//  Delegates business logic to ConnectionsListViewModel for testability
+//  and separation of concerns.
 //
 
 import SwiftUI
@@ -14,17 +16,44 @@ struct ConnectionsListView: View {
     @Environment(AppState.self) private var appState
     @Query private var connections: [ConnectionProfile]
 
-    @State private var connectionToDelete: ConnectionProfile?
-    @State private var showDeleteConfirmation = false
-    @State private var deleteError: String?
-    @State private var connectionError: String?
-    @State private var showConnectionError = false
+    @State private var viewModel: ConnectionsListViewModel?
 
     private var sortedConnections: [ConnectionProfile] {
         connections.sorted { $0.displayName < $1.displayName }
     }
 
+    /// Creates the ViewModel with proper dependencies
+    private func createViewModel() -> ConnectionsListViewModel {
+        let keychainService = KeychainServiceImpl()
+        let connectionService = ConnectionService(
+            appState: appState,
+            keychainService: keychainService
+        )
+        return ConnectionsListViewModel(
+            appState: appState,
+            connectionService: connectionService,
+            keychainService: keychainService
+        )
+    }
+
     var body: some View {
+        Group {
+            if let vm = viewModel {
+                mainContent(vm: vm)
+            } else {
+                Color.clear
+            }
+        }
+        .frame(width: 600, height: 500)
+        .onAppear {
+            if viewModel == nil {
+                viewModel = createViewModel()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func mainContent(vm: ConnectionsListViewModel) -> some View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Header
@@ -63,7 +92,7 @@ struct ConnectionsListView: View {
                                 isActive: appState.connection.currentConnection?.id == connection.id,
                                 onConnect: {
                                     Task {
-                                        await connect(to: connection)
+                                        await vm.connect(to: connection, modelContext: modelContext)
                                     }
                                 },
                                 onEdit: {
@@ -71,8 +100,8 @@ struct ConnectionsListView: View {
                                     appState.showConnectionForm()
                                 },
                                 onDelete: {
-                                    connectionToDelete = connection
-                                    showDeleteConfirmation = true
+                                    vm.connectionToDelete = connection
+                                    vm.showDeleteConfirmation = true
                                 }
                             )
                         }
@@ -91,104 +120,48 @@ struct ConnectionsListView: View {
             }
             .confirmationDialog(
                 "Delete Connection?",
-                isPresented: $showDeleteConfirmation,
-                presenting: connectionToDelete
+                isPresented: Binding(
+                    get: { vm.showDeleteConfirmation },
+                    set: { vm.showDeleteConfirmation = $0 }
+                ),
+                presenting: vm.connectionToDelete
             ) { connection in
                 Button(role: .destructive) {
                     Task {
-                        await deleteConnection(connection)
+                        await vm.deleteConnection(connection, connections: connections, modelContext: modelContext)
                     }
                 } label: {
                     Text("Delete")
                 }
                 Button("Cancel", role: .cancel) {
-                    connectionToDelete = nil
+                    vm.connectionToDelete = nil
                 }
             } message: { connection in
                 Text("Are you sure you want to delete '\(connection.displayName)'? This action cannot be undone.")
             }
             .alert("Error Deleting Connection", isPresented: Binding(
-                get: { deleteError != nil },
-                set: { if !$0 { deleteError = nil } }
+                get: { vm.deleteError != nil },
+                set: { if !$0 { vm.deleteError = nil } }
             )) {
                 Button("OK", role: .cancel) {
-                    deleteError = nil
+                    vm.deleteError = nil
                 }
             } message: {
-                if let error = deleteError {
+                if let error = vm.deleteError {
                     Text(error)
                 }
             }
-            .alert("Connection Failed", isPresented: $showConnectionError) {
+            .alert("Connection Failed", isPresented: Binding(
+                get: { vm.showConnectionError },
+                set: { vm.showConnectionError = $0 }
+            )) {
                 Button("OK", role: .cancel) {
-                    connectionError = nil
+                    vm.connectionError = nil
                 }
             } message: {
-                if let error = connectionError {
+                if let error = vm.connectionError {
                     Text(error)
                 }
-            }
-        }
-        .frame(width: 600, height: 500)
-    }
-
-    private func connect(to connection: ConnectionProfile) async {
-        let connectionService = ConnectionService(
-            appState: appState,
-            keychainService: KeychainServiceImpl()
-        )
-
-        let result = await connectionService.connect(to: connection)
-
-        switch result {
-        case .success:
-            try? modelContext.save()
-        case .failure(let error):
-            DebugLog.print("Failed to connect: \(error)")
-            connectionError = PostgresError.extractDetailedMessage(error)
-            showConnectionError = true
-        }
-    }
-
-    private func deleteConnection(_ connection: ConnectionProfile) async {
-        DebugLog.print("🗑️  [ConnectionsListView] Deleting connection: \(connection.displayName)")
-
-        do {
-            let isActiveConnection = appState.connection.currentConnection?.id == connection.id
-            let wasLastConnection = connections.count == 1
-
-            try KeychainService.deletePassword(for: connection.id)
-
-            if isActiveConnection {
-                await appState.connection.databaseService.disconnect()
-                appState.connection.currentConnection = nil
-                appState.connection.selectedDatabase = nil
-                appState.connection.tables = []
-                appState.connection.databases = []
-
-                if let lastConnectionIdString = UserDefaults.standard.string(forKey: Constants.UserDefaultsKeys.lastConnectionId),
-                   lastConnectionIdString == connection.id.uuidString {
-                    UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastConnectionId)
-                }
-            }
-
-            modelContext.delete(connection)
-            try modelContext.save()
-
-            DebugLog.print("✅ [ConnectionsListView] Connection deleted successfully")
-            connectionToDelete = nil
-
-            if wasLastConnection {
-                appState.navigation.isShowingWelcomeScreen = true
-                UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastConnectionId)
-            }
-
-        } catch {
-            DebugLog.print("❌ [ConnectionsListView] Error deleting connection: \(error)")
-            if let keychainError = error as? KeychainError {
-                deleteError = keychainError.errorDescription ?? "Failed to delete connection."
-            } else {
-                deleteError = error.localizedDescription
             }
         }
     }

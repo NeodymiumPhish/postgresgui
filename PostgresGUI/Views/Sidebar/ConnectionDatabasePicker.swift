@@ -62,9 +62,9 @@ struct ConnectionDatabasePicker: View {
     // MARK: - Separator
 
     private var separatorChevron: some View {
-        Image(systemName: "chevron.right")
-            .font(.system(size: PickerFontSize.separator))
-            .foregroundStyle(.secondary)
+        Text("|")
+            .font(.system(size: PickerFontSize.label, weight: .light))
+            .foregroundStyle(.tertiary)
     }
 
     // MARK: - Database Picker

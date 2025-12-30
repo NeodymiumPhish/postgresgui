@@ -5,6 +5,10 @@
 //  Centralized service for table loading and refresh operations.
 //  Eliminates duplicate loadTables logic across views.
 //
+//  Design: Uses static methods with dependency injection to enable testing
+//  while keeping call sites simple. KeychainService is injected to maintain
+//  loose coupling with secure storage implementation.
+//
 
 import Foundation
 
@@ -16,11 +20,14 @@ struct TableRefreshService {
     ///   - database: The database to load tables from
     ///   - connection: The connection profile to use
     ///   - appState: The app state to update
+    ///   - keychainService: Service for retrieving passwords (defaults to KeychainServiceImpl)
     static func loadTables(
         for database: DatabaseInfo,
         connection: ConnectionProfile,
-        appState: AppState
+        appState: AppState,
+        keychainService: KeychainServiceProtocol? = nil
     ) async {
+        let keychain = keychainService ?? KeychainServiceImpl()
         // Only clear loading state if we're still the active request for this database
         defer {
             if appState.connection.selectedDatabase?.id == database.id {
@@ -36,7 +43,7 @@ struct TableRefreshService {
         do {
             // Reconnect if not connected to target database
             if appState.connection.databaseService.connectedDatabase != database.name {
-                let password = try KeychainService.getPassword(for: connection.id) ?? ""
+                let password = try keychain.getPassword(for: connection.id) ?? ""
                 try await appState.connection.databaseService.connect(
                     host: connection.host,
                     port: connection.port,

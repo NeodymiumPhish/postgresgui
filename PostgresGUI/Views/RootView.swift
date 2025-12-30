@@ -198,6 +198,14 @@ struct RootView: View {
         restoreSavedQueryMetadata(for: activeTab.savedQueryId)
         appState.query.isRestoringFromTab = false
 
+        // Restore cached query results from tab
+        if let cachedResults = activeTab.cachedResults {
+            appState.query.queryResults = cachedResults
+            appState.query.queryColumnNames = activeTab.cachedColumnNames
+            appState.query.showQueryResults = true
+            DebugLog.print("📊 [RootView] Restored \(cachedResults.count) cached query results on app launch")
+        }
+
         // Connect to database
         loadingState.setPhase(.connectingToDatabase)
         let connectionService = ConnectionService(

@@ -2,24 +2,15 @@
 //  TabService.swift
 //  PostgresGUI
 //
-//  Created by ghazi on 12/20/25.
+//  Service for managing tab state persistence with SwiftData.
+//  Handles creation, updates, and restoration of query tabs.
+//
+//  Design: Conforms to TabServiceProtocol for dependency injection and testing.
+//  Protocol is defined in Services/Protocols/TabServiceProtocol.swift.
 //
 
 import Foundation
 import SwiftData
-
-protocol TabServiceProtocol {
-    func loadAllTabs() -> [TabState]
-    func getActiveTab() -> TabState?
-    func setActiveTab(_ tab: TabState)
-    func createTab(inheritingFrom tab: TabState?) -> TabState
-    func updateTab(_ tab: TabState, connectionId: UUID?, databaseName: String?, queryText: String?, savedQueryId: UUID?)
-    func updateTabTableSelection(_ tab: TabState, schema: String?, name: String?)
-    func updateTabResults(_ tab: TabState, results: [TableRow]?, columnNames: [String]?)
-    func clearSavedQueryId(_ tab: TabState)
-    func deleteTab(_ tab: TabState)
-    func save()
-}
 
 @MainActor
 class TabService: TabServiceProtocol {

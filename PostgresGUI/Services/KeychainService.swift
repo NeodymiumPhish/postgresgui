@@ -2,7 +2,11 @@
 //  KeychainService.swift
 //  PostgresGUI
 //
-//  Created by ghazi on 11/28/25.
+//  Low-level keychain operations for secure password storage.
+//  Uses macOS Keychain Services API to store connection passwords securely.
+//
+//  Design: Static enum provides direct keychain access. Use KeychainServiceImpl
+//  (which conforms to KeychainServiceProtocol) for dependency injection and testing.
 //
 
 import Foundation
