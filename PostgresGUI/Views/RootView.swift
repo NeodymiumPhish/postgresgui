@@ -279,27 +279,56 @@ struct RootView: View {
             DebugLog.print("📝 [RootView] queryText changed from: \"\(previousQueryText.prefix(30))...\" to: \"\(tab.queryText.prefix(30))...\" (tab restore)")
         }
 
-        // Set loading state BEFORE clearing tables to prevent "No tables found" flash
-        appState.connection.isLoadingTables = true
-
-        // Clear current state
-        appState.connection.selectedTable = nil
-        appState.connection.tables = []
-        appState.query.queryResults = []
-        appState.query.queryColumnNames = nil
+        // Restore cached results from tab (or clear if none)
+        if let cachedResults = tab.cachedResults {
+            appState.query.queryResults = cachedResults
+            appState.query.queryColumnNames = tab.cachedColumnNames
+            appState.query.showQueryResults = true
+        } else {
+            appState.query.queryResults = []
+            appState.query.queryColumnNames = nil
+        }
 
         // If tab has no connection, just clear and return
         guard let connectionId = tab.connectionId,
               let connection = connections.first(where: { $0.id == connectionId }) else {
             appState.connection.currentConnection = nil
             appState.connection.selectedDatabase = nil
+            appState.connection.selectedTable = nil
             appState.connection.databases = []
+            appState.connection.tables = []
             appState.connection.isLoadingTables = false
             return
         }
 
+        // Check if we're switching to the same connection AND database
+        let sameConnection = appState.connection.currentConnection?.id == connectionId
+        let sameDatabase = appState.connection.selectedDatabase?.name == tab.databaseName
+        let isConnected = appState.connection.databaseService.isConnected
+
+        if sameConnection && sameDatabase && isConnected && !appState.connection.tables.isEmpty {
+            // Fast path: same connection and database, just restore table selection
+            DebugLog.print("📑 [RootView] Tab switch - same connection/database, restoring table selection only")
+
+            if let tableSchema = tab.selectedTableSchema,
+               let tableName = tab.selectedTableName,
+               let table = appState.connection.tables.first(where: {
+                   $0.schema == tableSchema && $0.name == tableName
+               }) {
+                appState.connection.selectedTable = table
+            } else {
+                appState.connection.selectedTable = nil
+            }
+            return
+        }
+
+        // Set loading state and clear tables for full reload
+        appState.connection.isLoadingTables = true
+        appState.connection.selectedTable = nil
+        appState.connection.tables = []
+
         // Connect if different connection or not connected
-        if appState.connection.currentConnection?.id != connectionId || !appState.connection.databaseService.isConnected {
+        if !sameConnection || !isConnected {
             DebugLog.print("🔌 [RootView] Tab switch requires connection to: \(connection.displayName)")
             let connectionService = ConnectionService(
                 appState: appState,
@@ -348,6 +377,15 @@ struct RootView: View {
            let database = appState.connection.databases.first(where: { $0.name == databaseName }) {
             appState.connection.selectedDatabase = database
             await loadTables(for: database, connection: connection)
+
+            // Restore table selection from tab (after tables are loaded)
+            if let tableSchema = tab.selectedTableSchema,
+               let tableName = tab.selectedTableName,
+               let table = appState.connection.tables.first(where: {
+                   $0.schema == tableSchema && $0.name == tableName
+               }) {
+                appState.connection.selectedTable = table
+            }
         } else {
             // No database selected in tab, stop loading
             appState.connection.isLoadingTables = false

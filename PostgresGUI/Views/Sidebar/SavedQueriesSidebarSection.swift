@@ -210,9 +210,11 @@ struct SavedQueriesSidebarSection: View {
                 savedQueries: savedQueries,
                 folders: folders
             )
-            // Clear tab's savedQueryId when deselecting
+            // Update tab's savedQueryId based on selection
             if newIDs.isEmpty && !oldIDs.isEmpty {
                 tabManager.clearActiveTabSavedQueryId()
+            } else if newIDs.count == 1, let selectedId = newIDs.first {
+                tabManager.updateActiveTab(savedQueryId: selectedId)
             }
         }
         .onChange(of: appState.query.currentSavedQueryId) { _, newID in

@@ -76,6 +76,7 @@ private extension ComparisonResult {
 
 struct QueryResultsView: View {
     @Environment(AppState.self) private var appState
+    @Environment(TabManager.self) private var tabManager
     @State private var sortOrder: [TableRowComparator] = []
     @State private var lastExecutedTableID: String? = nil
     var searchText: String = ""
@@ -94,26 +95,51 @@ struct QueryResultsView: View {
         }
         .padding(.leading, 4)
         .onChange(of: appState.connection.selectedTable?.id) { oldValue, newValue in
-            // Clear results immediately when table changes (prevents column mismatch crashes)
-            if oldValue != newValue {
-                appState.query.queryResults = []
+            let table = appState.connection.selectedTable
+
+            // Check if we already have results (e.g., restored from tab cache)
+            let hasExistingResults = !appState.query.queryResults.isEmpty
+
+            // Clear results when table changes, UNLESS we already have cached results
+            // (This prevents clearing results that were just restored from tab)
+            if oldValue != newValue && !hasExistingResults {
                 appState.query.queryColumnNames = nil
                 appState.query.queryError = nil
                 appState.query.currentPage = 0
                 sortOrder = []
             }
 
-            // Execute query when a table is selected
-            if let table = appState.connection.selectedTable, table.id != lastExecutedTableID {
+            // Save table selection to tab
+            tabManager.updateActiveTabTableSelection(
+                schema: table?.schema,
+                name: table?.name
+            )
+
+            // Execute query when a table is selected, UNLESS we already have results
+            if let table = table, table.id != lastExecutedTableID {
                 lastExecutedTableID = table.id
-                Task { @MainActor in
-                    await appState.executeTableQuery(for: table)
+
+                // Skip query if we already have cached results for this table
+                if hasExistingResults {
+                    DebugLog.print("📋 [QueryResultsView] Skipping query - using cached results")
+                } else {
+                    Task { @MainActor in
+                        await appState.executeTableQuery(for: table)
+                        // Cache results to tab for restoration on tab switch
+                        tabManager.updateActiveTabResults(
+                            results: appState.query.queryResults,
+                            columnNames: appState.query.queryColumnNames
+                        )
+                    }
                 }
             } else if newValue == nil {
                 // Clear query results when table selection is cleared (but preserve queryText)
                 lastExecutedTableID = nil
                 DebugLog.print("📋 [QueryResultsView] Table selection cleared - preserving queryText, clearing results")
                 appState.query.showQueryResults = false
+                appState.query.queryResults = []
+                // Clear cached results in tab
+                tabManager.updateActiveTabResults(results: nil, columnNames: nil)
             }
         }
     }
@@ -211,6 +237,10 @@ struct QueryResultsView: View {
         appState.query.hasNextPage = true  // We know there's a next page since we came from it
         Task {
             await appState.executeTableQuery(for: table)
+            tabManager.updateActiveTabResults(
+                results: appState.query.queryResults,
+                columnNames: appState.query.queryColumnNames
+            )
         }
     }
 
@@ -219,6 +249,10 @@ struct QueryResultsView: View {
         appState.query.currentPage += 1
         Task {
             await appState.executeTableQuery(for: table)
+            tabManager.updateActiveTabResults(
+                results: appState.query.queryResults,
+                columnNames: appState.query.queryColumnNames
+            )
         }
     }
 

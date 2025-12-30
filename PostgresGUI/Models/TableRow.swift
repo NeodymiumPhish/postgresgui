@@ -7,10 +7,10 @@
 
 import Foundation
 
-struct TableRow: Identifiable {
+struct TableRow: Identifiable, Codable {
     let id: UUID
     let values: [String: String?]
-    
+
     init(id: UUID = UUID(), values: [String: String?]) {
         self.id = id
         self.values = values

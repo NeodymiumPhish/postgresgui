@@ -8,13 +8,13 @@ import SwiftUI
 /// Font sizes used in the connection/database picker
 private enum PickerFontSize {
     static let connectionIcon: CGFloat = 13.75
-    static let label: CGFloat = 11
+    static let label: CGFloat = Constants.FontSize.small
     static let separator: CGFloat = 9
-    static let databaseIcon: CGFloat = 10
+    static let databaseIcon: CGFloat = Constants.FontSize.smallIcon
     static let chevron: CGFloat = 8
     static let dropdownItem: CGFloat = 12
-    static let checkmark: CGFloat = 10
-    static let deleteIcon: CGFloat = 11
+    static let checkmark: CGFloat = Constants.FontSize.smallIcon
+    static let deleteIcon: CGFloat = Constants.FontSize.small
 }
 
 /// Compact picker showing current connection and database with dropdown

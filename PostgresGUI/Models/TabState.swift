@@ -20,6 +20,14 @@ final class TabState: Identifiable {
     var createdAt: Date
     var lastAccessedAt: Date
 
+    // Selected table state
+    var selectedTableSchema: String?
+    var selectedTableName: String?
+
+    // Cached query results
+    var cachedResultsData: Data?
+    var cachedColumnNames: [String]?
+
     init(
         id: UUID = UUID(),
         connectionId: UUID? = nil,
@@ -29,7 +37,11 @@ final class TabState: Identifiable {
         isActive: Bool = false,
         order: Int = 0,
         createdAt: Date = Date(),
-        lastAccessedAt: Date = Date()
+        lastAccessedAt: Date = Date(),
+        selectedTableSchema: String? = nil,
+        selectedTableName: String? = nil,
+        cachedResultsData: Data? = nil,
+        cachedColumnNames: [String]? = nil
     ) {
         self.id = id
         self.connectionId = connectionId
@@ -40,5 +52,33 @@ final class TabState: Identifiable {
         self.order = order
         self.createdAt = createdAt
         self.lastAccessedAt = lastAccessedAt
+        self.selectedTableSchema = selectedTableSchema
+        self.selectedTableName = selectedTableName
+        self.cachedResultsData = cachedResultsData
+        self.cachedColumnNames = cachedColumnNames
+    }
+
+    // MARK: - Results Encoding/Decoding
+
+    /// Decode cached results from Data
+    var cachedResults: [TableRow]? {
+        guard let data = cachedResultsData else { return nil }
+        return try? JSONDecoder().decode([TableRow].self, from: data)
+    }
+
+    /// Encode and store results
+    func setCachedResults(_ results: [TableRow]?, columnNames: [String]?) {
+        if let results = results {
+            cachedResultsData = try? JSONEncoder().encode(results)
+        } else {
+            cachedResultsData = nil
+        }
+        cachedColumnNames = columnNames
+    }
+
+    /// Clear cached results
+    func clearCachedResults() {
+        cachedResultsData = nil
+        cachedColumnNames = nil
     }
 }

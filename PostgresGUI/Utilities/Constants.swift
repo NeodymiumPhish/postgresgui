@@ -9,6 +9,14 @@ import SwiftUI
 
 /// Design system constants following Liquid Glass patterns
 enum Constants {
+    // Font sizes
+    enum FontSize {
+        /// Small text used for tabs, picker labels, status text (11pt)
+        static let small: CGFloat = 11
+        /// Icon size for small UI elements
+        static let smallIcon: CGFloat = 10
+    }
+
     // Spacing
     enum Spacing {
         static let small: CGFloat = 8

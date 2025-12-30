@@ -19,7 +19,7 @@ struct DetailContentToolbar: ToolbarContent {
             Button(action: {
                 viewModel.openJSONView()
             }) {
-                Image(systemName: "doc.text")
+                Image(systemName: "square.and.arrow.down")
             }
             .help("View selected rows as JSON")
             .disabled(appState.query.selectedRowIDs.isEmpty)

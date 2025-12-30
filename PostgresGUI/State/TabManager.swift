@@ -94,6 +94,16 @@ class TabManager {
         tabService.updateTab(activeTab, connectionId: connectionId, databaseName: databaseName, queryText: queryText, savedQueryId: savedQueryId)
     }
 
+    func updateActiveTabTableSelection(schema: String?, name: String?) {
+        guard let tabService = tabService, let activeTab = activeTab else { return }
+        tabService.updateTabTableSelection(activeTab, schema: schema, name: name)
+    }
+
+    func updateActiveTabResults(results: [TableRow]?, columnNames: [String]?) {
+        guard let tabService = tabService, let activeTab = activeTab else { return }
+        tabService.updateTabResults(activeTab, results: results, columnNames: columnNames)
+    }
+
     func clearActiveTabSavedQueryId() {
         guard let tabService = tabService, let activeTab = activeTab else { return }
         tabService.clearSavedQueryId(activeTab)

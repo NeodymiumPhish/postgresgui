@@ -62,9 +62,12 @@ struct TabBarView: View {
     }
 
     private func connectionName(for tab: TabState) -> String {
-        // If tab has a saved query, use its name
+        // If tab has a saved query, show "db / query_name"
         if let savedQueryId = tab.savedQueryId,
            let savedQuery = savedQueries.first(where: { $0.id == savedQueryId }) {
+            if let dbName = tab.databaseName {
+                return "\(dbName) / \(savedQuery.name)"
+            }
             return savedQuery.name
         }
 
@@ -128,7 +131,7 @@ struct TabItemView: View {
     var body: some View {
         HStack(spacing: 4) {
             Text(connectionName)
-                .font(.system(size: 11))
+                .font(.system(size: Constants.FontSize.small))
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .foregroundColor(isActive ? .primary : .secondary)

@@ -87,16 +87,16 @@ struct QueryEditorView: View {
         if appState.query.isExecutingQuery {
             Text("Running...")
                 .foregroundColor(.secondary)
-                .font(.subheadline)
+                .font(.system(size: Constants.FontSize.small))
         } else if let statusMessage = appState.query.statusMessage {
             Text(statusMessage)
                 .foregroundColor(.secondary)
-                .font(.subheadline)
+                .font(.system(size: Constants.FontSize.small))
                 .lineLimit(1)
         } else if let queryName = appState.query.currentQueryName {
             Text(queryName)
                 .foregroundColor(.secondary)
-                .font(.subheadline)
+                .font(.system(size: Constants.FontSize.small))
         }
     }
 
@@ -230,6 +230,12 @@ struct QueryEditorView: View {
                     appState.query.showQueryResults = true
                     appState.query.setTemporaryStatus("Executed in \(QueryState.formatExecutionTime(executionTime))")
                     DebugLog.print("✅ [QueryEditorView] Query executed, showing \(results.count) results")
+
+                    // Cache results to tab for restoration on tab switch
+                    tabManager.updateActiveTabResults(
+                        results: results,
+                        columnNames: columnNames.isEmpty ? nil : columnNames
+                    )
                 }
 
                 // Refresh tables list if query modified schema
