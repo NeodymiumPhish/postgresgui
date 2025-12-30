@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 /// Protocol for secure password storage
 @MainActor
@@ -33,5 +34,19 @@ class KeychainServiceImpl: KeychainServiceProtocol {
 
     func deletePassword(for connectionId: UUID) throws {
         try KeychainService.deletePassword(for: connectionId)
+    }
+}
+
+// MARK: - SwiftUI Environment
+
+/// Environment key for KeychainServiceProtocol
+private struct KeychainServiceKey: EnvironmentKey {
+    @MainActor static let defaultValue: KeychainServiceProtocol = KeychainServiceImpl()
+}
+
+extension EnvironmentValues {
+    var keychainService: KeychainServiceProtocol {
+        get { self[KeychainServiceKey.self] }
+        set { self[KeychainServiceKey.self] = newValue }
     }
 }

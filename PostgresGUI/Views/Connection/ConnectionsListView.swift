@@ -14,6 +14,7 @@ struct ConnectionsListView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
+    @Environment(\.keychainService) private var keychainService
     @Query private var connections: [ConnectionProfile]
 
     @State private var viewModel: ConnectionsListViewModel?
@@ -24,7 +25,6 @@ struct ConnectionsListView: View {
 
     /// Creates the ViewModel with proper dependencies
     private func createViewModel() -> ConnectionsListViewModel {
-        let keychainService = KeychainServiceImpl()
         let connectionService = ConnectionService(
             appState: appState,
             keychainService: keychainService

@@ -2,7 +2,8 @@
 //  PostgresQueryExecutor.swift
 //  PostgresGUI
 //
-//  PostgresNIO-specific implementation of QueryExecutorProtocol
+//  PostgresNIO-specific implementation of QueryExecutorProtocol.
+//  Executes queries and delegates result mapping to ResultMapperProtocol.
 //
 
 import Foundation
@@ -11,16 +12,18 @@ import Logging
 
 /// PostgresNIO implementation of QueryExecutorProtocol
 struct PostgresQueryExecutor: QueryExecutorProtocol {
-    
-    static let shared = PostgresQueryExecutor()
-    
-    private static let logger = Logger.debugLogger(label: "com.postgresgui.query")
-    private static let resultMapper: ResultMapperProtocol = PostgresResultMapper.shared
-    
-    private init() {}
-    
+
+    private let logger = Logger.debugLogger(label: "com.postgresgui.query")
+    private let resultMapper: ResultMapperProtocol
+
+    // MARK: - Initialization
+
+    init(resultMapper: ResultMapperProtocol = PostgresResultMapper()) {
+        self.resultMapper = resultMapper
+    }
+
     // MARK: - Database Operations
-    
+
     func fetchDatabases(connection: DatabaseConnectionProtocol) async throws -> [DatabaseInfo] {
         let sql = """
         SELECT datname
@@ -28,46 +31,46 @@ struct PostgresQueryExecutor: QueryExecutorProtocol {
         WHERE datistemplate = false
         ORDER BY datname
         """
-        
-        PostgresQueryExecutor.logger.debug("Fetching databases")
-        
+
+        logger.debug("Fetching databases")
+
         let rows = try await connection.executeQuery(sql)
         var databases: [DatabaseInfo] = []
-        
+
         for try await row in rows {
             guard let dbRow = row as? any DatabaseRow else {
                 throw DatabaseError.unknownError("Expected DatabaseRow")
             }
-            let db = try PostgresQueryExecutor.resultMapper.mapToDatabaseInfo(dbRow)
+            let db = try resultMapper.mapToDatabaseInfo(dbRow)
             databases.append(db)
         }
-        
-        PostgresQueryExecutor.logger.info("Fetched \(databases.count) databases")
+
+        logger.info("Fetched \(databases.count) databases")
         return databases
     }
-    
+
     func createDatabase(connection: DatabaseConnectionProtocol, name: String) async throws {
         let sanitizedName = sanitizeIdentifier(name)
         let sql = "CREATE DATABASE \(sanitizedName)"
-        
-        PostgresQueryExecutor.logger.info("Creating database: \(sanitizedName)")
-        
+
+        logger.info("Creating database: \(sanitizedName)")
+
         _ = try await connection.executeQuery(sql)
-        PostgresQueryExecutor.logger.info("Database created successfully")
+        logger.info("Database created successfully")
     }
-    
+
     func dropDatabase(connection: DatabaseConnectionProtocol, name: String) async throws {
         let sanitizedName = sanitizeIdentifier(name)
         let sql = "DROP DATABASE \(sanitizedName)"
-        
-        PostgresQueryExecutor.logger.info("Dropping database: \(sanitizedName)")
-        
+
+        logger.info("Dropping database: \(sanitizedName)")
+
         _ = try await connection.executeQuery(sql)
-        PostgresQueryExecutor.logger.info("Database dropped successfully")
+        logger.info("Database dropped successfully")
     }
-    
+
     // MARK: - Table Operations
-    
+
     func fetchTables(connection: DatabaseConnectionProtocol) async throws -> [TableInfo] {
         let sql = """
         SELECT schemaname, tablename
@@ -75,24 +78,24 @@ struct PostgresQueryExecutor: QueryExecutorProtocol {
         WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
         ORDER BY schemaname, tablename
         """
-        
-        PostgresQueryExecutor.logger.debug("Fetching tables")
-        
+
+        logger.debug("Fetching tables")
+
         let rows = try await connection.executeQuery(sql)
         var tables: [TableInfo] = []
-        
+
         for try await row in rows {
             guard let dbRow = row as? any DatabaseRow else {
                 throw DatabaseError.unknownError("Expected DatabaseRow")
             }
-            let table = try PostgresQueryExecutor.resultMapper.mapToTableInfo(dbRow)
+            let table = try resultMapper.mapToTableInfo(dbRow)
             tables.append(table)
         }
-        
-        PostgresQueryExecutor.logger.info("Fetched \(tables.count) tables")
+
+        logger.info("Fetched \(tables.count) tables")
         return tables
     }
-    
+
     func fetchTableData(
         connection: DatabaseConnectionProtocol,
         schema: String,
@@ -102,16 +105,16 @@ struct PostgresQueryExecutor: QueryExecutorProtocol {
     ) async throws -> [TableRow] {
         let qualifiedTable = "\(sanitizeIdentifier(schema)).\(sanitizeIdentifier(table))"
         let sql = "SELECT * FROM \(qualifiedTable) LIMIT \(limit) OFFSET \(offset)"
-        
-        PostgresQueryExecutor.logger.debug("Fetching table data: \(qualifiedTable), limit: \(limit), offset: \(offset)")
-        
+
+        logger.debug("Fetching table data: \(qualifiedTable), limit: \(limit), offset: \(offset)")
+
         let rows = try await connection.executeQuery(sql)
-        let tableRows = try await PostgresQueryExecutor.resultMapper.mapRowsToTableRows(rows)
-        
-        PostgresQueryExecutor.logger.info("Fetched \(tableRows.count) rows from \(qualifiedTable)")
+        let tableRows = try await resultMapper.mapRowsToTableRows(rows)
+
+        logger.info("Fetched \(tableRows.count) rows from \(qualifiedTable)")
         return tableRows
     }
-    
+
     func dropTable(
         connection: DatabaseConnectionProtocol,
         schema: String,
@@ -119,15 +122,15 @@ struct PostgresQueryExecutor: QueryExecutorProtocol {
     ) async throws {
         let qualifiedTable = "\(sanitizeIdentifier(schema)).\(sanitizeIdentifier(table))"
         let sql = "DROP TABLE \(qualifiedTable)"
-        
-        PostgresQueryExecutor.logger.info("Dropping table: \(qualifiedTable)")
-        
+
+        logger.info("Dropping table: \(qualifiedTable)")
+
         _ = try await connection.executeQuery(sql)
-        PostgresQueryExecutor.logger.info("Table dropped successfully")
+        logger.info("Table dropped successfully")
     }
-    
+
     // MARK: - Column Metadata
-    
+
     func fetchColumns(
         connection: DatabaseConnectionProtocol,
         schema: String,
@@ -143,24 +146,24 @@ struct PostgresQueryExecutor: QueryExecutorProtocol {
         WHERE table_schema = '\(schema)' AND table_name = '\(table)'
         ORDER BY ordinal_position
         """
-        
-        PostgresQueryExecutor.logger.debug("Fetching columns for \(schema).\(table)")
-        
+
+        logger.debug("Fetching columns for \(schema).\(table)")
+
         let rows = try await connection.executeQuery(sql)
         var columns: [ColumnInfo] = []
-        
+
         for try await row in rows {
             guard let dbRow = row as? any DatabaseRow else {
                 throw DatabaseError.unknownError("Expected DatabaseRow")
             }
-            let column = try PostgresQueryExecutor.resultMapper.mapToColumnInfo(dbRow)
+            let column = try resultMapper.mapToColumnInfo(dbRow)
             columns.append(column)
         }
-        
-        PostgresQueryExecutor.logger.info("Fetched \(columns.count) columns for \(schema).\(table)")
+
+        logger.info("Fetched \(columns.count) columns for \(schema).\(table)")
         return columns
     }
-    
+
     func fetchPrimaryKeys(
         connection: DatabaseConnectionProtocol,
         schema: String,
@@ -173,7 +176,7 @@ struct PostgresQueryExecutor: QueryExecutorProtocol {
         WHERE i.indrelid = ('\(schema).\(table)')::regclass AND i.indisprimary
         """
 
-        PostgresQueryExecutor.logger.debug("Fetching primary keys for \(schema).\(table)")
+        logger.debug("Fetching primary keys for \(schema).\(table)")
 
         let rows = try await connection.executeQuery(sql)
         var primaryKeys: [String] = []
@@ -187,25 +190,25 @@ struct PostgresQueryExecutor: QueryExecutorProtocol {
             primaryKeys.append(pkColumn)
         }
 
-        PostgresQueryExecutor.logger.info("Found \(primaryKeys.count) primary key columns for \(schema).\(table)")
+        logger.info("Found \(primaryKeys.count) primary key columns for \(schema).\(table)")
         return primaryKeys
     }
-    
+
     // MARK: - Query Execution
-    
+
     func executeQuery(
         connection: DatabaseConnectionProtocol,
         sql: String
     ) async throws -> ([TableRow], [String]) {
-        PostgresQueryExecutor.logger.info("Executing query: \(sql.prefix(100))...")
-        
+        logger.info("Executing query: \(sql.prefix(100))...")
+
         let startTime = Date()
-        
+
         let rows = try await connection.executeQuery(sql)
-        
+
         var tableRows: [TableRow] = []
         var columnNames: [String] = []
-        
+
         for try await row in rows {
             guard let dbRow = row as? any DatabaseRow else {
                 throw DatabaseError.unknownError("Expected DatabaseRow")
@@ -213,19 +216,19 @@ struct PostgresQueryExecutor: QueryExecutorProtocol {
             if columnNames.isEmpty {
                 columnNames = dbRow.columnNames
             }
-            
-            let tableRow = try PostgresQueryExecutor.resultMapper.mapRowToTableRow(dbRow)
+
+            let tableRow = try resultMapper.mapRowToTableRow(dbRow)
             tableRows.append(tableRow)
         }
-        
+
         let executionTime = Date().timeIntervalSince(startTime)
-        PostgresQueryExecutor.logger.info("Query executed in \(String(format: "%.3f", executionTime))s, returned \(tableRows.count) rows")
-        
+        logger.info("Query executed in \(String(format: "%.3f", executionTime))s, returned \(tableRows.count) rows")
+
         return (tableRows, columnNames)
     }
-    
+
     // MARK: - Row Operations
-    
+
     func updateRow(
         connection: DatabaseConnectionProtocol,
         schema: String,
@@ -237,9 +240,9 @@ struct PostgresQueryExecutor: QueryExecutorProtocol {
         guard !primaryKeyColumns.isEmpty else {
             throw DatabaseError.noPrimaryKey
         }
-        
+
         let qualifiedTable = "\(sanitizeIdentifier(schema)).\(sanitizeIdentifier(table))"
-        
+
         var setClauses: [String] = []
         for (column, value) in updatedValues {
             if let val = value {
@@ -248,33 +251,33 @@ struct PostgresQueryExecutor: QueryExecutorProtocol {
                 setClauses.append("\(sanitizeIdentifier(column)) = NULL")
             }
         }
-        
+
         var whereClauses: [String] = []
         for pkColumn in primaryKeyColumns {
             guard let pkValue = originalRow.values[pkColumn] else {
                 throw DatabaseError.missingPrimaryKeyValue(column: pkColumn)
             }
-            
+
             if let val = pkValue {
                 whereClauses.append("\(sanitizeIdentifier(pkColumn)) = '\(val.replacingOccurrences(of: "'", with: "''"))'")
             } else {
                 whereClauses.append("\(sanitizeIdentifier(pkColumn)) IS NULL")
             }
         }
-        
+
         let sql = """
         UPDATE \(qualifiedTable)
         SET \(setClauses.joined(separator: ", "))
         WHERE \(whereClauses.joined(separator: " AND "))
         """
-        
-        PostgresQueryExecutor.logger.info("Updating row in \(qualifiedTable)")
-        PostgresQueryExecutor.logger.debug("SQL: \(sql)")
-        
+
+        logger.info("Updating row in \(qualifiedTable)")
+        logger.debug("SQL: \(sql)")
+
         _ = try await connection.executeQuery(sql)
-        PostgresQueryExecutor.logger.info("Row updated successfully")
+        logger.info("Row updated successfully")
     }
-    
+
     func deleteRows(
         connection: DatabaseConnectionProtocol,
         schema: String,
@@ -285,42 +288,41 @@ struct PostgresQueryExecutor: QueryExecutorProtocol {
         guard !primaryKeyColumns.isEmpty else {
             throw DatabaseError.noPrimaryKey
         }
-        
+
         let qualifiedTable = "\(sanitizeIdentifier(schema)).\(sanitizeIdentifier(table))"
-        
+
         for row in rows {
             var whereClauses: [String] = []
-            
+
             for pkColumn in primaryKeyColumns {
                 guard let pkValue = row.values[pkColumn] else {
                     throw DatabaseError.missingPrimaryKeyValue(column: pkColumn)
                 }
-                
+
                 if let val = pkValue {
                     whereClauses.append("\(sanitizeIdentifier(pkColumn)) = '\(val.replacingOccurrences(of: "'", with: "''"))'")
                 } else {
                     whereClauses.append("\(sanitizeIdentifier(pkColumn)) IS NULL")
                 }
             }
-            
+
             let sql = """
             DELETE FROM \(qualifiedTable)
             WHERE \(whereClauses.joined(separator: " AND "))
             """
-            
-            PostgresQueryExecutor.logger.debug("Deleting row from \(qualifiedTable)")
+
+            logger.debug("Deleting row from \(qualifiedTable)")
             _ = try await connection.executeQuery(sql)
         }
-        
-        PostgresQueryExecutor.logger.info("Deleted \(rows.count) row(s) from \(qualifiedTable)")
+
+        logger.info("Deleted \(rows.count) row(s) from \(qualifiedTable)")
     }
-    
+
     // MARK: - Helpers
-    
+
     /// Sanitize SQL identifier (table name, column name, etc.)
     private func sanitizeIdentifier(_ identifier: String) -> String {
         let escaped = identifier.replacingOccurrences(of: "\"", with: "\"\"")
         return "\"\(escaped)\""
     }
 }
-

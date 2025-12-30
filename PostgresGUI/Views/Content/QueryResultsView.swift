@@ -2,7 +2,7 @@
 //  QueryResultsView.swift
 //  PostgresGUI
 //
-//  Created by ghazi on 11/29/25.
+//  Displays query results in a table. Delegates business logic to QueryResultsViewModel.
 //
 
 import SwiftUI
@@ -77,8 +77,8 @@ private extension ComparisonResult {
 struct QueryResultsView: View {
     @Environment(AppState.self) private var appState
     @Environment(TabManager.self) private var tabManager
+    @State private var viewModel: QueryResultsViewModel?
     @State private var sortOrder: [TableRowComparator] = []
-    @State private var lastExecutedTableID: String? = nil
     var searchText: String = ""
     var onDeleteKeyPressed: (() -> Void)?
     var onSpaceKeyPressed: (() -> Void)?
@@ -94,58 +94,15 @@ struct QueryResultsView: View {
             }
         }
         .padding(.leading, 4)
+        .onAppear {
+            viewModel = QueryResultsViewModel(appState: appState, tabManager: tabManager)
+        }
         .onChange(of: appState.connection.selectedTable?.id) { oldValue, newValue in
-            let table = appState.connection.selectedTable
-
-            // Check if we already have results for THIS specific table (e.g., restored from tab cache)
-            let hasCachedResultsForThisTable = !appState.query.queryResults.isEmpty
-                && appState.query.cachedResultsTableId == newValue
-
-            // Clear results when table changes, UNLESS we have cached results for this table
-            if oldValue != newValue && !hasCachedResultsForThisTable {
-                appState.query.queryColumnNames = nil
-                appState.query.queryError = nil
-                appState.query.currentPage = 0
+            // Reset sort order when table changes
+            if oldValue != newValue {
                 sortOrder = []
             }
-
-            // Save table selection to tab
-            tabManager.updateActiveTabTableSelection(
-                schema: table?.schema,
-                name: table?.name
-            )
-
-            // Execute query when a table is selected
-            if let table = table, table.id != lastExecutedTableID {
-                lastExecutedTableID = table.id
-
-                // Skip query only if we have cached results for THIS specific table
-                if hasCachedResultsForThisTable {
-                    DebugLog.print("📋 [QueryResultsView] Skipping query - using cached results for table \(table.name)")
-                } else {
-                    Task { @MainActor in
-                        await appState.executeTableQuery(for: table)
-                        // Only update cache tracking if this table is still selected
-                        // (prevents race condition when rapidly switching tables)
-                        guard appState.connection.selectedTable?.id == table.id else { return }
-                        appState.query.cachedResultsTableId = table.id
-                        // Cache results to tab for restoration on tab switch
-                        tabManager.updateActiveTabResults(
-                            results: appState.query.queryResults,
-                            columnNames: appState.query.queryColumnNames
-                        )
-                    }
-                }
-            } else if newValue == nil {
-                // Clear query results when table selection is cleared (but preserve queryText)
-                lastExecutedTableID = nil
-                DebugLog.print("📋 [QueryResultsView] Table selection cleared - preserving queryText, clearing results")
-                appState.query.showQueryResults = false
-                appState.query.queryResults = []
-                appState.query.cachedResultsTableId = nil
-                // Clear cached results in tab
-                tabManager.updateActiveTabResults(results: nil, columnNames: nil)
-            }
+            viewModel?.handleTableSelectionChange(oldValue: oldValue, newValue: newValue)
         }
     }
 
@@ -207,7 +164,7 @@ struct QueryResultsView: View {
 
             HStack(spacing: 12) {
                 Button {
-                    goToPreviousPage()
+                    viewModel?.goToPreviousPage()
                 } label: {
                     Image(systemName: "chevron.left")
                 }
@@ -219,7 +176,7 @@ struct QueryResultsView: View {
                     .foregroundStyle(.secondary)
 
                 Button {
-                    goToNextPage()
+                    viewModel?.goToNextPage()
                 } label: {
                     Image(systemName: "chevron.right")
                 }
@@ -232,32 +189,6 @@ struct QueryResultsView: View {
         .background(.bar)
         .overlay(alignment: .top) {
             Divider()
-        }
-    }
-
-    private func goToPreviousPage() {
-        guard appState.query.currentPage > 0,
-              let table = appState.connection.selectedTable else { return }
-        appState.query.currentPage -= 1
-        appState.query.hasNextPage = true  // We know there's a next page since we came from it
-        Task {
-            await appState.executeTableQuery(for: table)
-            tabManager.updateActiveTabResults(
-                results: appState.query.queryResults,
-                columnNames: appState.query.queryColumnNames
-            )
-        }
-    }
-
-    private func goToNextPage() {
-        guard let table = appState.connection.selectedTable else { return }
-        appState.query.currentPage += 1
-        Task {
-            await appState.executeTableQuery(for: table)
-            tabManager.updateActiveTabResults(
-                results: appState.query.queryResults,
-                columnNames: appState.query.queryColumnNames
-            )
         }
     }
 
@@ -326,19 +257,15 @@ struct QueryResultsView: View {
     private func getColumnNames() -> [String]? {
         // First try to get column names from stored queryColumnNames (works even for empty results)
         if let columnNames = appState.query.queryColumnNames, !columnNames.isEmpty {
-            DebugLog.print("📋 [QueryResultsView] Using stored column names: \(columnNames.joined(separator: ", "))")
             return columnNames
         }
 
         // Fallback: Extract column names from the first row
         guard let firstRow = appState.query.queryResults.first else {
-            DebugLog.print("⚠️  [QueryResultsView] No column names available")
             return nil
         }
         // Sort column names alphabetically for consistent ordering
-        let columnNames = Array(firstRow.values.keys.sorted())
-        DebugLog.print("📋 [QueryResultsView] Using column names from first row: \(columnNames.joined(separator: ", "))")
-        return columnNames
+        return Array(firstRow.values.keys.sorted())
     }
 
     private func formatValue(_ value: String?) -> String {

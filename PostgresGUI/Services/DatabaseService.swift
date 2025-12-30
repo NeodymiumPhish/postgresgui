@@ -47,7 +47,7 @@ class DatabaseService {
         queryExecutor: QueryExecutorProtocol? = nil
     ) {
         self.connectionManager = connectionManager
-        self.queryExecutor = queryExecutor ?? PostgresQueryExecutor.shared
+        self.queryExecutor = queryExecutor ?? PostgresQueryExecutor()
         logger.info("DatabaseService initialized")
     }
 

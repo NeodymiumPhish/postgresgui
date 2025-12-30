@@ -12,6 +12,7 @@ struct ConnectionFormView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
+    @Environment(\.keychainService) private var keychainService
 
     @State private var viewModel: ConnectionFormViewModel
 
@@ -52,9 +53,10 @@ struct ConnectionFormView: View {
                 .background(Color(nsColor: .controlBackgroundColor))
             }
             .onAppear {
-                // Re-initialize with proper appState
+                // Re-initialize with proper dependencies from Environment
                 viewModel = ConnectionFormViewModel(
                     appState: appState,
+                    keychainService: keychainService,
                     connectionToEdit: viewModel.connectionToEdit
                 )
                 viewModel.loadConnectionIfNeeded()
