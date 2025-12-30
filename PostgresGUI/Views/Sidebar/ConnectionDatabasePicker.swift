@@ -77,7 +77,7 @@ struct ConnectionDatabasePicker: View {
                 Image(systemName: "cylinder.split.1x2")
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
-                Text(appState.connection.selectedDatabase?.name ?? "No Database")
+                Text(appState.connection.selectedDatabase?.name ?? "Select Database")
                     .font(.system(size: PickerFontSize.label))
                     .foregroundColor(
                         appState.connection.selectedDatabase != nil ? .primary : .secondary
