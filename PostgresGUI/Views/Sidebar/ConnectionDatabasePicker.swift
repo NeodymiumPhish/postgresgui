@@ -7,10 +7,8 @@ import SwiftUI
 
 /// Font sizes used in the connection/database picker
 private enum PickerFontSize {
-    static let connectionIcon: CGFloat = 13.75
     static let label: CGFloat = Constants.FontSize.small
     static let separator: CGFloat = 9
-    static let databaseIcon: CGFloat = Constants.FontSize.smallIcon
     static let chevron: CGFloat = 8
     static let dropdownItem: CGFloat = 12
     static let checkmark: CGFloat = Constants.FontSize.smallIcon
@@ -48,8 +46,7 @@ struct ConnectionDatabasePicker: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "globe")
-                    .font(.system(size: PickerFontSize.connectionIcon))
-                    .frame(width: 12, height: 12)
+                    .font(.system(size: 14))
                     .foregroundColor(.secondary)
                 Text(appState.connection.currentConnection?.displayName ?? "No Connection")
                     .font(.system(size: PickerFontSize.label))
@@ -78,8 +75,7 @@ struct ConnectionDatabasePicker: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "cylinder.split.1x2")
-                    .font(.system(size: PickerFontSize.databaseIcon))
-                    .frame(width: 12, height: 12)
+                    .font(.system(size: 14))
                     .foregroundColor(.secondary)
                 Text(appState.connection.selectedDatabase?.name ?? "No Database")
                     .font(.system(size: PickerFontSize.label))

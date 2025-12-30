@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 struct JSONViewerView: View {
     @Environment(AppState.self) private var appState
@@ -53,6 +54,12 @@ struct JSONViewerView: View {
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
+                    Button("Download CSV") {
+                        downloadAsCSV()
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Copy JSON") {
                         copyToClipboard()
                     }
@@ -67,5 +74,24 @@ struct JSONViewerView: View {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(jsonString, forType: .string)
+    }
+
+    private func downloadAsCSV() {
+        let csvString = CSVExporter.toCSV(rows: selectedRows)
+
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [.commaSeparatedText]
+        savePanel.nameFieldStringValue = "export.csv"
+        savePanel.title = "Save CSV"
+        savePanel.message = "Choose a location to save the CSV file"
+
+        if savePanel.runModal() == .OK, let url = savePanel.url {
+            do {
+                try csvString.write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                // Error handling could be enhanced with alert
+                print("Failed to save CSV: \(error.localizedDescription)")
+            }
+        }
     }
 }
