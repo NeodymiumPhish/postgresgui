@@ -59,9 +59,10 @@ struct ConnectionsDatabasesSidebar: View {
                     set: { appState.connection.selectedTable = $0 }
                 ),
                 isLoadingTables: appState.connection.isLoadingTables,
+                isExecutingQuery: appState.query.isExecutingQuery,
                 selectedDatabase: appState.connection.selectedDatabase,
-                refreshTablesAction: {
-                    await TableRefreshService.refresh(appState: appState)
+                refreshQueryAction: { table in
+                    await appState.executeTableQuery(for: table)
                 }
             )
         }
