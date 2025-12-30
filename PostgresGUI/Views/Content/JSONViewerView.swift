@@ -12,10 +12,15 @@ import UniformTypeIdentifiers
 struct JSONViewerView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+    @State private var showingExporter = false
     let selectedRowIDs: Set<UUID>
-    
+
     private var selectedRows: [TableRow] {
         appState.query.queryResults.filter { selectedRowIDs.contains($0.id) }
+    }
+
+    private var csvString: String {
+        CSVExporter.toCSV(rows: selectedRows, columns: appState.query.queryColumnNames)
     }
     
     private var jsonString: String {
@@ -52,46 +57,57 @@ struct JSONViewerView: View {
                         dismiss()
                     }
                 }
-                
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Download CSV") {
-                        downloadAsCSV()
-                    }
-                }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Copy JSON") {
-                        copyToClipboard()
+                    HStack {
+                        Button("Download CSV") {
+                            showingExporter = true
+                        }
+
+                        Button("Copy JSON") {
+                            copyToClipboard()
+                        }
                     }
                 }
             }
             .padding(4)
         }
         .frame(minWidth: 600, minHeight: 500)
+        .fileExporter(
+            isPresented: $showingExporter,
+            document: CSVDocument(content: csvString),
+            contentType: .commaSeparatedText,
+            defaultFilename: appState.connection.selectedTable?.name ?? "export"
+        ) { _ in }
     }
-    
+
     private func copyToClipboard() {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(jsonString, forType: .string)
     }
+}
 
-    private func downloadAsCSV() {
-        let csvString = CSVExporter.toCSV(rows: selectedRows)
+// MARK: - CSV Document
 
-        let savePanel = NSSavePanel()
-        savePanel.allowedContentTypes = [.commaSeparatedText]
-        savePanel.nameFieldStringValue = "export.csv"
-        savePanel.title = "Save CSV"
-        savePanel.message = "Choose a location to save the CSV file"
+struct CSVDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.commaSeparatedText] }
 
-        if savePanel.runModal() == .OK, let url = savePanel.url {
-            do {
-                try csvString.write(to: url, atomically: true, encoding: .utf8)
-            } catch {
-                // Error handling could be enhanced with alert
-                print("Failed to save CSV: \(error.localizedDescription)")
-            }
+    var content: String
+
+    init(content: String) {
+        self.content = content
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        if let data = configuration.file.regularFileContents {
+            content = String(data: data, encoding: .utf8) ?? ""
+        } else {
+            content = ""
         }
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: content.data(using: .utf8) ?? Data())
     }
 }
