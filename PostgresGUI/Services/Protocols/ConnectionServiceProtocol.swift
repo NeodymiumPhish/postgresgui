@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftData
 
 /// Result of connection operation
 enum ConnectionResult {
@@ -30,4 +31,9 @@ protocol ConnectionServiceProtocol {
 
     /// Disconnect from the current database
     func disconnect() async
+
+    /// Delete a connection profile and its associated keychain password
+    /// - Parameter connection: The connection profile to delete
+    /// - Parameter modelContext: The SwiftData model context to delete from
+    func delete(connection: ConnectionProfile, from modelContext: ModelContext) async
 }

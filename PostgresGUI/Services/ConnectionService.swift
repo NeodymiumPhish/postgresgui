@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftData
 
 /// Service for managing database connections
 /// Consolidates connection logic that was previously duplicated across ConnectionFormView,
@@ -86,6 +87,35 @@ class ConnectionService: ConnectionServiceProtocol {
         appState.connection.tables = []
         appState.connection.selectedDatabase = nil
         appState.connection.selectedTable = nil
+    }
+
+    /// Delete a connection profile and its associated keychain password
+    func delete(connection: ConnectionProfile, from modelContext: ModelContext) async {
+        DebugLog.print("🗑️ [ConnectionService] Deleting connection: \(connection.displayName)")
+
+        // Delete password from keychain
+        do {
+            try keychainService.deletePassword(for: connection.id)
+        } catch {
+            DebugLog.print("⚠️ [ConnectionService] Failed to delete password from keychain: \(error)")
+        }
+
+        // If deleting the active connection, disconnect first
+        if appState.connection.currentConnection?.id == connection.id {
+            appState.connection.currentConnection = nil
+            appState.connection.selectedDatabase = nil
+            appState.connection.tables = []
+            appState.connection.selectedTable = nil
+            appState.connection.databases = []
+            userDefaults.removeObject(forKey: Constants.UserDefaultsKeys.lastConnectionId)
+            userDefaults.removeObject(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
+        }
+
+        // Delete from SwiftData
+        modelContext.delete(connection)
+        try? modelContext.save()
+
+        DebugLog.print("✅ [ConnectionService] Connection deleted")
     }
 
     // MARK: - Private Helpers

@@ -265,33 +265,14 @@ struct ConnectionsDatabasesSidebar: View {
         await connect(to: connection)
     }
 
-    /// Delete a connection
+    /// Delete a connection using ConnectionService
     @MainActor
     private func deleteConnection(_ connection: ConnectionProfile) async {
-        let keychainService = KeychainServiceImpl()
-
-        // Delete password from keychain
-        do {
-            try keychainService.deletePassword(for: connection.id)
-        } catch {
-            DebugLog.print("Failed to delete password from keychain: \(error)")
-        }
-
-        // If deleting the active connection, disconnect first
-        if appState.connection.currentConnection?.id == connection.id {
-            appState.connection.currentConnection = nil
-            appState.connection.selectedDatabase = nil
-            appState.connection.tables = []
-            appState.connection.selectedTable = nil
-            appState.connection.databases = []
-            UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastConnectionId)
-            UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
-        }
-
-        // Delete from SwiftData
-        modelContext.delete(connection)
-        try? modelContext.save()
-
+        let connectionService = ConnectionService(
+            appState: appState,
+            keychainService: KeychainServiceImpl()
+        )
+        await connectionService.delete(connection: connection, from: modelContext)
         connectionToDelete = nil
     }
 
