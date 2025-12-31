@@ -133,12 +133,10 @@ struct QueryResultsView: View {
                 emptyTableWithHeaders(columnNames: columnNames)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(alignment: .center) {
-                        Text("No rows returned")
-                            .foregroundStyle(.secondary)
+                        EmptyQueryResultsView(hasExecutedQuery: appState.query.showQueryResults)
                     }
             } else {
-                Text("No rows returned")
-                    .foregroundStyle(.secondary)
+                EmptyQueryResultsView(hasExecutedQuery: appState.query.showQueryResults)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else {
