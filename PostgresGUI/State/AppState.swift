@@ -74,6 +74,7 @@ class AppState {
             connectionId: connectionId
         ) else {
             DebugLog.print("⚠️ [AppState] Query for \(table.name) superseded (context changed), skipping state update")
+            query.isExecutingQuery = false
             return
         }
 
