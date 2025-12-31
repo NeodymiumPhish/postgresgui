@@ -22,7 +22,10 @@ struct RootView: View {
     var body: some View {
         ZStack {
             Group {
-                if appState.navigation.isShowingWelcomeScreen && connections.isEmpty {
+                if shouldShowWelcomeScreen(
+                    connectionCount: connections.count,
+                    isShowingConnectionForm: appState.navigation.isShowingConnectionForm
+                ) {
                     WelcomeView()
                         .environment(appState)
                 } else {
@@ -48,6 +51,17 @@ struct RootView: View {
         )) {
             ConnectionFormView(connectionToEdit: appState.navigation.connectionToEdit)
                 .environment(appState)
+        }
+        .sheet(isPresented: Binding(
+            get: { appState.navigation.isShowingCreateDatabase },
+            set: { appState.navigation.isShowingCreateDatabase = $0 }
+        )) {
+            CreateDatabaseView { database in
+                Task {
+                    await viewModel?.selectDatabase(database)
+                }
+            }
+            .environment(appState)
         }
         .task {
             // Create ViewModel with dependencies

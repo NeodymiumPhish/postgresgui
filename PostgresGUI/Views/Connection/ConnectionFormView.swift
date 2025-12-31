@@ -15,6 +15,7 @@ struct ConnectionFormView: View {
     @Environment(\.keychainService) private var keychainService
 
     @State private var viewModel: ConnectionFormViewModel
+    @FocusState private var isNameFieldFocused: Bool
 
     init(connectionToEdit: ConnectionProfile? = nil) {
         // Note: appState will be injected via onAppear since we can't access @Environment in init
@@ -123,11 +124,7 @@ struct ConnectionFormView: View {
                 }
             }
         } message: {
-            VStack(spacing: 8) {
-                Text(viewModel.savedConnectionProfile?.displayName ?? "")
-                    .fontWeight(.medium)
-                Text("Connect now?")
-            }
+            Text("Connect now?")
         }
     }
 
@@ -137,7 +134,8 @@ struct ConnectionFormView: View {
         VStack(alignment: .leading, spacing: 0) {
             nameFieldRow(
                 showField: $viewModel.showIndividualNameField,
-                name: $viewModel.individualName
+                name: $viewModel.individualName,
+                focused: $isNameFieldFocused
             )
 
             formRow(label: "Host", alignment: .top) {
@@ -223,7 +221,8 @@ struct ConnectionFormView: View {
         VStack(alignment: .leading, spacing: 0) {
             nameFieldRow(
                 showField: $viewModel.showConnectionStringNameField,
-                name: $viewModel.connectionStringName
+                name: $viewModel.connectionStringName,
+                focused: $isNameFieldFocused
             )
 
             formRow(label: "Connection String", alignment: .top) {
@@ -282,13 +281,14 @@ struct ConnectionFormView: View {
 
     // MARK: - Helper Views
 
-    private func nameFieldRow(showField: Binding<Bool>, name: Binding<String>) -> some View {
+    private func nameFieldRow(showField: Binding<Bool>, name: Binding<String>, focused: FocusState<Bool>.Binding) -> some View {
         Group {
             if showField.wrappedValue {
                 formRow(label: "Name") {
                     HStack(spacing: 8) {
                         TextField("", text: name)
                             .textFieldStyle(.roundedBorder)
+                            .focused(focused)
 
                         Button(action: {
                             showField.wrappedValue = false
@@ -305,6 +305,7 @@ struct ConnectionFormView: View {
                 formRow(label: "Name") {
                     Button(action: {
                         showField.wrappedValue = true
+                        focused.wrappedValue = true
                     }) {
                         HStack(spacing: 4) {
                             Image(systemName: "plus.circle.fill")

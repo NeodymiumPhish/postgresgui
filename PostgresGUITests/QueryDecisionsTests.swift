@@ -187,25 +187,6 @@ struct TableRefreshDecisionTests {
     }
 }
 
-// MARK: - Query Staleness Tests
-
-@Suite("Query Staleness")
-struct QueryStalenessTests {
-
-    @Test func queryIsNotStaleWhenIdsMatch() {
-        #expect(isQueryStale(queryId: 5, currentQueryId: 5) == false)
-    }
-
-    @Test func queryIsStaleWhenIdIsLower() {
-        #expect(isQueryStale(queryId: 4, currentQueryId: 5) == true)
-    }
-
-    @Test func queryIsStaleWhenIdIsHigher() {
-        // Edge case: shouldn't happen in practice, but should still be detected
-        #expect(isQueryStale(queryId: 6, currentQueryId: 5) == true)
-    }
-}
-
 // MARK: - Rollback Safety Tests
 
 @Suite("Rollback Safety")

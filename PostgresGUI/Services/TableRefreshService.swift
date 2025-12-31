@@ -5,29 +5,28 @@
 //  Centralized service for table loading and refresh operations.
 //  Eliminates duplicate loadTables logic across views.
 //
-//  Design: Uses static methods with dependency injection to enable testing
-//  while keeping call sites simple. KeychainService is injected to maintain
-//  loose coupling with secure storage implementation.
-//
 
 import Foundation
 
+/// Service for loading and refreshing table lists
 @MainActor
-struct TableRefreshService {
+final class TableRefreshService: TableRefreshServiceProtocol {
+    private let keychainService: KeychainServiceProtocol
+
+    init(keychainService: KeychainServiceProtocol? = nil) {
+        self.keychainService = keychainService ?? KeychainServiceImpl()
+    }
 
     /// Loads tables for a database, reconnecting if necessary.
     /// - Parameters:
     ///   - database: The database to load tables from
     ///   - connection: The connection profile to use
     ///   - appState: The app state to update
-    ///   - keychainService: Service for retrieving passwords (defaults to KeychainServiceImpl)
-    static func loadTables(
+    func loadTables(
         for database: DatabaseInfo,
         connection: ConnectionProfile,
-        appState: AppState,
-        keychainService: KeychainServiceProtocol? = nil
+        appState: AppState
     ) async {
-        let keychain = keychainService ?? KeychainServiceImpl()
         // Only clear loading state if we're still the active request for this database
         defer {
             if appState.connection.selectedDatabase?.id == database.id {
@@ -43,7 +42,7 @@ struct TableRefreshService {
         do {
             // Reconnect if not connected to target database
             if appState.connection.databaseService.connectedDatabase != database.name {
-                let password = try keychain.getPassword(for: connection.id) ?? ""
+                let password = try keychainService.getPassword(for: connection.id) ?? ""
                 try await appState.connection.databaseService.connect(
                     host: connection.host,
                     port: connection.port,
@@ -80,7 +79,7 @@ struct TableRefreshService {
 
     /// Refreshes both databases and tables lists.
     /// - Parameter appState: The app state to update
-    static func refresh(appState: AppState) async {
+    func refresh(appState: AppState) async {
         guard let database = appState.connection.selectedDatabase,
               appState.connection.currentConnection != nil else { return }
 
@@ -98,6 +97,7 @@ struct TableRefreshService {
         // Refresh databases
         do {
             appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
+            appState.connection.databasesVersion += 1
         } catch {
             DebugLog.print("❌ [TableRefreshService] Error refreshing databases: \(error)")
         }
@@ -123,7 +123,7 @@ struct TableRefreshService {
     }
 
     /// Updates selectedTable reference if it still exists in refreshed list.
-    private static func updateSelectedTable(appState: AppState) {
+    private func updateSelectedTable(appState: AppState) {
         guard let selectedTable = appState.connection.selectedTable,
               let refreshedTable = appState.connection.tables.first(where: { $0.id == selectedTable.id }) else {
             if appState.connection.selectedTable != nil {

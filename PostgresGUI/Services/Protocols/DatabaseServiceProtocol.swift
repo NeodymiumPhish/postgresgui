@@ -12,11 +12,48 @@ import Foundation
 protocol DatabaseServiceProtocol: AnyObject {
     // MARK: - Connection State
 
+    /// Whether currently connected to a database
+    var isConnected: Bool { get }
+
     /// The currently connected database name, if any
     var connectedDatabase: String? { get }
 
+    // MARK: - Connection Management
+
+    /// Connect to PostgreSQL database
+    func connect(
+        host: String,
+        port: Int,
+        username: String,
+        password: String,
+        database: String,
+        sslMode: SSLMode
+    ) async throws
+
     /// Disconnect from the current database
     func disconnect() async
+
+    /// Full shutdown including all resources - call on app termination
+    func shutdown() async
+
+    // MARK: - Database Operations
+
+    /// Fetch list of databases
+    func fetchDatabases() async throws -> [DatabaseInfo]
+
+    /// Create a new database
+    func createDatabase(name: String) async throws
+
+    /// Delete a database
+    func deleteDatabase(name: String) async throws
+
+    // MARK: - Table Operations
+
+    /// Fetch list of tables in the connected database
+    func fetchTables(database: String) async throws -> [TableInfo]
+
+    /// Delete a table
+    func deleteTable(schema: String, table: String) async throws
 
     // MARK: - Query Execution
 

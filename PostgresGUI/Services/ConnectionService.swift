@@ -52,7 +52,6 @@ class ConnectionService: ConnectionServiceProtocol {
 
             // Update app state
             appState.connection.currentConnection = connection
-            appState.navigation.isShowingWelcomeScreen = false
 
             // Save last connection ID if requested
             if saveAsLast {
@@ -69,6 +68,13 @@ class ConnectionService: ConnectionServiceProtocol {
             return .success
 
         } catch {
+            // Handle connectionCancelled specially - it's expected during rapid tab switching
+            if case ConnectionError.connectionCancelled = error {
+                DebugLog.print("📑 [ConnectionService] Connection cancelled (superseded by newer request)")
+                // Don't reset connection state - a newer connection is taking over
+                return .failure(error)
+            }
+
             DebugLog.print("❌ [ConnectionService] Connection failed: \(error)")
 
             // Reset connection state on error
@@ -84,6 +90,7 @@ class ConnectionService: ConnectionServiceProtocol {
         await appState.connection.databaseService.disconnect()
         appState.connection.currentConnection = nil
         appState.connection.databases = []
+        appState.connection.databasesVersion += 1
         appState.connection.tables = []
         appState.connection.selectedDatabase = nil
         appState.connection.selectedTable = nil
@@ -107,6 +114,7 @@ class ConnectionService: ConnectionServiceProtocol {
             appState.connection.tables = []
             appState.connection.selectedTable = nil
             appState.connection.databases = []
+            appState.connection.databasesVersion += 1
             userDefaults.removeObject(forKey: Constants.UserDefaultsKeys.lastConnectionId)
             userDefaults.removeObject(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
         }
@@ -123,6 +131,7 @@ class ConnectionService: ConnectionServiceProtocol {
     private func loadDatabases() async {
         do {
             appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
+            appState.connection.databasesVersion += 1
         } catch {
             DebugLog.print("⚠️ [ConnectionService] Failed to load databases: \(error)")
             // Don't throw - connection succeeded, just database list failed

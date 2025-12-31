@@ -105,7 +105,7 @@ struct MainSplitView: View {
                                 $0.name == tableName
                             })
                         {
-                            let wasAlreadySelected = appState.connection.selectedTable?.id == table.id
+                            let wasAlreadySelected = appState.connection.isTableStillSelected(table.id)
                             appState.connection.selectedTable = table
 
                             // Only explicitly execute if table was already selected

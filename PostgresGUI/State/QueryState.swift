@@ -65,27 +65,46 @@ class QueryState {
 
     /// Set a temporary status message that auto-reverts after the specified duration
     func setTemporaryStatus(_ message: String, duration: TimeInterval = 3.0) {
-        statusTimer?.cancel()
-        statusMessage = message
-        statusTimer = Task {
-            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
-            guard !Task.isCancelled else { return }
-            self.statusMessage = nil
-        }
+        withAutoDismissTimer(
+            timer: &statusTimer,
+            duration: duration,
+            setValue: { self.statusMessage = message },
+            clearValue: { self.statusMessage = nil }
+        )
     }
 
     /// Show mutation toast notification
     func showMutationToast(type: QueryType, tableName: String?, duration: TimeInterval = 5.0) {
-        toastTimer?.cancel()
-        mutationToast = MutationToastData(
-            title: type.successTitle,
-            tableName: tableName,
-            queryType: type
+        withAutoDismissTimer(
+            timer: &toastTimer,
+            duration: duration,
+            setValue: {
+                self.mutationToast = MutationToastData(
+                    title: type.successTitle,
+                    tableName: tableName,
+                    queryType: type
+                )
+            },
+            clearValue: { self.mutationToast = nil }
         )
-        toastTimer = Task {
-            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+    }
+    
+    // MARK: - Private Timer Helpers
+    
+    /// Generic helper for auto-dismissing timers
+    /// Cancels previous timer, sets value, then creates new timer to clear value after duration
+    private func withAutoDismissTimer(
+        timer: inout Task<Void, Never>?,
+        duration: TimeInterval,
+        setValue: () -> Void,
+        clearValue: @escaping () -> Void
+    ) {
+        timer?.cancel()
+        setValue()
+        timer = Task {
+            try? await Task.sleep(nanoseconds: duration.nanoseconds)
             guard !Task.isCancelled else { return }
-            self.mutationToast = nil
+            clearValue()
         }
     }
 
@@ -101,6 +120,43 @@ class QueryState {
         currentQueryTask?.cancel()
         currentQueryTask = nil
         queryCounter += 1
+    }
+
+    // MARK: - Query Execution State Helpers
+
+    /// Start query execution - resets error and execution time, sets loading state
+    func startQueryExecution() {
+        isExecutingQuery = true
+        queryError = nil
+        queryExecutionTime = nil
+    }
+
+    /// Finish query execution with a result
+    func finishQueryExecution(with result: QueryResult) {
+        queryExecutionTime = result.executionTime
+        if result.isSuccess {
+            updateQueryResults(result.rows, columnNames: result.columnNames)
+        } else {
+            queryError = result.error
+            queryColumnNames = nil
+            showQueryResults = true
+        }
+        isExecutingQuery = false
+    }
+
+    /// Update query results and column names
+    func updateQueryResults(_ results: [TableRow], columnNames: [String]?) {
+        queryResults = results
+        queryColumnNames = columnNames?.isEmpty == false ? columnNames : nil
+        showQueryResults = true
+    }
+
+    /// Clear query results and reset state for a new query
+    func clearQueryResults() {
+        showQueryResults = false
+        queryResults = []
+        queryColumnNames = nil
+        selectedRowIDs = []
     }
 
     /// Reset query state

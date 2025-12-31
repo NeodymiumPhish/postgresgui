@@ -106,7 +106,7 @@ struct ConnectionDatabasePicker: View {
                     .foregroundColor(.primary)
                     .lineLimit(1)
             } else {
-                Text("⚠️ No Database")
+                Text("⚠️ Select DB")
                     .font(.system(size: PickerFontSize.label))
                     .foregroundColor(.secondary)
                     .opacity(opacity)

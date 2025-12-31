@@ -21,6 +21,8 @@ class ConnectionSidebarViewModel {
     private let loadingState: LoadingState
     private let modelContext: ModelContext
     private let keychainService: KeychainServiceProtocol
+    private let userDefaults: UserDefaultsProtocol
+    private let tableRefreshService: TableRefreshServiceProtocol
 
     // MARK: - State
 
@@ -29,9 +31,6 @@ class ConnectionSidebarViewModel {
     var hasRestoredConnection = false
 
     // Database state
-    var showCreateDatabaseForm = false
-    var newDatabaseName = ""
-    var createDatabaseError: String?
     var databaseToDelete: DatabaseInfo?
     var deleteError: String?
 
@@ -48,13 +47,18 @@ class ConnectionSidebarViewModel {
         tabManager: TabManager,
         loadingState: LoadingState,
         modelContext: ModelContext,
-        keychainService: KeychainServiceProtocol? = nil
+        keychainService: KeychainServiceProtocol? = nil,
+        userDefaults: UserDefaultsProtocol? = nil,
+        tableRefreshService: TableRefreshServiceProtocol? = nil
     ) {
         self.appState = appState
         self.tabManager = tabManager
         self.loadingState = loadingState
         self.modelContext = modelContext
-        self.keychainService = keychainService ?? KeychainServiceImpl()
+        let keychain = keychainService ?? KeychainServiceImpl()
+        self.keychainService = keychain
+        self.userDefaults = userDefaults ?? UserDefaultsWrapper()
+        self.tableRefreshService = tableRefreshService ?? TableRefreshService(keychainService: keychain)
     }
 
     // MARK: - Initialization & Restoration
@@ -62,7 +66,7 @@ class ConnectionSidebarViewModel {
     /// Wait for initial load to complete before restoring connection
     func waitForInitialLoad() async {
         while !loadingState.hasCompletedInitialLoad {
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            try? await Task.sleep(nanoseconds: 0.05.nanoseconds)
         }
 
         if appState.connection.currentConnection != nil {
@@ -81,12 +85,12 @@ class ConnectionSidebarViewModel {
         hasRestoredConnection = true
         Self.hasRestoredConnectionGlobally = true
 
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        try? await Task.sleep(nanoseconds: 0.1.nanoseconds)
 
         guard !connections.isEmpty else { return }
 
         guard
-            let lastConnectionIdString = UserDefaults.standard.string(
+            let lastConnectionIdString = userDefaults.string(
                 forKey: Constants.UserDefaultsKeys.lastConnectionId),
             let lastConnectionId = UUID(uuidString: lastConnectionIdString)
         else {
@@ -97,7 +101,7 @@ class ConnectionSidebarViewModel {
         }
 
         guard let lastConnection = connections.first(where: { $0.id == lastConnectionId }) else {
-            UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastConnectionId)
+            userDefaults.removeObject(forKey: Constants.UserDefaultsKeys.lastConnectionId)
             return
         }
 
@@ -140,7 +144,7 @@ class ConnectionSidebarViewModel {
         appState.connection.selectedDatabase = nil
         appState.connection.tables = []
         appState.connection.selectedTable = nil
-        UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
+        userDefaults.removeObject(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
 
         await connect(to: connection)
     }
@@ -165,7 +169,7 @@ class ConnectionSidebarViewModel {
         appState.connection.selectedTable = nil
 
         if persistSelection {
-            UserDefaults.standard.set(
+            userDefaults.set(
                 database.name, forKey: Constants.UserDefaultsKeys.lastDatabaseName)
             tabManager.updateActiveTab(connectionId: nil, databaseName: database.name, queryText: nil)
         }
@@ -175,26 +179,35 @@ class ConnectionSidebarViewModel {
         }
     }
 
-    /// Create a new database
-    func createDatabase() async {
-        guard !newDatabaseName.isEmpty else { return }
-
-        do {
-            try await appState.connection.databaseService.createDatabase(name: newDatabaseName)
-            appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
-            newDatabaseName = ""
-        } catch {
-            createDatabaseError = PostgresError.extractDetailedMessage(error)
-        }
-    }
-
-    /// Delete a database
+    /// Delete a database with optimistic update
     func deleteDatabase(_ database: DatabaseInfo) async {
+        let versionBeforeDelete = appState.connection.databasesVersion
+        let originalDatabases = appState.connection.databases
+        let wasSelected = appState.connection.selectedDatabase?.id == database.id
+
+        // Optimistically remove from UI
+        appState.connection.databases.removeAll { $0.id == database.id }
+        if wasSelected {
+            appState.connection.selectedDatabase = nil
+            appState.connection.tables = []
+            appState.connection.selectedTable = nil
+        }
+        databaseToDelete = nil
+
         do {
             try await appState.connection.databaseService.deleteDatabase(name: database.name)
-            appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
-            databaseToDelete = nil
+            appState.connection.databasesVersion += 1
         } catch {
+            // Rollback if databases list hasn't changed
+            if isSafeToRollback(
+                versionAtOperationStart: versionBeforeDelete,
+                currentVersion: appState.connection.databasesVersion
+            ) {
+                appState.connection.databases = originalDatabases
+                if wasSelected {
+                    appState.connection.selectedDatabase = database
+                }
+            }
             deleteError = PostgresError.extractDetailedMessage(error)
         }
     }
@@ -204,7 +217,7 @@ class ConnectionSidebarViewModel {
     /// Handle connection change: clear database selection when connection changes
     func handleConnectionChange(oldValue: ConnectionProfile?, newValue: ConnectionProfile?) {
         if oldValue != nil && newValue != oldValue {
-            UserDefaults.standard.removeObject(
+            userDefaults.removeObject(
                 forKey: Constants.UserDefaultsKeys.lastDatabaseName)
             appState.connection.selectedDatabase = nil
         }
@@ -228,6 +241,7 @@ class ConnectionSidebarViewModel {
         do {
             appState.connection.databases = try await appState.connection.databaseService
                 .fetchDatabases()
+            appState.connection.databasesVersion += 1
             await restoreLastDatabase()
         } catch {
             DebugLog.print("Failed to refresh databases: \(error)")
@@ -239,7 +253,7 @@ class ConnectionSidebarViewModel {
         else { return }
 
         guard
-            let lastDatabaseName = UserDefaults.standard.string(
+            let lastDatabaseName = userDefaults.string(
                 forKey: Constants.UserDefaultsKeys.lastDatabaseName),
             !lastDatabaseName.isEmpty
         else { return }
@@ -249,7 +263,7 @@ class ConnectionSidebarViewModel {
                 $0.name == lastDatabaseName
             })
         else {
-            UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
+            userDefaults.removeObject(forKey: Constants.UserDefaultsKeys.lastDatabaseName)
             return
         }
 
@@ -258,11 +272,10 @@ class ConnectionSidebarViewModel {
 
     private func loadTables(for database: DatabaseInfo) async {
         guard let connection = appState.connection.currentConnection else { return }
-        await TableRefreshService.loadTables(
+        await tableRefreshService.loadTables(
             for: database,
             connection: connection,
-            appState: appState,
-            keychainService: keychainService
+            appState: appState
         )
     }
 }

@@ -133,19 +133,13 @@ struct QueryResultsView: View {
                 emptyTableWithHeaders(columnNames: columnNames)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(alignment: .center) {
-                        ContentUnavailableView(
-                            "Empty Table",
-                            systemImage: "tablecells",
-                            description: Text("Query returned no rows")
-                        )
+                        Text("No rows returned")
+                            .foregroundStyle(.secondary)
                     }
             } else {
-                ContentUnavailableView(
-                    "Empty Table",
-                    systemImage: "tablecells",
-                    description: Text("Query returned no rows")
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Text("No rows returned")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else {
             // Display results using SwiftUI Table
@@ -169,7 +163,7 @@ struct QueryResultsView: View {
                     Image(systemName: "chevron.left")
                 }
                 .buttonStyle(.borderless)
-                .disabled(appState.query.currentPage == 0 || appState.query.isExecutingQuery)
+                .disabled(!canGoToPreviousPage(currentPage: appState.query.currentPage) || appState.query.isExecutingQuery)
 
                 Text("Page \(appState.query.currentPage + 1)")
                     .font(.system(.body, design: .monospaced))

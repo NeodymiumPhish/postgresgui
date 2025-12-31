@@ -21,10 +21,15 @@ class RootViewModel {
     private let loadingState: LoadingState
     private let modelContext: ModelContext
     private let keychainService: KeychainServiceProtocol
+    private let tableRefreshService: TableRefreshServiceProtocol
 
     // MARK: - State
 
     var initializationError: String?
+
+    /// Generation counter for tab switches - used to detect superseded operations
+    /// More reliable than Task.isCancelled because state mutations happen synchronously
+    private var tabSwitchGeneration: UInt64 = 0
 
     // MARK: - Initialization
 
@@ -33,13 +38,16 @@ class RootViewModel {
         tabManager: TabManager,
         loadingState: LoadingState,
         modelContext: ModelContext,
-        keychainService: KeychainServiceProtocol? = nil
+        keychainService: KeychainServiceProtocol? = nil,
+        tableRefreshService: TableRefreshServiceProtocol? = nil
     ) {
         self.appState = appState
         self.tabManager = tabManager
         self.loadingState = loadingState
         self.modelContext = modelContext
-        self.keychainService = keychainService ?? KeychainServiceImpl()
+        let keychain = keychainService ?? KeychainServiceImpl()
+        self.keychainService = keychain
+        self.tableRefreshService = tableRefreshService ?? TableRefreshService(keychainService: keychain)
     }
 
     // MARK: - App Initialization
@@ -53,11 +61,11 @@ class RootViewModel {
         tabManager.initialize(with: modelContext)
 
         // Wait for SwiftData to load connections
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        try? await Task.sleep(nanoseconds: 0.1.nanoseconds)
 
         DebugLog.print("🚀 [RootViewModel] connections count: \(connections.count)")
 
-        // If no connections exist, skip to ready state (show welcome)
+        // If no connections exist, skip to ready state (welcome screen will show)
         guard !connections.isEmpty else {
             DebugLog.print("🚀 [RootViewModel] No connections, showing welcome")
             loadingState.setReady()
@@ -97,6 +105,7 @@ class RootViewModel {
         loadingState.setPhase(.loadingDatabases)
         do {
             appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
+            appState.connection.databasesVersion += 1
         } catch {
             DebugLog.print("Failed to load databases: \(error)")
             initializationError = PostgresError.extractDetailedMessage(error)
@@ -112,23 +121,32 @@ class RootViewModel {
             // Load tables
             loadingState.setPhase(.loadingTables)
             await loadTables(for: database, connection: connection)
+
+            // Restore table selection and cached results from tab
+            restoreTableSelectionFromTab(activeTab)
+            restoreCachedResultsFromTab(activeTab)
         }
 
         loadingState.setReady()
-        appState.navigation.isShowingWelcomeScreen = false
     }
 
     // MARK: - Tab Change Handling
 
+    /// Check if this tab switch is still the current one
+    /// Returns false if a newer tab switch has started (this one is superseded)
+    private func isTabSwitchCurrent(_ generation: UInt64) -> Bool {
+        generation == tabSwitchGeneration
+    }
+
     /// Handle tab switch: restore query state, connect if needed, load tables
     func handleTabChange(_ tab: TabState?, connections: [ConnectionProfile]) async {
         guard let tab = tab else { return }
-        guard !Task.isCancelled else {
-            DebugLog.print("📑 [RootViewModel] Tab change cancelled before start")
-            return
-        }
 
-        DebugLog.print("📑 [RootViewModel] Tab changed to: \(tab.id)")
+        // Increment generation to invalidate any in-flight tab switches
+        tabSwitchGeneration &+= 1
+        let myGeneration = tabSwitchGeneration
+
+        DebugLog.print("📑 [RootViewModel] Tab changed to: \(tab.id) (generation: \(myGeneration))")
 
         // Restore query text and saved query selection
         let previousQueryText = appState.query.queryText
@@ -174,14 +192,19 @@ class RootViewModel {
 
             let result = await connectionService.connect(to: connection, saveAsLast: false)
 
-            // Check if cancelled after async operation
-            guard !Task.isCancelled else {
-                DebugLog.print("📑 [RootViewModel] Tab change cancelled after connection")
-                appState.connection.isLoadingTables = false
+            // Check if superseded after async operation
+            guard isTabSwitchCurrent(myGeneration) else {
+                DebugLog.print("📑 [RootViewModel] Tab switch superseded after connection (gen \(myGeneration) vs \(tabSwitchGeneration))")
                 return
             }
 
             if case .failure(let error) = result {
+                // Check if this is a cancellation error (superseded by newer connection)
+                if case ConnectionError.connectionCancelled = error {
+                    DebugLog.print("📑 [RootViewModel] Tab switch connection was cancelled (superseded)")
+                    appState.connection.isLoadingTables = false
+                    return
+                }
                 DebugLog.print("❌ [RootViewModel] Tab switch connection failed: \(error)")
                 initializationError = PostgresError.extractDetailedMessage(error)
                 appState.connection.isLoadingTables = false
@@ -192,20 +215,37 @@ class RootViewModel {
             DebugLog.print("🔌 [RootViewModel] Tab switch reusing existing connection to: \(connection.displayName)")
         }
 
+        // Check if superseded before database fetch
+        guard isTabSwitchCurrent(myGeneration) else {
+            DebugLog.print("📑 [RootViewModel] Tab switch superseded before database fetch (gen \(myGeneration) vs \(tabSwitchGeneration))")
+            return
+        }
+
         // Load databases
         do {
             appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
+            appState.connection.databasesVersion += 1
         } catch {
+            // Check if superseded - don't show error for race conditions
+            guard isTabSwitchCurrent(myGeneration) else {
+                DebugLog.print("📑 [RootViewModel] Tab switch superseded during database fetch (gen \(myGeneration) vs \(tabSwitchGeneration))")
+                return
+            }
+            // Check for notConnected which typically indicates a race condition
+            if case ConnectionError.notConnected = error {
+                DebugLog.print("📑 [RootViewModel] Tab switch got notConnected (likely superseded)")
+                appState.connection.isLoadingTables = false
+                return
+            }
             DebugLog.print("Failed to load databases: \(error)")
             initializationError = PostgresError.extractDetailedMessage(error)
             appState.connection.isLoadingTables = false
             return
         }
 
-        // Check if cancelled after database fetch
-        guard !Task.isCancelled else {
-            DebugLog.print("📑 [RootViewModel] Tab change cancelled after fetching databases")
-            appState.connection.isLoadingTables = false
+        // Check if superseded after database fetch
+        guard isTabSwitchCurrent(myGeneration) else {
+            DebugLog.print("📑 [RootViewModel] Tab switch superseded after fetching databases (gen \(myGeneration) vs \(tabSwitchGeneration))")
             return
         }
 
@@ -214,6 +254,12 @@ class RootViewModel {
            let database = appState.connection.databases.first(where: { $0.name == databaseName }) {
             appState.connection.selectedDatabase = database
             await loadTables(for: database, connection: connection)
+
+            // Check if superseded after loading tables
+            guard isTabSwitchCurrent(myGeneration) else {
+                DebugLog.print("📑 [RootViewModel] Tab switch superseded after loading tables (gen \(myGeneration) vs \(tabSwitchGeneration))")
+                return
+            }
 
             // Restore table selection from tab (after tables are loaded)
             restoreTableSelectionFromTab(tab)
@@ -246,6 +292,20 @@ class RootViewModel {
     func closeCurrentTab() {
         guard let activeTab = tabManager.activeTab else { return }
         tabManager.closeTab(activeTab)
+    }
+
+    // MARK: - Database Selection
+
+    /// Select a database and load its tables
+    func selectDatabase(_ database: DatabaseInfo) async {
+        guard let connection = appState.connection.currentConnection else { return }
+
+        appState.connection.selectedDatabase = database
+        appState.connection.tables = []
+        appState.connection.isLoadingTables = true
+        appState.connection.selectedTable = nil
+
+        await loadTables(for: database, connection: connection)
     }
 
     // MARK: - Private Helpers
@@ -293,6 +353,7 @@ class RootViewModel {
         appState.connection.selectedDatabase = nil
         appState.connection.selectedTable = nil
         appState.connection.databases = []
+        appState.connection.databasesVersion += 1
         appState.connection.tables = []
         appState.connection.isLoadingTables = false
     }
@@ -314,11 +375,10 @@ class RootViewModel {
     }
 
     private func loadTables(for database: DatabaseInfo, connection: ConnectionProfile) async {
-        await TableRefreshService.loadTables(
+        await tableRefreshService.loadTables(
             for: database,
             connection: connection,
-            appState: appState,
-            keychainService: keychainService
+            appState: appState
         )
     }
 }

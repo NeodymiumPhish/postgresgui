@@ -20,9 +20,9 @@ class ConnectionState {
     }
 
     // Database service dependency - injected for testability
-    var databaseService: DatabaseService
+    var databaseService: DatabaseServiceProtocol
 
-    init(databaseService: DatabaseService) {
+    init(databaseService: DatabaseServiceProtocol) {
         self.databaseService = databaseService
     }
 
@@ -36,6 +36,7 @@ class ConnectionState {
 
     // Data caches (populated by DatabaseService)
     var databases: [DatabaseInfo] = []
+    var databasesVersion: Int = 0
     var tables: [TableInfo] = []
     var isLoadingTables: Bool = false
 
@@ -43,20 +44,53 @@ class ConnectionState {
     // Key: table ID (schema.name), Value: (primaryKeyColumns, columnInfo)
     var tableMetadataCache: [String: (primaryKeys: [String]?, columns: [ColumnInfo]?)] = [:]
 
+    // MARK: - Metadata Cache Helpers
+
+    /// Get primary keys for a table, checking cache first, then selectedTable
+    func getPrimaryKeys(for table: TableInfo) -> [String]? {
+        return tableMetadataCache[table.id]?.primaryKeys ?? table.primaryKeyColumns
+    }
+
+    /// Get column info for a table, checking cache first, then selectedTable
+    func getColumnInfo(for table: TableInfo) -> [ColumnInfo]? {
+        return tableMetadataCache[table.id]?.columns ?? table.columnInfo
+    }
+
+    /// Check if table has primary keys (either cached or in table metadata)
+    func hasPrimaryKeys(for table: TableInfo) -> Bool {
+        guard let pkColumns = getPrimaryKeys(for: table) else { return false }
+        return !pkColumns.isEmpty
+    }
+    
+    /// Check if a table is still the currently selected table
+    /// Useful for race condition checks during async operations
+    func isTableStillSelected(_ tableId: String) -> Bool {
+        selectedTable?.id == tableId
+    }
+
+    /// Check if the full query context is still valid (table, database, and connection)
+    /// Prevents stale results when same table name exists in different databases/connections
+    func isQueryContextValid(tableId: String, databaseId: String?, connectionId: UUID?) -> Bool {
+        selectedTable?.id == tableId &&
+        selectedDatabase?.id == databaseId &&
+        currentConnection?.id == connectionId
+    }
+
     /// Clean up resources when window is closing
     func cleanupOnWindowClose() async {
         guard isConnected else { return }
 
         DebugLog.print("🧹 Window closing, cleaning up connection...")
 
-        // Disconnect database (awaits proper shutdown)
-        await databaseService.disconnect()
+        // Full shutdown including EventLoopGroup
+        await databaseService.shutdown()
 
         // Reset state
         currentConnection = nil
         selectedDatabase = nil
         selectedTable = nil
         databases = []
+        databasesVersion += 1
         tables = []
         tableMetadataCache = [:]
 

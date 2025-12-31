@@ -109,6 +109,14 @@ class DatabaseService {
         _isConnected = false
     }
 
+    /// Full shutdown including all resources - call on app termination
+    func shutdown() async {
+        logger.info("Shutting down DatabaseService")
+        await connectionManager.shutdown()
+        currentDatabase = nil
+        _isConnected = false
+    }
+
     /// Test connection without saving (static method - doesn't require instance)
     nonisolated static func testConnection(
         host: String,

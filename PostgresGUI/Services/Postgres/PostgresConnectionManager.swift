@@ -185,11 +185,14 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
         }
     }
 
-    /// Disconnect from database and cleanup resources
+    /// Disconnect from database (keeps EventLoopGroup alive for reuse)
+    /// Call shutdown() for full cleanup including EventLoopGroup
     func disconnect() async {
         logger.info("Disconnecting from PostgreSQL")
 
-        // Close connection
+        // Close connection but keep EventLoopGroup for reuse
+        // This prevents "Cannot schedule tasks on an EventLoop that has already shut down"
+        // errors when rapidly switching connections
         if let conn = connection {
             logger.debug("Closing PostgreSQL connection")
             do {
@@ -201,7 +204,17 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
             wrappedConnection = nil
         }
 
-        // Shutdown EventLoopGroup
+        logger.info("Disconnected from PostgreSQL")
+    }
+
+    /// Full shutdown including EventLoopGroup - call on app termination
+    func shutdown() async {
+        logger.info("Shutting down PostgresConnectionManager")
+
+        // Disconnect first
+        await disconnect()
+
+        // Now shutdown EventLoopGroup
         if let elg = eventLoopGroup {
             logger.debug("Shutting down EventLoopGroup")
 
@@ -210,13 +223,12 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
                 logger.info("✅ EventLoopGroup shutdown completed")
             } catch {
                 logger.error("❌ Error shutting down EventLoopGroup: \(error)")
-                // Even if shutdown fails, clear reference to prevent reuse
             }
 
             eventLoopGroup = nil
         }
 
-        logger.info("Disconnected from PostgreSQL")
+        logger.info("PostgresConnectionManager shutdown complete")
     }
 
     // MARK: - Connection Access

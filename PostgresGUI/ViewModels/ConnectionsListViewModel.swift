@@ -94,9 +94,9 @@ class ConnectionsListViewModel {
             DebugLog.print("✅ [ConnectionsListViewModel] Connection deleted successfully")
             connectionToDelete = nil
 
-            // If this was the last connection, show welcome screen
+            // If this was the last connection, clear last connection ID
+            // (Welcome screen will show automatically when connections.isEmpty)
             if wasLastConnection {
-                appState.navigation.isShowingWelcomeScreen = true
                 UserDefaults.standard.removeObject(forKey: Constants.UserDefaultsKeys.lastConnectionId)
             }
 

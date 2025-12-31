@@ -11,11 +11,6 @@ import AppKit
 
 @main
 struct PostgresGUIApp: App {
-    init() {
-        // Disable automatic window tabbing - we use our own tab bar
-        NSWindow.allowsAutomaticWindowTabbing = false
-    }
-
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             ConnectionProfile.self,
@@ -64,15 +59,11 @@ struct PostgresGUIApp: App {
     }()
 
     var body: some Scene {
-        WindowGroup {
+        Window("PostgresGUI", id: "main") {
             RootView()
         }
         .modelContainer(sharedModelContainer)
         .commands {
-            // Remove Settings menu item (Cmd+,)
-            CommandGroup(replacing: .appSettings) { }
-
-            // Remove default New Window command
             CommandGroup(replacing: .newItem) {
                 Button(action: openNewTab) {
                     Text("New Tab")
@@ -97,13 +88,12 @@ struct PostgresGUIApp: App {
         }
     }
 
+    // Menu commands can't access TabManager directly, so we use notifications.
+    // RootView observes these and calls tabManager methods.
     private func openNewTab() {
-        // Post notification to create a new tab in our custom tab bar
         NotificationCenter.default.post(name: .createNewTab, object: nil)
     }
-
     private func closeCurrentTab() {
-        // Post notification to close the current tab
         NotificationCenter.default.post(name: .closeCurrentTab, object: nil)
     }
 }

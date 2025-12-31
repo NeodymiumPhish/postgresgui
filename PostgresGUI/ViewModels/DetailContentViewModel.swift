@@ -18,6 +18,7 @@ class DetailContentViewModel {
     private let appState: AppState
     private let rowOperations: RowOperationsServiceProtocol
     private let queryService: QueryServiceProtocol
+    private let tableMetadataService: TableMetadataServiceProtocol
 
     // MARK: - Modal State
 
@@ -38,30 +39,42 @@ class DetailContentViewModel {
 
     // MARK: - Initialization
 
-    init(appState: AppState, rowOperations: RowOperationsServiceProtocol, queryService: QueryServiceProtocol) {
+    init(
+        appState: AppState,
+        rowOperations: RowOperationsServiceProtocol,
+        queryService: QueryServiceProtocol,
+        tableMetadataService: TableMetadataServiceProtocol? = nil
+    ) {
         self.appState = appState
         self.rowOperations = rowOperations
         self.queryService = queryService
+        self.tableMetadataService = tableMetadataService ?? TableMetadataService()
     }
 
     // MARK: - Table Metadata Helpers
 
-    /// Updates the selected table with metadata if not already set
-    private func updateSelectedTableMetadata(
-        primaryKeys: [String]? = nil,
-        columnInfo: [ColumnInfo]? = nil
-    ) {
-        guard let selectedTable = appState.connection.selectedTable else { return }
-
-        let needsPKUpdate = primaryKeys != nil && selectedTable.primaryKeyColumns == nil
-        let needsColInfoUpdate = columnInfo != nil && selectedTable.columnInfo == nil
-
-        guard needsPKUpdate || needsColInfoUpdate else { return }
-
-        var updatedTable = selectedTable
-        if needsPKUpdate { updatedTable.primaryKeyColumns = primaryKeys }
-        if needsColInfoUpdate { updatedTable.columnInfo = columnInfo }
-        appState.connection.selectedTable = updatedTable
+    /// Generic helper for fetching metadata and executing a callback
+    /// Handles error cases and updates metadata cache
+    private func fetchMetadataAndExecute<T>(
+        table: TableInfo,
+        onSuccess: (TableInfo) -> T
+    ) async -> Result<T, RowOperationError> {
+        let result = await rowOperations.ensureTableMetadata(
+            table: table,
+            databaseService: appState.connection.databaseService
+        )
+        
+        switch result {
+        case .success(let updatedTable):
+            tableMetadataService.updateSelectedTableMetadata(
+                connectionState: appState.connection,
+                primaryKeys: updatedTable.primaryKeyColumns,
+                columnInfo: updatedTable.columnInfo
+            )
+            return .success(onSuccess(updatedTable))
+        case .failure(let error):
+            return .failure(error)
+        }
     }
 
     // MARK: - JSON Viewer
@@ -98,12 +111,14 @@ class DetailContentViewModel {
 
         switch result {
         case .success:
-            // Check metadata cache first, then selectedTable
-            let cachedMetadata = appState.connection.tableMetadataCache[selectedTable.id]
-            let pkColumns = cachedMetadata?.primaryKeys ?? selectedTable.primaryKeyColumns
-
-            if let pkColumns = pkColumns, !pkColumns.isEmpty {
-                updateSelectedTableMetadata(primaryKeys: pkColumns)
+            // Check if we have primary keys cached
+            if appState.connection.hasPrimaryKeys(for: selectedTable) {
+                let pkColumns = appState.connection.getPrimaryKeys(for: selectedTable)
+                tableMetadataService.updateSelectedTableMetadata(
+                    connectionState: appState.connection,
+                    primaryKeys: pkColumns,
+                    columnInfo: nil
+                )
                 showDeleteConfirmation = true
             } else {
                 // Fetch primary keys if not cached
@@ -117,21 +132,19 @@ class DetailContentViewModel {
     }
 
     private func fetchPrimaryKeysAndShowDeleteDialog(table: TableInfo) async {
-        do {
-            let pkColumns = try await appState.connection.databaseService.fetchPrimaryKeyColumns(
-                schema: table.schema,
-                table: table.name
-            )
-
-            guard !pkColumns.isEmpty else {
+        let result = await fetchMetadataAndExecute(table: table) { updatedTable in
+            updatedTable
+        }
+        
+        switch result {
+        case .success(let updatedTable):
+            guard let pkColumns = updatedTable.primaryKeyColumns, !pkColumns.isEmpty else {
                 deleteError = RowOperationError.noPrimaryKey.localizedDescription
                 return
             }
-
-            updateSelectedTableMetadata(primaryKeys: pkColumns)
             showDeleteConfirmation = true
-        } catch {
-            deleteError = "Failed to fetch table metadata: \(error.localizedDescription)"
+        case .failure(let error):
+            deleteError = error.localizedDescription
         }
     }
 
@@ -163,7 +176,7 @@ class DetailContentViewModel {
 
         // Rollback on failure (only if results haven't been replaced by a refresh)
         if case .failure(let error) = result {
-            if appState.query.resultsVersion == versionBeforeDelete {
+            if isSafeToRollback(versionAtOperationStart: versionBeforeDelete, currentVersion: appState.query.resultsVersion) {
                 // Safe to rollback - results haven't changed
                 for (index, row) in rowsWithIndices.sorted(by: { $0.index < $1.index }) {
                     let insertIndex = min(index, appState.query.queryResults.count)
@@ -209,13 +222,16 @@ class DetailContentViewModel {
                 return
             }
 
-            // Check metadata cache first, then selectedTable
-            let cachedMetadata = appState.connection.tableMetadataCache[selectedTable.id]
-            let pkColumns = cachedMetadata?.primaryKeys ?? selectedTable.primaryKeyColumns
-            let colInfo = cachedMetadata?.columns ?? selectedTable.columnInfo
+            // Check if we have required metadata cached
+            let pkColumns = appState.connection.getPrimaryKeys(for: selectedTable)
+            let colInfo = appState.connection.getColumnInfo(for: selectedTable)
 
             if let pkColumns = pkColumns, !pkColumns.isEmpty, colInfo != nil {
-                updateSelectedTableMetadata(primaryKeys: pkColumns, columnInfo: colInfo)
+                tableMetadataService.updateSelectedTableMetadata(
+                    connectionState: appState.connection,
+                    primaryKeys: pkColumns,
+                    columnInfo: colInfo
+                )
                 self.rowToEdit = rowToEdit
                 showRowEditor = true
             } else {
@@ -230,27 +246,21 @@ class DetailContentViewModel {
     }
 
     private func fetchMetadataAndShowEditor(table: TableInfo, row: TableRow) async {
-        do {
-            let pkColumns = try await appState.connection.databaseService.fetchPrimaryKeyColumns(
-                schema: table.schema,
-                table: table.name
-            )
-
-            let columnInfo = try await appState.connection.databaseService.fetchColumnInfo(
-                schema: table.schema,
-                table: table.name
-            )
-
-            guard !pkColumns.isEmpty else {
+        let result = await fetchMetadataAndExecute(table: table) { updatedTable in
+            updatedTable
+        }
+        
+        switch result {
+        case .success(let updatedTable):
+            guard let pkColumns = updatedTable.primaryKeyColumns, !pkColumns.isEmpty,
+                  let columnInfo = updatedTable.columnInfo else {
                 editError = RowOperationError.noPrimaryKey.localizedDescription
                 return
             }
-
-            updateSelectedTableMetadata(primaryKeys: pkColumns, columnInfo: columnInfo)
             self.rowToEdit = row
             showRowEditor = true
-        } catch {
-            editError = "Failed to fetch table metadata: \(error.localizedDescription)"
+        case .failure(let error):
+            editError = error.localizedDescription
         }
     }
 
@@ -291,13 +301,8 @@ class DetailContentViewModel {
         DebugLog.print("🔄 [DetailContentViewModel] Refresh button clicked")
 
         // Set loading state FIRST to prevent empty state flicker
-        appState.query.isExecutingQuery = true
-        appState.query.queryError = nil
-        appState.query.queryExecutionTime = nil
-        appState.query.showQueryResults = false // Hide results view during loading
-        appState.query.queryResults = [] // Clear previous results
-        appState.query.queryColumnNames = nil // Clear previous column names
-        appState.query.selectedRowIDs = [] // Clear selected rows
+        appState.query.startQueryExecution()
+        appState.query.clearQueryResults()
 
         // Execute query
         let result = await queryService.executeQuery(appState.query.queryText)
@@ -305,19 +310,13 @@ class DetailContentViewModel {
         // Update state based on result
         if result.isSuccess {
             appState.query.resultsVersion += 1
-            appState.query.queryResults = result.rows
-            appState.query.queryColumnNames = result.columnNames.isEmpty ? nil : result.columnNames
-            appState.query.showQueryResults = true
-            appState.query.queryExecutionTime = result.executionTime
-            DebugLog.print("✅ [DetailContentViewModel] Query executed successfully, showing results")
-        } else if let error = result.error {
-            appState.query.queryError = error
-            appState.query.queryColumnNames = nil
-            appState.query.showQueryResults = true
-            appState.query.queryExecutionTime = result.executionTime
-            DebugLog.print("❌ [DetailContentViewModel] Query execution failed: \(error)")
         }
+        appState.query.finishQueryExecution(with: result)
 
-        appState.query.isExecutingQuery = false
+        if result.isSuccess {
+            DebugLog.print("✅ [DetailContentViewModel] Query executed successfully, showing results")
+        } else {
+            DebugLog.print("❌ [DetailContentViewModel] Query execution failed: \(result.error?.localizedDescription ?? "unknown")")
+        }
     }
 }

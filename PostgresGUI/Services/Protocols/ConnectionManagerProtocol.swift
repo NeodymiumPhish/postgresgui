@@ -45,8 +45,11 @@ protocol ConnectionManagerProtocol: Actor {
         tlsMode: DatabaseTLSMode
     ) async throws
 
-    /// Disconnect from database and cleanup resources
+    /// Disconnect from database (keeps resources like EventLoopGroup for reuse)
     func disconnect() async
+
+    /// Full shutdown including all resources - call on app termination
+    func shutdown() async
 
     /// Execute an operation with the active connection
     /// - Parameter operation: Async closure that receives the abstract DatabaseConnectionProtocol

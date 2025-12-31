@@ -45,18 +45,6 @@ struct ConnectionsDatabasesSidebar: View {
                     get: { viewModel?.connectionError },
                     set: { viewModel?.connectionError = $0 }
                 ),
-                showCreateDatabaseForm: Binding(
-                    get: { viewModel?.showCreateDatabaseForm ?? false },
-                    set: { viewModel?.showCreateDatabaseForm = $0 }
-                ),
-                newDatabaseName: Binding(
-                    get: { viewModel?.newDatabaseName ?? "" },
-                    set: { viewModel?.newDatabaseName = $0 }
-                ),
-                createDatabaseError: Binding(
-                    get: { viewModel?.createDatabaseError },
-                    set: { viewModel?.createDatabaseError = $0 }
-                ),
                 databaseToDelete: Binding(
                     get: { viewModel?.databaseToDelete },
                     set: { viewModel?.databaseToDelete = $0 }
@@ -65,9 +53,6 @@ struct ConnectionsDatabasesSidebar: View {
                     get: { viewModel?.deleteError },
                     set: { viewModel?.deleteError = $0 }
                 ),
-                createDatabase: {
-                    await viewModel?.createDatabase()
-                },
                 deleteDatabase: { database in
                     await viewModel?.deleteDatabase(database)
                 }
@@ -174,7 +159,7 @@ struct ConnectionsDatabasesSidebar: View {
     }
 
     private func handleCreateDatabase() {
-        viewModel?.showCreateDatabaseForm = true
+        appState.navigation.showCreateDatabase()
     }
 
     private func handleDeleteError(_ error: String) {
@@ -187,12 +172,8 @@ struct ConnectionsDatabasesSidebar: View {
 private struct DatabaseAlertsModifier: ViewModifier {
     @Binding var showConnectionError: Bool
     @Binding var connectionError: String?
-    @Binding var showCreateDatabaseForm: Bool
-    @Binding var newDatabaseName: String
-    @Binding var createDatabaseError: String?
     @Binding var databaseToDelete: DatabaseInfo?
     @Binding var deleteError: String?
-    let createDatabase: () async -> Void
     let deleteDatabase: (DatabaseInfo) async -> Void
 
     func body(content: Content) -> some View {
@@ -203,29 +184,6 @@ private struct DatabaseAlertsModifier: ViewModifier {
                 }
             } message: {
                 if let error = connectionError {
-                    Text(error)
-                }
-            }
-            .alert("Create Database", isPresented: $showCreateDatabaseForm) {
-                TextField("Database Name", text: $newDatabaseName)
-                Button("Create") {
-                    Task {
-                        await createDatabase()
-                    }
-                }
-                Button("Cancel", role: .cancel) {
-                    newDatabaseName = ""
-                }
-            }
-            .alert("Error Creating Database", isPresented: Binding(
-                get: { createDatabaseError != nil },
-                set: { if !$0 { createDatabaseError = nil } }
-            )) {
-                Button("OK", role: .cancel) {
-                    createDatabaseError = nil
-                }
-            } message: {
-                if let error = createDatabaseError {
                     Text(error)
                 }
             }

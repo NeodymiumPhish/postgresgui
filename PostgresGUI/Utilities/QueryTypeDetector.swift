@@ -81,10 +81,14 @@ struct QueryTypeDetector {
     static func extractTableName(_ sql: String) -> String? {
         let trimmed = sql.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        // Pattern for table names: either "quoted identifier" or unquoted_identifier
+        // Quoted can contain spaces, unquoted cannot
+        let tableNamePattern = "(?:\"[^\"]+\"|[\\w\\.]+)"
+
         // INSERT INTO table_name
-        if let match = trimmed.range(of: "INSERT\\s+INTO\\s+([\"']?[\\w\\.]+[\"']?)", options: [.regularExpression, .caseInsensitive]) {
+        if let match = trimmed.range(of: "INSERT\\s+INTO\\s+(\(tableNamePattern))", options: [.regularExpression, .caseInsensitive]) {
             let afterInsertInto = trimmed[match]
-            if let tableMatch = afterInsertInto.range(of: "INTO\\s+([\"']?[\\w\\.]+[\"']?)", options: [.regularExpression, .caseInsensitive]) {
+            if let tableMatch = afterInsertInto.range(of: "INTO\\s+(\(tableNamePattern))", options: [.regularExpression, .caseInsensitive]) {
                 var tablePart = String(afterInsertInto[tableMatch]).replacingOccurrences(of: "INTO", with: "", options: .caseInsensitive)
                 tablePart = tablePart.trimmingCharacters(in: .whitespaces)
                 return cleanTableName(tablePart)
@@ -92,16 +96,16 @@ struct QueryTypeDetector {
         }
 
         // UPDATE table_name SET
-        if let match = trimmed.range(of: "UPDATE\\s+([\"']?[\\w\\.]+[\"']?)", options: [.regularExpression, .caseInsensitive]) {
+        if let match = trimmed.range(of: "UPDATE\\s+(\(tableNamePattern))", options: [.regularExpression, .caseInsensitive]) {
             var tablePart = String(trimmed[match]).replacingOccurrences(of: "UPDATE", with: "", options: .caseInsensitive)
             tablePart = tablePart.trimmingCharacters(in: .whitespaces)
             return cleanTableName(tablePart)
         }
 
         // DELETE FROM table_name
-        if let match = trimmed.range(of: "DELETE\\s+FROM\\s+([\"']?[\\w\\.]+[\"']?)", options: [.regularExpression, .caseInsensitive]) {
+        if let match = trimmed.range(of: "DELETE\\s+FROM\\s+(\(tableNamePattern))", options: [.regularExpression, .caseInsensitive]) {
             let afterDeleteFrom = trimmed[match]
-            if let tableMatch = afterDeleteFrom.range(of: "FROM\\s+([\"']?[\\w\\.]+[\"']?)", options: [.regularExpression, .caseInsensitive]) {
+            if let tableMatch = afterDeleteFrom.range(of: "FROM\\s+(\(tableNamePattern))", options: [.regularExpression, .caseInsensitive]) {
                 var tablePart = String(afterDeleteFrom[tableMatch]).replacingOccurrences(of: "FROM", with: "", options: .caseInsensitive)
                 tablePart = tablePart.trimmingCharacters(in: .whitespaces)
                 return cleanTableName(tablePart)
@@ -109,9 +113,12 @@ struct QueryTypeDetector {
         }
 
         // CREATE TABLE table_name
-        if let match = trimmed.range(of: "CREATE\\s+(TEMP(ORARY)?\\s+)?TABLE\\s+(IF\\s+NOT\\s+EXISTS\\s+)?([\"']?[\\w\\.]+[\"']?)", options: [.regularExpression, .caseInsensitive]) {
+        if let match = trimmed.range(of: "CREATE\\s+(TEMP(ORARY)?\\s+)?TABLE\\s+(IF\\s+NOT\\s+EXISTS\\s+)?(\(tableNamePattern))", options: [.regularExpression, .caseInsensitive]) {
             let matched = String(trimmed[match])
-            // Extract last word-like token (the table name)
+            // For quoted names, extract the quoted part; for unquoted, get last token
+            if let quotedMatch = matched.range(of: "\"[^\"]+\"", options: .regularExpression) {
+                return cleanTableName(String(matched[quotedMatch]))
+            }
             let components = matched.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
             if let last = components.last {
                 return cleanTableName(last)
@@ -119,8 +126,11 @@ struct QueryTypeDetector {
         }
 
         // DROP TABLE table_name
-        if let match = trimmed.range(of: "DROP\\s+TABLE\\s+(IF\\s+EXISTS\\s+)?([\"']?[\\w\\.]+[\"']?)", options: [.regularExpression, .caseInsensitive]) {
+        if let match = trimmed.range(of: "DROP\\s+TABLE\\s+(IF\\s+EXISTS\\s+)?(\(tableNamePattern))", options: [.regularExpression, .caseInsensitive]) {
             let matched = String(trimmed[match])
+            if let quotedMatch = matched.range(of: "\"[^\"]+\"", options: .regularExpression) {
+                return cleanTableName(String(matched[quotedMatch]))
+            }
             let components = matched.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
             if let last = components.last {
                 return cleanTableName(last)
@@ -128,8 +138,11 @@ struct QueryTypeDetector {
         }
 
         // ALTER TABLE table_name
-        if let match = trimmed.range(of: "ALTER\\s+TABLE\\s+([\"']?[\\w\\.]+[\"']?)", options: [.regularExpression, .caseInsensitive]) {
+        if let match = trimmed.range(of: "ALTER\\s+TABLE\\s+(\(tableNamePattern))", options: [.regularExpression, .caseInsensitive]) {
             let matched = String(trimmed[match])
+            if let quotedMatch = matched.range(of: "\"[^\"]+\"", options: .regularExpression) {
+                return cleanTableName(String(matched[quotedMatch]))
+            }
             let components = matched.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
             if let last = components.last {
                 return cleanTableName(last)

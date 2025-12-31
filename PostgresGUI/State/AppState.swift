@@ -16,16 +16,22 @@ class AppState {
     let connection: ConnectionState
     let query: QueryState
 
+    // MARK: - Services
+
+    private let tableMetadataService: TableMetadataServiceProtocol
+
     // MARK: - Initialization
 
     init(
         navigation: NavigationState? = nil,
         connection: ConnectionState? = nil,
-        query: QueryState? = nil
+        query: QueryState? = nil,
+        tableMetadataService: TableMetadataServiceProtocol? = nil
     ) {
         self.navigation = navigation ?? NavigationState()
         self.connection = connection ?? ConnectionState()
         self.query = query ?? QueryState()
+        self.tableMetadataService = tableMetadataService ?? TableMetadataService()
     }
 
     // MARK: - Convenience Methods
@@ -39,102 +45,66 @@ class AppState {
     /// Centralized query execution to prevent race conditions when rapidly switching tables
     @MainActor
     func executeTableQuery(for table: TableInfo) async {
+        // Capture context to verify nothing changed after async operations
+        // This prevents stale query results when user switches table, database, or connection
+        let tableId = table.id
+        let databaseId = connection.selectedDatabase?.id
+        let connectionId = connection.currentConnection?.id
+
         let queryService = QueryService(
             databaseService: connection.databaseService,
             queryState: query
         )
 
         // Set loading state
-        query.isExecutingQuery = true
-        query.queryError = nil
-        query.queryExecutionTime = nil
+        query.startQueryExecution()
 
-        // Execute query (fetch +1 to detect if more pages exist)
+        // Execute query (fetch +1 to detect if more pages exists)
         let result = await queryService.executeTableQuery(
             for: table,
             limit: query.rowsPerPage + 1,
-            offset: query.currentPage * query.rowsPerPage
+            offset: calculateOffset(page: query.currentPage, pageSize: query.rowsPerPage)
         )
+
+        // Only update state if context hasn't changed (table, database, AND connection)
+        // Prevents stale results when same table name exists in different databases
+        guard connection.isQueryContextValid(
+            tableId: tableId,
+            databaseId: databaseId,
+            connectionId: connectionId
+        ) else {
+            DebugLog.print("⚠️ [AppState] Query for \(table.name) superseded (context changed), skipping state update")
+            return
+        }
 
         // Update state based on result
         if result.isSuccess {
             // Check if we got more rows than requested (indicates next page exists)
-            query.hasNextPage = result.rows.count > query.rowsPerPage
+            query.hasNextPage = hasMorePages(fetchedRowCount: result.rows.count, pageSize: query.rowsPerPage)
             // Trim to actual page size
-            query.queryResults = query.hasNextPage ? Array(result.rows.prefix(query.rowsPerPage)) : result.rows
-            query.queryColumnNames = result.columnNames.isEmpty ? nil : result.columnNames
-            query.showQueryResults = true
-            query.queryExecutionTime = result.executionTime
+            let trimmedRows = query.hasNextPage ? Array(result.rows.prefix(query.rowsPerPage)) : result.rows
+            let trimmedResult = QueryResult.success(
+                rows: trimmedRows,
+                columnNames: result.columnNames,
+                executionTime: result.executionTime
+            )
+            query.finishQueryExecution(with: trimmedResult)
 
             // Fetch table metadata (primary keys, column info) for edit/delete operations
             await fetchTableMetadata(for: table)
-        } else if let error = result.error {
-            query.queryError = error
-            query.queryColumnNames = nil
-            query.showQueryResults = true
-            query.queryExecutionTime = result.executionTime
+        } else {
+            query.finishQueryExecution(with: result)
         }
-
-        query.isExecutingQuery = false
     }
 
     /// Fetch and cache table metadata (primary keys, column info)
     @MainActor
     private func fetchTableMetadata(for table: TableInfo) async {
-        // Store table ID to verify selection hasn't changed
-        let tableId = table.id
-
-        var primaryKeyColumns: [String]?
-        var columnInfo: [ColumnInfo]?
-
-        // Fetch primary key columns if not cached
-        if table.primaryKeyColumns == nil {
-            do {
-                primaryKeyColumns = try await connection.databaseService.fetchPrimaryKeyColumns(
-                    schema: table.schema,
-                    table: table.name
-                )
-            } catch {
-                DebugLog.print("⚠️ [AppState] Failed to fetch primary keys: \(error)")
-            }
-        }
-
-        // Check if user switched tables during primary key fetch
-        guard connection.selectedTable?.id == tableId else {
-            DebugLog.print("⚠️ [AppState] Table selection changed during metadata fetch, skipping update for \(table.schema).\(table.name)")
-            return
-        }
-
-        // Fetch column info if not cached
-        if table.columnInfo == nil {
-            do {
-                columnInfo = try await connection.databaseService.fetchColumnInfo(
-                    schema: table.schema,
-                    table: table.name
-                )
-            } catch {
-                DebugLog.print("⚠️ [AppState] Failed to fetch column info: \(error)")
-            }
-        }
-
-        // Final check: only update if this table is still selected (prevents race condition)
-        guard connection.selectedTable?.id == tableId else {
-            DebugLog.print("⚠️ [AppState] Table selection changed during metadata fetch, skipping update for \(table.schema).\(table.name)")
-            return
-        }
-
-        // Only update if we actually fetched new data
-        guard primaryKeyColumns != nil || columnInfo != nil else {
-            return
-        }
-
-        // Store in separate metadata cache (doesn't trigger List re-renders)
-        let existingCache = connection.tableMetadataCache[tableId]
-        connection.tableMetadataCache[tableId] = (
-            primaryKeys: primaryKeyColumns ?? existingCache?.primaryKeys,
-            columns: columnInfo ?? existingCache?.columns
+        _ = await tableMetadataService.fetchAndCacheMetadata(
+            for: table,
+            connectionState: connection,
+            databaseService: connection.databaseService
         )
-        DebugLog.print("✅ [AppState] Cached metadata for \(table.schema).\(table.name)")
     }
 
     // MARK: - Cleanup

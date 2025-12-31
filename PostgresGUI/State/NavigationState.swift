@@ -16,11 +16,15 @@ class NavigationState {
 
     // Modal/Sheet state
     var isShowingConnectionForm: Bool = false
-    var isShowingWelcomeScreen: Bool = true
     var connectionToEdit: ConnectionProfile? = nil
+    var isShowingCreateDatabase: Bool = false
 
     // Sheet management helpers
     func showConnectionForm() {
         isShowingConnectionForm = true
+    }
+
+    func showCreateDatabase() {
+        isShowingCreateDatabase = true
     }
 }

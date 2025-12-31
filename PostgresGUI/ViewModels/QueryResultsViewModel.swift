@@ -35,12 +35,19 @@ class QueryResultsViewModel {
     func handleTableSelectionChange(oldValue: String?, newValue: String?) {
         let table = appState.connection.selectedTable
 
-        // Check if we already have results for THIS specific table (e.g., restored from tab cache)
-        let hasCachedResultsForThisTable = !appState.query.queryResults.isEmpty
-            && appState.query.cachedResultsTableId == newValue
+        // Check if we should use cached results for the selected table
+        let shouldUseCached = shouldUseCachedResults(
+            hasResults: !appState.query.queryResults.isEmpty,
+            cachedTableId: appState.query.cachedResultsTableId,
+            selectedTableId: newValue
+        )
 
         // Clear results when table changes, UNLESS we have cached results for this table
-        if oldValue != newValue && !hasCachedResultsForThisTable {
+        if shouldClearResultsOnTableChange(
+            oldTableId: oldValue,
+            newTableId: newValue,
+            hasCachedResultsForNewTable: shouldUseCached
+        ) {
             appState.query.queryColumnNames = nil
             appState.query.queryError = nil
             appState.query.currentPage = 0
@@ -57,7 +64,7 @@ class QueryResultsViewModel {
             lastExecutedTableID = table.id
 
             // Skip query only if we have cached results for THIS specific table
-            if hasCachedResultsForThisTable {
+            if shouldUseCached {
                 DebugLog.print("📋 [QueryResultsViewModel] Skipping query - using cached results for table \(table.name)")
             } else {
                 Task { @MainActor in
@@ -104,7 +111,7 @@ class QueryResultsViewModel {
         await appState.executeTableQuery(for: table)
         // Only update cache tracking if this table is still selected
         // (prevents race condition when rapidly switching tables)
-        guard appState.connection.selectedTable?.id == table.id else { return }
+        guard appState.connection.isTableStillSelected(table.id) else { return }
         appState.query.cachedResultsTableId = table.id
         // Cache results to tab for restoration on tab switch
         tabManager.updateActiveTabResults(

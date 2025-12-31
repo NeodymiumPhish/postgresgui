@@ -227,7 +227,7 @@ class ConnectionFormViewModel {
 
         copyButtonLabel = "Copied!"
         Task {
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            try? await Task.sleep(nanoseconds: 1.5.nanoseconds)
             copyButtonLabel = "Copy"
         }
     }
@@ -266,7 +266,7 @@ class ConnectionFormViewModel {
             // Ensure testing state is visible for at least 150ms
             let elapsed = Date().timeIntervalSince(testStartTime)
             if elapsed < 0.15 {
-                try? await Task.sleep(nanoseconds: UInt64((0.15 - elapsed) * 1_000_000_000))
+                try? await Task.sleep(nanoseconds: (0.15 - elapsed).nanoseconds)
             }
 
             if success {
@@ -289,7 +289,7 @@ class ConnectionFormViewModel {
     private func handleTestError(_ message: String, startTime: Date) async {
         let elapsed = Date().timeIntervalSince(startTime)
         if elapsed < 0.15 {
-            try? await Task.sleep(nanoseconds: UInt64((0.15 - elapsed) * 1_000_000_000))
+            try? await Task.sleep(nanoseconds: (0.15 - elapsed).nanoseconds)
         }
         connectionTestStatus = .error(message: message)
         DebugLog.print("   ❌ \(message)")
@@ -346,6 +346,7 @@ class ConnectionFormViewModel {
                     appState.connection.selectedTable = nil
                     appState.connection.tables = []
                     appState.connection.databases = []
+                    appState.connection.databasesVersion += 1
                 }
             } else {
                 // Create new connection
