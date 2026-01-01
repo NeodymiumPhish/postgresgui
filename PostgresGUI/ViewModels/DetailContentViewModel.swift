@@ -253,7 +253,7 @@ class DetailContentViewModel {
         switch result {
         case .success(let updatedTable):
             guard let pkColumns = updatedTable.primaryKeyColumns, !pkColumns.isEmpty,
-                  let columnInfo = updatedTable.columnInfo else {
+                  let _ = updatedTable.columnInfo else {
                 editError = RowOperationError.noPrimaryKey.localizedDescription
                 return
             }
