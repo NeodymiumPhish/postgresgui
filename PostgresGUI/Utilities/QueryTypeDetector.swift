@@ -17,6 +17,22 @@ enum QueryType: Equatable {
     case alterTable
     case other
 
+    nonisolated static func == (lhs: QueryType, rhs: QueryType) -> Bool {
+        switch (lhs, rhs) {
+        case (.select, .select),
+             (.insert, .insert),
+             (.update, .update),
+             (.delete, .delete),
+             (.createTable, .createTable),
+             (.dropTable, .dropTable),
+             (.alterTable, .alterTable),
+             (.other, .other):
+            return true
+        default:
+            return false
+        }
+    }
+
     var isMutation: Bool {
         switch self {
         case .select, .other:
