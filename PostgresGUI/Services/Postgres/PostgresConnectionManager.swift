@@ -16,11 +16,24 @@ import Logging
 /// Handles connection lifecycle, EventLoopGroup management, and async/await bridging
 actor PostgresConnectionManager: ConnectionManagerProtocol {
 
+    // MARK: - Connection Parameters Storage
+
+    /// Stored connection parameters for reconnection
+    private struct ConnectionParams {
+        let host: String
+        let port: Int
+        let username: String
+        let password: String
+        let database: String
+        let tlsMode: DatabaseTLSMode
+    }
+
     // MARK: - Properties
 
     private var eventLoopGroup: MultiThreadedEventLoopGroup?
     private var connection: PostgresConnection?
     private var wrappedConnection: PostgresDatabaseConnection?
+    private var storedParams: ConnectionParams?
     private let logger = Logger.debugLogger(label: "com.postgresgui.connection")
 
     /// Generation counter to detect stale connection attempts
@@ -152,6 +165,14 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
 
             self.connection = newConnection
             self.wrappedConnection = PostgresDatabaseConnection(connection: newConnection, logger: logger)
+            self.storedParams = ConnectionParams(
+                host: host,
+                port: port,
+                username: username,
+                password: password,
+                database: database,
+                tlsMode: tlsMode
+            )
             logger.info("Successfully connected to PostgreSQL")
         } catch let error as ConnectionError where error == .connectionCancelled {
             // Re-throw cancellation without shutting down ELG (newer connection needs it)
@@ -211,6 +232,9 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
     func shutdown() async {
         logger.info("Shutting down PostgresConnectionManager")
 
+        // Clear stored params on full shutdown
+        storedParams = nil
+
         // Disconnect first
         await disconnect()
 
@@ -231,14 +255,92 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
         logger.info("PostgresConnectionManager shutdown complete")
     }
 
+    // MARK: - Reconnection
+
+    /// Reconnect using stored connection parameters
+    private func reconnect() async throws {
+        guard let params = storedParams else {
+            logger.error("Cannot reconnect: no stored connection parameters")
+            throw ConnectionError.notConnected
+        }
+
+        logger.info("Attempting to reconnect...")
+
+        // Close the dead connection without clearing params
+        if let conn = connection {
+            try? await conn.close()
+            connection = nil
+            wrappedConnection = nil
+        }
+
+        // Reconnect using stored params
+        try await connect(
+            host: params.host,
+            port: params.port,
+            username: params.username,
+            password: params.password,
+            database: params.database,
+            tlsMode: params.tlsMode
+        )
+    }
+
+    /// Check if an error indicates a dead/stale connection that should be retried
+    ///
+    /// Uses PostgresNIO's PSQLError.Code for reliable detection rather than string matching.
+    private static func isConnectionError(_ error: Error) -> Bool {
+        // Check PSQLError codes (most reliable for PostgresNIO errors)
+        if let psqlError = error as? PSQLError {
+            let code = psqlError.code
+            // Connection-related codes that indicate the connection is dead
+            if code == .serverClosedConnection ||
+               code == .connectionError ||
+               code == .uncleanShutdown ||
+               code == .messageDecodingFailure {
+                return true
+            }
+            // Don't retry on clientClosedConnection (we closed it intentionally)
+            // Don't retry on queryCancelled (just the query was cancelled)
+            // Don't retry on server errors (SQL errors, auth errors, etc.)
+            return false
+        }
+
+        // Check for NIO-level connection errors
+        if error is NIOConnectionError {
+            return true
+        }
+
+        // Check our own ConnectionError type
+        if let connError = error as? ConnectionError {
+            switch connError {
+            case .timeout, .networkUnreachable, .notConnected:
+                return true
+            default:
+                return false
+            }
+        }
+
+        return false
+    }
+
     // MARK: - Connection Access
 
     /// Execute an operation with the active connection
     /// - Parameter operation: Async closure that receives the abstract DatabaseConnectionProtocol
     /// - Returns: Result of the operation
     /// - Throws: ConnectionError.notConnected if not connected, or operation errors
+    ///
+    /// If a connection error is detected, this method will attempt to reconnect once and retry the operation.
     func withConnection<T>(_ operation: @escaping (DatabaseConnectionProtocol) async throws -> T) async throws -> T {
         guard let wrappedConn = wrappedConnection else {
+            // No connection - try to reconnect if we have stored params
+            if storedParams != nil {
+                logger.info("No active connection, attempting reconnect...")
+                try await reconnect()
+                guard let newConn = wrappedConnection else {
+                    throw ConnectionError.notConnected
+                }
+                return try await operation(newConn)
+            }
             logger.error("Attempted to use connection while not connected")
             throw ConnectionError.notConnected
         }
@@ -247,6 +349,22 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
             let result = try await operation(wrappedConn)
             return result
         } catch {
+            // Check if this is a connection error that we should retry
+            if Self.isConnectionError(error) && storedParams != nil {
+                logger.warning("Connection error detected, attempting reconnect: \(error)")
+                do {
+                    try await reconnect()
+                    guard let newConn = wrappedConnection else {
+                        throw ConnectionError.notConnected
+                    }
+                    logger.info("Reconnected successfully, retrying operation...")
+                    return try await operation(newConn)
+                } catch {
+                    logger.error("Reconnect failed: \(error)")
+                    throw PostgresError.mapError(error)
+                }
+            }
+
             logger.error("Operation failed: \(error)")
             throw PostgresError.mapError(error)
         }
