@@ -319,6 +319,7 @@ class RootViewModel {
     }
 
     private func restoreCachedResultsFromTab(_ tab: TabState) {
+        DebugLog.print("📊 [RootViewModel] Restoring cached results from tab \(tab.id)")
         if let cachedResults = tab.cachedResults {
             appState.query.queryResults = cachedResults
             appState.query.queryColumnNames = tab.cachedColumnNames
@@ -328,8 +329,9 @@ class RootViewModel {
             } else {
                 appState.query.cachedResultsTableId = nil
             }
-            DebugLog.print("📊 [RootViewModel] Restored \(cachedResults.count) cached query results")
+            DebugLog.print("📊 [RootViewModel] Restored \(cachedResults.count) cached query results, showQueryResults=true")
         } else {
+            DebugLog.print("📊 [RootViewModel] No cached results in tab, clearing")
             appState.query.queryResults = []
             appState.query.queryColumnNames = nil
             appState.query.cachedResultsTableId = nil

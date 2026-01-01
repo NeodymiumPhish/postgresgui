@@ -122,6 +122,7 @@ class QueryEditorViewModel {
                 DebugLog.print("✅ [QueryEditorViewModel] Query executed, showing \(result.rows.count) results")
 
                 // Cache results to tab for restoration on tab switch
+                DebugLog.print("💾 [QueryEditorViewModel] Caching \(result.rows.count) results to tab")
                 tabManager.updateActiveTabResults(
                     results: result.rows,
                     columnNames: result.columnNames.isEmpty ? nil : result.columnNames

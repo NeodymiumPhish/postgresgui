@@ -96,6 +96,7 @@ class TabService: TabServiceProtocol {
     }
 
     func updateTabResults(_ tab: TabState, results: [TableRow]?, columnNames: [String]?) {
+        DebugLog.print("💾 [TabService] Saving \(results?.count ?? 0) results to tab \(tab.id)")
         tab.setCachedResults(results, columnNames: columnNames)
         save()
     }
