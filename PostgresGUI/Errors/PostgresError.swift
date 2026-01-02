@@ -141,6 +141,10 @@ enum PostgresError {
             return extractDetailedMessage(psqlError)
         }
 
+        if let databaseError = error as? DatabaseError {
+            return databaseError.errorDescription ?? "Query failed"
+        }
+
         if let connectionError = error as? ConnectionError {
             if case .unknownError(let underlying) = connectionError {
                 if let psqlError = underlying as? PSQLError {
