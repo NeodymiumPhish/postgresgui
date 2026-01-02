@@ -168,6 +168,11 @@ struct PostgresResultMapper: ResultMapperProtocol {
             return String(doubleValue)
         }
 
+        // Try Decimal (PostgreSQL numeric type)
+        if let decimalValue = try? cell.decode(Decimal.self, context: .default) {
+            return "\(decimalValue)"
+        }
+
         // Try Date/Time types
         if let date = try? cell.decode(Date.self, context: .default) {
             return PostgresResultMapper.dateFormatter.string(from: date)
