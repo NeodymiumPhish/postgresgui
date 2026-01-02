@@ -79,29 +79,35 @@ struct DetailContentModals: ViewModifier {
                 Text("Are you sure you want to delete \(selectedRowsCount) row(s)? This action cannot be undone.")
             }
             // Delete Error Alert
-            .alert("Error Deleting Rows", isPresented: Binding(
-                get: { viewModel.deleteError != nil },
-                set: { if !$0 { viewModel.deleteError = nil } }
-            )) {
+            .alert(
+                viewModel.deleteError?.title ?? "Error",
+                isPresented: Binding(
+                    get: { viewModel.deleteError != nil },
+                    set: { if !$0 { viewModel.deleteError = nil } }
+                )
+            ) {
                 Button("OK", role: .cancel) {
                     viewModel.deleteError = nil
                 }
             } message: {
                 if let error = viewModel.deleteError {
-                    Text(error)
+                    Text(error.body)
                 }
             }
             // Edit Error Alert
-            .alert("Error Editing Row", isPresented: Binding(
-                get: { viewModel.editError != nil },
-                set: { if !$0 { viewModel.editError = nil } }
-            )) {
+            .alert(
+                viewModel.editError?.title ?? "Error",
+                isPresented: Binding(
+                    get: { viewModel.editError != nil },
+                    set: { if !$0 { viewModel.editError = nil } }
+                )
+            ) {
                 Button("OK", role: .cancel) {
                     viewModel.editError = nil
                 }
             } message: {
                 if let error = viewModel.editError {
-                    Text(error)
+                    Text(error.body)
                 }
             }
             // JSON View Error Alert

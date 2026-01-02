@@ -33,9 +33,21 @@ class DetailContentViewModel {
 
     // MARK: - Error State
 
-    var deleteError: String?
-    var editError: String?
+    var deleteError: EditabilityReason?
+    var editError: EditabilityReason?
     var jsonViewError: String?
+
+    // MARK: - Editability
+
+    /// Determines if current query results can be edited
+    var queryEditability: QueryEditability {
+        let context = QueryEditabilityContext(
+            query: appState.query.queryText,
+            sourceTable: appState.connection.selectedTable?.name,
+            sourceSchema: appState.connection.selectedTable?.schema
+        )
+        return determineQueryEditability(context)
+    }
 
     // MARK: - Initialization
 
@@ -98,8 +110,18 @@ class DetailContentViewModel {
     func deleteSelectedRows() {
         DebugLog.print("🗑️ [DetailContentViewModel] Delete button clicked for \(appState.query.selectedRowIDs.count) row(s)")
 
+        // Check if query results are editable (same constraints as edit)
+        let editability = queryEditability
+        guard editability.isEditable else {
+            deleteError = editability.disabledReason
+            return
+        }
+
         guard let selectedTable = appState.connection.selectedTable else {
-            deleteError = RowOperationError.noTableSelected.localizedDescription
+            deleteError = EditabilityReason(
+                title: "No Table Selected",
+                body: "Select a table from the sidebar to delete rows."
+            )
             return
         }
 
@@ -127,7 +149,10 @@ class DetailContentViewModel {
                 }
             }
         case .failure(let error):
-            deleteError = error.localizedDescription
+            deleteError = EditabilityReason(
+                title: "Selection Error",
+                body: error.localizedDescription
+            )
         }
     }
 
@@ -135,16 +160,22 @@ class DetailContentViewModel {
         let result = await fetchMetadataAndExecute(table: table) { updatedTable in
             updatedTable
         }
-        
+
         switch result {
         case .success(let updatedTable):
             guard let pkColumns = updatedTable.primaryKeyColumns, !pkColumns.isEmpty else {
-                deleteError = RowOperationError.noPrimaryKey.localizedDescription
+                deleteError = EditabilityReason(
+                    title: "Can't Identify Row",
+                    body: "This table has no primary key. Row deletion requires a way to uniquely identify each row."
+                )
                 return
             }
             showDeleteConfirmation = true
         case .failure(let error):
-            deleteError = error.localizedDescription
+            deleteError = EditabilityReason(
+                title: "Metadata Error",
+                body: error.localizedDescription
+            )
         }
     }
 
@@ -183,7 +214,10 @@ class DetailContentViewModel {
                     appState.query.queryResults.insert(row, at: insertIndex)
                 }
             }
-            deleteError = error.localizedDescription
+            deleteError = EditabilityReason(
+                title: "Delete Failed",
+                body: error.localizedDescription
+            )
         }
     }
 
@@ -192,14 +226,27 @@ class DetailContentViewModel {
     func editSelectedRows() {
         DebugLog.print("✏️ [DetailContentViewModel] Edit button clicked for \(appState.query.selectedRowIDs.count) row(s)")
 
+        // Check if query results are editable
+        let editability = queryEditability
+        guard editability.isEditable else {
+            editError = editability.disabledReason
+            return
+        }
+
         guard let selectedTable = appState.connection.selectedTable else {
-            editError = RowOperationError.noTableSelected.localizedDescription
+            editError = EditabilityReason(
+                title: "No Table Selected",
+                body: "Select a table from the sidebar to edit rows."
+            )
             return
         }
 
         // Validate we have column names
         guard appState.query.queryColumnNames != nil else {
-            editError = "No query results available"
+            editError = EditabilityReason(
+                title: "No Results",
+                body: "No query results available to edit."
+            )
             return
         }
 
@@ -213,12 +260,18 @@ class DetailContentViewModel {
         case .success(let selectedRows):
             // Check if multiple rows are selected
             if selectedRows.count > 1 {
-                editError = "Please select only one row to edit"
+                editError = EditabilityReason(
+                    title: "Multiple Rows Selected",
+                    body: "Please select only one row to edit at a time."
+                )
                 return
             }
 
             guard let rowToEdit = selectedRows.first else {
-                editError = "No row selected"
+                editError = EditabilityReason(
+                    title: "No Row Selected",
+                    body: "Select a row to edit."
+                )
                 return
             }
 
@@ -241,7 +294,10 @@ class DetailContentViewModel {
                 }
             }
         case .failure(let error):
-            editError = error.localizedDescription
+            editError = EditabilityReason(
+                title: "Selection Error",
+                body: error.localizedDescription
+            )
         }
     }
 
@@ -249,18 +305,24 @@ class DetailContentViewModel {
         let result = await fetchMetadataAndExecute(table: table) { updatedTable in
             updatedTable
         }
-        
+
         switch result {
         case .success(let updatedTable):
             guard let pkColumns = updatedTable.primaryKeyColumns, !pkColumns.isEmpty,
                   let _ = updatedTable.columnInfo else {
-                editError = RowOperationError.noPrimaryKey.localizedDescription
+                editError = EditabilityReason(
+                    title: "Can't Identify Row",
+                    body: "This table has no primary key. Row editing requires a way to uniquely identify each row."
+                )
                 return
             }
             self.rowToEdit = row
             showRowEditor = true
         case .failure(let error):
-            editError = error.localizedDescription
+            editError = EditabilityReason(
+                title: "Metadata Error",
+                body: error.localizedDescription
+            )
         }
     }
 
