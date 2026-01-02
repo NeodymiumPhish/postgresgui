@@ -38,18 +38,15 @@ struct ConnectionStatusBanner: View {
     private func testingBanner() -> some View {
         HStack(spacing: 12) {
             SpinnerIcon()
-                .foregroundColor(.secondary)
             
             Text("Testing connection...")
                 .font(.system(size: 13))
-                .foregroundColor(.primary)
             
             Spacer()
             
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
                     .font(.system(size: 12))
-                    .foregroundColor(.secondary)
                     .frame(width: 20, height: 20)
             }
             .buttonStyle(.plain)
@@ -58,7 +55,6 @@ struct ConnectionStatusBanner: View {
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 16)
-        .background(Color(nsColor: .controlBackgroundColor))
         .overlay(
             RoundedRectangle(cornerRadius: 6)
                 .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
@@ -79,14 +75,12 @@ struct ConnectionStatusBanner: View {
             
             Text("Connection successful")
                 .font(.system(size: 13))
-                .foregroundColor(.primary)
             
             Spacer()
             
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
                     .font(.system(size: 12))
-                    .foregroundColor(.secondary)
                     .frame(width: 20, height: 20)
             }
             .buttonStyle(.plain)
@@ -95,7 +89,6 @@ struct ConnectionStatusBanner: View {
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 16)
-        .background(Color(red: 0.94, green: 0.99, blue: 0.96)) // #F0FDF4
         .overlay(
             RoundedRectangle(cornerRadius: 6)
                 .stroke(Color(red: 0.13, green: 0.77, blue: 0.37), lineWidth: 1) // #22C55E
@@ -115,14 +108,12 @@ struct ConnectionStatusBanner: View {
             
             Text(message)
                 .font(.system(size: 13))
-                .foregroundColor(.primary)
             
             Spacer()
             
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
                     .font(.system(size: 12))
-                    .foregroundColor(.secondary)
                     .frame(width: 20, height: 20)
             }
             .buttonStyle(.plain)
@@ -131,7 +122,6 @@ struct ConnectionStatusBanner: View {
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 16)
-        .background(Color(red: 1.0, green: 0.95, blue: 0.95)) // #FEF2F2
         .overlay(
             RoundedRectangle(cornerRadius: 6)
                 .stroke(Color(red: 0.94, green: 0.27, blue: 0.27), lineWidth: 1) // #EF4444
