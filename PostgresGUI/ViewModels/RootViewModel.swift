@@ -148,6 +148,10 @@ class RootViewModel {
 
         DebugLog.print("📑 [RootViewModel] Tab changed to: \(tab.id) (generation: \(myGeneration))")
 
+        // Set flag to prevent result-clearing during tab restore
+        appState.query.isRestoringFromTab = true
+        defer { appState.query.isRestoringFromTab = false }
+
         // Restore query text and saved query selection
         let previousQueryText = appState.query.queryText
         restoreQueryStateFromTab(tab)
@@ -311,11 +315,9 @@ class RootViewModel {
     // MARK: - Private Helpers
 
     private func restoreQueryStateFromTab(_ tab: TabState) {
-        appState.query.isRestoringFromTab = true
         appState.query.queryText = tab.queryText
         appState.query.currentSavedQueryId = tab.savedQueryId
         restoreSavedQueryMetadata(for: tab.savedQueryId)
-        appState.query.isRestoringFromTab = false
     }
 
     private func restoreCachedResultsFromTab(_ tab: TabState) {

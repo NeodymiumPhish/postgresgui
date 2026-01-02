@@ -72,6 +72,14 @@ class QueryResultsViewModel {
                 }
             }
         } else if newValue == nil {
+            // Skip clearing if we're restoring from a tab switch
+            // (tab restoration handles results separately from table selection)
+            guard !appState.query.isRestoringFromTab else {
+                DebugLog.print("📋 [QueryResultsViewModel] Table selection nil during tab restore - skipping result clear")
+                lastExecutedTableID = nil
+                return
+            }
+
             // Clear query results when table selection is cleared (but preserve queryText)
             lastExecutedTableID = nil
             DebugLog.print("📋 [QueryResultsViewModel] Table selection cleared - preserving queryText, clearing results")
