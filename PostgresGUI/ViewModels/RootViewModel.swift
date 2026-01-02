@@ -150,7 +150,6 @@ class RootViewModel {
 
         // Set flag to prevent result-clearing during tab restore
         appState.query.isRestoringFromTab = true
-        defer { appState.query.isRestoringFromTab = false }
 
         // Restore query text and saved query selection
         let previousQueryText = appState.query.queryText
@@ -166,6 +165,7 @@ class RootViewModel {
         guard let connectionId = tab.connectionId,
               let connection = connections.first(where: { $0.id == connectionId }) else {
             clearConnectionState()
+            appState.query.isRestoringFromTab = false
             return
         }
 
@@ -178,6 +178,9 @@ class RootViewModel {
             // Fast path: same connection and database, just restore table selection
             DebugLog.print("📑 [RootViewModel] Tab switch - same connection/database, restoring table selection only")
             restoreTableSelectionFromTab(tab)
+            // Yield to let SwiftUI process onChange before clearing flag
+            await Task.yield()
+            appState.query.isRestoringFromTab = false
             return
         }
 
@@ -199,6 +202,7 @@ class RootViewModel {
             // Check if superseded after async operation
             guard isTabSwitchCurrent(myGeneration) else {
                 DebugLog.print("📑 [RootViewModel] Tab switch superseded after connection (gen \(myGeneration) vs \(tabSwitchGeneration))")
+                appState.query.isRestoringFromTab = false
                 return
             }
 
@@ -207,11 +211,13 @@ class RootViewModel {
                 if case ConnectionError.connectionCancelled = error {
                     DebugLog.print("📑 [RootViewModel] Tab switch connection was cancelled (superseded)")
                     appState.connection.isLoadingTables = false
+                    appState.query.isRestoringFromTab = false
                     return
                 }
                 DebugLog.print("❌ [RootViewModel] Tab switch connection failed: \(error)")
                 initializationError = PostgresError.extractDetailedMessage(error)
                 appState.connection.isLoadingTables = false
+                appState.query.isRestoringFromTab = false
                 return
             }
             DebugLog.print("✅ [RootViewModel] Tab switch connection successful")
@@ -222,6 +228,7 @@ class RootViewModel {
         // Check if superseded before database fetch
         guard isTabSwitchCurrent(myGeneration) else {
             DebugLog.print("📑 [RootViewModel] Tab switch superseded before database fetch (gen \(myGeneration) vs \(tabSwitchGeneration))")
+            appState.query.isRestoringFromTab = false
             return
         }
 
@@ -233,23 +240,27 @@ class RootViewModel {
             // Check if superseded - don't show error for race conditions
             guard isTabSwitchCurrent(myGeneration) else {
                 DebugLog.print("📑 [RootViewModel] Tab switch superseded during database fetch (gen \(myGeneration) vs \(tabSwitchGeneration))")
+                appState.query.isRestoringFromTab = false
                 return
             }
             // Check for notConnected which typically indicates a race condition
             if case ConnectionError.notConnected = error {
                 DebugLog.print("📑 [RootViewModel] Tab switch got notConnected (likely superseded)")
                 appState.connection.isLoadingTables = false
+                appState.query.isRestoringFromTab = false
                 return
             }
             DebugLog.print("Failed to load databases: \(error)")
             initializationError = PostgresError.extractDetailedMessage(error)
             appState.connection.isLoadingTables = false
+            appState.query.isRestoringFromTab = false
             return
         }
 
         // Check if superseded after database fetch
         guard isTabSwitchCurrent(myGeneration) else {
             DebugLog.print("📑 [RootViewModel] Tab switch superseded after fetching databases (gen \(myGeneration) vs \(tabSwitchGeneration))")
+            appState.query.isRestoringFromTab = false
             return
         }
 
@@ -262,14 +273,19 @@ class RootViewModel {
             // Check if superseded after loading tables
             guard isTabSwitchCurrent(myGeneration) else {
                 DebugLog.print("📑 [RootViewModel] Tab switch superseded after loading tables (gen \(myGeneration) vs \(tabSwitchGeneration))")
+                appState.query.isRestoringFromTab = false
                 return
             }
 
             // Restore table selection from tab (after tables are loaded)
             restoreTableSelectionFromTab(tab)
+            // Yield to let SwiftUI process onChange before clearing flag
+            await Task.yield()
+            appState.query.isRestoringFromTab = false
         } else {
             // No database selected in tab, stop loading
             appState.connection.isLoadingTables = false
+            appState.query.isRestoringFromTab = false
         }
     }
 
