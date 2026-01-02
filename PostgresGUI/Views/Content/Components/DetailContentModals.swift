@@ -26,7 +26,8 @@ struct DetailContentModals: ViewModifier {
                     viewModel.rowToEdit != nil &&
                     appState.query.queryColumnNames != nil &&
                     appState.connection.selectedTable?.name != nil &&
-                    appState.connection.selectedTable?.columnInfo != nil
+                    appState.connection.selectedTable?.columnInfo != nil &&
+                    appState.connection.selectedTable?.primaryKeyColumns != nil
                 },
                 set: { newValue in
                     viewModel.showRowEditor = newValue
@@ -38,12 +39,14 @@ struct DetailContentModals: ViewModifier {
                 if let rowToEdit = viewModel.rowToEdit,
                    let columnNames = appState.query.queryColumnNames,
                    let tableName = appState.connection.selectedTable?.name,
-                   let columnInfo = appState.connection.selectedTable?.columnInfo {
+                   let columnInfo = appState.connection.selectedTable?.columnInfo,
+                   let primaryKeyColumns = appState.connection.selectedTable?.primaryKeyColumns {
                     RowEditorView(
                         row: rowToEdit,
                         columnNames: columnNames,
                         tableName: tableName,
                         columnInfo: columnInfo,
+                        primaryKeyColumns: primaryKeyColumns,
                         editedValues: $viewModel.editedRowValues,
                         onSave: {
                             DebugLog.print("🔴 [Closure] Captured editedRowValues count: \(viewModel.editedRowValues.count)")

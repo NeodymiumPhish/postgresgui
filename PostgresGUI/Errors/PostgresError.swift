@@ -36,31 +36,42 @@ enum PostgresError {
 
     /// Map PSQLError to ConnectionError or DatabaseError
     private nonisolated static func mapPSQLError(_ error: PSQLError) -> Error {
-        // Check the error message for specific cases
-        let message = error.serverInfo?[.message]?.lowercased() ?? error.localizedDescription.lowercased()
+        // Check if we have server info (indicates server responded with an error)
+        if let serverMessage = error.serverInfo?[.message] {
+            let lowerMessage = serverMessage.lowercased()
 
-        // Check for authentication errors
-        if message.contains("password") || message.contains("authentication") {
-            return ConnectionError.authenticationFailed
+            // Check for authentication errors
+            if lowerMessage.contains("password") || lowerMessage.contains("authentication") {
+                return ConnectionError.authenticationFailed
+            }
+
+            // Check for database not found
+            if lowerMessage.contains("database") && lowerMessage.contains("does not exist") {
+                let dbName = extractDatabaseName(from: error) ?? "unknown"
+                return ConnectionError.databaseNotFound(dbName)
+            }
+
+            // Server responded with an error (SQL error, constraint violation, etc.)
+            // Return a DatabaseError to preserve the server message
+            return DatabaseError.queryFailed(serverMessage)
         }
 
-        // Check for database not found
-        if message.contains("database") && message.contains("does not exist") {
-            let dbName = extractDatabaseName(from: error) ?? "unknown"
-            return ConnectionError.databaseNotFound(dbName)
-        }
+        // No server info - this is likely a connection-level error
+        // Use String(reflecting:) to get the actual error details
+        let detailedDescription = String(reflecting: error)
+        let lowerDescription = detailedDescription.lowercased()
 
         // Check for connection errors
-        if message.contains("connection") || message.contains("could not connect") {
+        if lowerDescription.contains("connection") || lowerDescription.contains("could not connect") {
             return ConnectionError.networkUnreachable
         }
 
         // Check for timeout
-        if message.contains("timeout") || message.contains("canceled") {
+        if lowerDescription.contains("timeout") || lowerDescription.contains("canceled") {
             return ConnectionError.timeout
         }
 
-        // Unknown PostgreSQL error - wrap in unknownError
+        // Unknown PostgreSQL error - wrap in unknownError with detailed description
         return ConnectionError.unknownError(error)
     }
 

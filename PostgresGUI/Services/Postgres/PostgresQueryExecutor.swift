@@ -243,13 +243,23 @@ struct PostgresQueryExecutor: QueryExecutorProtocol {
 
         let qualifiedTable = "\(sanitizeIdentifier(schema)).\(sanitizeIdentifier(table))"
 
+        // Exclude primary key columns from SET clause - they cannot be updated
+        // (especially important for GENERATED ALWAYS identity columns)
+        let pkSet = Set(primaryKeyColumns)
+
         var setClauses: [String] = []
-        for (column, value) in updatedValues {
+        for (column, value) in updatedValues where !pkSet.contains(column) {
             if let val = value {
                 setClauses.append("\(sanitizeIdentifier(column)) = '\(val.replacingOccurrences(of: "'", with: "''"))'")
             } else {
                 setClauses.append("\(sanitizeIdentifier(column)) = NULL")
             }
+        }
+
+        // Ensure we have at least one column to update
+        guard !setClauses.isEmpty else {
+            logger.info("No columns to update (all columns are primary keys)")
+            return
         }
 
         var whereClauses: [String] = []

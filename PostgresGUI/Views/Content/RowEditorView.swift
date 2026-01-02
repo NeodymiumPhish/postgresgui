@@ -13,6 +13,7 @@ struct RowEditorView: View {
     let columnNames: [String]
     let tableName: String
     let columnInfo: [ColumnInfo]
+    let primaryKeyColumns: [String]
     @Binding var editedValues: [String: String?]
     let onSave: () async throws -> Void
 
@@ -21,11 +22,16 @@ struct RowEditorView: View {
     @State private var isSaving = false
     @State private var saveError: String?
 
+    private var primaryKeySet: Set<String> {
+        Set(primaryKeyColumns)
+    }
+
     init(
         row: TableRow,
         columnNames: [String],
         tableName: String,
         columnInfo: [ColumnInfo],
+        primaryKeyColumns: [String],
         editedValues: Binding<[String: String?]>,
         onSave: @escaping () async throws -> Void
     ) {
@@ -33,6 +39,7 @@ struct RowEditorView: View {
         self.columnNames = columnNames
         self.tableName = tableName
         self.columnInfo = columnInfo
+        self.primaryKeyColumns = primaryKeyColumns
         self._editedValues = editedValues
         self.onSave = onSave
 
@@ -108,94 +115,128 @@ struct RowEditorView: View {
         let column = columnInfo.first { $0.name == columnName }
         let isNullable = column?.isNullable ?? true
         let dataType = column?.dataType.lowercased() ?? ""
+        let isPrimaryKey = primaryKeySet.contains(columnName)
         let shouldUseTextEditor = dataType == "text" || dataType == "json" || dataType == "jsonb" || dataType == "xml" || dataType.contains("[]")
 
         return VStack(alignment: .leading, spacing: 4) {
-            Text(columnName)
-                .foregroundColor(.secondary)
-                .font(.subheadline)
+            HStack(spacing: 6) {
+                Text(columnName)
+                    .foregroundColor(.secondary)
+                    .font(.subheadline)
 
-            HStack(alignment: shouldUseTextEditor ? .top : .center, spacing: 8) {
-                Group {
-                    if shouldUseTextEditor {
-                        let isDisabled = nullFlags[columnName] ?? false
-                        TextEditor(text: Binding(
-                            get: {
-                                textValues[columnName] ?? ""
-                            },
-                            set: { newValue in
-                                if !isDisabled {
-                                    textValues[columnName] = newValue
-                                }
-                            }
-                        ))
-                        .frame(minHeight: 100)
-                        .padding(4)
-                        .background(isDisabled ? Color(nsColor: .controlBackgroundColor) : Color(nsColor: .textBackgroundColor))
+                if isPrimaryKey {
+                    Text("Primary Key")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.15))
+                        .foregroundColor(.secondary)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+            }
+
+            if isPrimaryKey {
+                // Read-only display for primary key columns
+                HStack(spacing: 8) {
+                    Text(textValues[columnName] ?? "")
+                        .frame(maxWidth: 380, alignment: .leading)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
                         .overlay(
                             RoundedRectangle(cornerRadius: 5)
                                 .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
                         )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 5)
-                                .stroke(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [
-                                            Color.black.opacity(0.1),
-                                            Color.clear
-                                        ]),
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    ),
-                                    lineWidth: 1
-                                )
-                                .blendMode(.multiply)
-                        )
-                        .shadow(color: Color.black.opacity(0.05), radius: 1, x: 0, y: 1)
-                        .disabled(isDisabled)
-                        .opacity(isDisabled ? 0.6 : 1.0)
-                    } else {
-                        TextField("", text: Binding(
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+                }
+            } else {
+                // Editable field for non-primary-key columns
+                HStack(alignment: shouldUseTextEditor ? .top : .center, spacing: 8) {
+                    Group {
+                        if shouldUseTextEditor {
+                            let isDisabled = nullFlags[columnName] ?? false
+                            TextEditor(text: Binding(
+                                get: {
+                                    textValues[columnName] ?? ""
+                                },
+                                set: { newValue in
+                                    if !isDisabled {
+                                        textValues[columnName] = newValue
+                                    }
+                                }
+                            ))
+                            .frame(minHeight: 100)
+                            .padding(4)
+                            .background(isDisabled ? Color(nsColor: .controlBackgroundColor) : Color(nsColor: .textBackgroundColor))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [
+                                                Color.black.opacity(0.1),
+                                                Color.clear
+                                            ]),
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        ),
+                                        lineWidth: 1
+                                    )
+                                    .blendMode(.multiply)
+                            )
+                            .shadow(color: Color.black.opacity(0.05), radius: 1, x: 0, y: 1)
+                            .disabled(isDisabled)
+                            .opacity(isDisabled ? 0.6 : 1.0)
+                        } else {
+                            TextField("", text: Binding(
+                                get: {
+                                    textValues[columnName] ?? ""
+                                },
+                                set: { newValue in
+                                    textValues[columnName] = newValue
+                                }
+                            ))
+                            .textFieldStyle(.roundedBorder)
+                            .disabled(nullFlags[columnName] ?? false)
+                            .frame(maxWidth: 380)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [
+                                                Color.black.opacity(0.1),
+                                                Color.clear
+                                            ]),
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        ),
+                                        lineWidth: 1
+                                    )
+                                    .blendMode(.multiply)
+                            )
+                            .shadow(color: Color.black.opacity(0.05), radius: 1, x: 0, y: 1)
+                        }
+                    }
+
+                    if isNullable {
+                        Toggle("NULL", isOn: Binding(
                             get: {
-                                textValues[columnName] ?? ""
+                                nullFlags[columnName] ?? false
                             },
-                            set: { newValue in
-                                textValues[columnName] = newValue
+                            set: { isNull in
+                                nullFlags[columnName] = isNull
                             }
                         ))
-                        .textFieldStyle(.roundedBorder)
-                        .disabled(nullFlags[columnName] ?? false)
-                        .frame(maxWidth: 380)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 5)
-                                .stroke(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [
-                                            Color.black.opacity(0.1),
-                                            Color.clear
-                                        ]),
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    ),
-                                    lineWidth: 1
-                                )
-                                .blendMode(.multiply)
-                        )
-                        .shadow(color: Color.black.opacity(0.05), radius: 1, x: 0, y: 1)
+                        .toggleStyle(.checkbox)
+                        .padding(.top, shouldUseTextEditor ? 4 : 0)
                     }
-                }
-
-                if isNullable {
-                    Toggle("NULL", isOn: Binding(
-                        get: {
-                            nullFlags[columnName] ?? false
-                        },
-                        set: { isNull in
-                            nullFlags[columnName] = isNull
-                        }
-                    ))
-                    .toggleStyle(.checkbox)
-                    .padding(.top, shouldUseTextEditor ? 4 : 0)
                 }
             }
         }

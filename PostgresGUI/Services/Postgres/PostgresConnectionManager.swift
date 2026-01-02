@@ -288,14 +288,19 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
     ///
     /// Uses PostgresNIO's PSQLError.Code for reliable detection rather than string matching.
     private static func isConnectionError(_ error: Error) -> Bool {
+        let logger = Logger.debugLogger(label: "com.postgresgui.connection")
+
         // Check PSQLError codes (most reliable for PostgresNIO errors)
         if let psqlError = error as? PSQLError {
             let code = psqlError.code
+            logger.debug("PSQLError code: \(code)")
+
             // Connection-related codes that indicate the connection is dead
             if code == .serverClosedConnection ||
                code == .connectionError ||
                code == .uncleanShutdown ||
                code == .messageDecodingFailure {
+                logger.debug("Detected connection error: \(code)")
                 return true
             }
             // Don't retry on clientClosedConnection (we closed it intentionally)
@@ -349,9 +354,15 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
             let result = try await operation(wrappedConn)
             return result
         } catch {
+            // Log detailed error info for debugging
+            logger.error("Operation error: \(String(reflecting: error))")
+
             // Check if this is a connection error that we should retry
-            if Self.isConnectionError(error) && storedParams != nil {
-                logger.warning("Connection error detected, attempting reconnect: \(error)")
+            let shouldRetry = Self.isConnectionError(error)
+            logger.debug("isConnectionError returned: \(shouldRetry), storedParams exists: \(storedParams != nil)")
+
+            if shouldRetry && storedParams != nil {
+                logger.warning("Connection error detected, attempting reconnect")
                 do {
                     try await reconnect()
                     guard let newConn = wrappedConnection else {
@@ -360,12 +371,12 @@ actor PostgresConnectionManager: ConnectionManagerProtocol {
                     logger.info("Reconnected successfully, retrying operation...")
                     return try await operation(newConn)
                 } catch {
-                    logger.error("Reconnect failed: \(error)")
+                    logger.error("Reconnect failed: \(String(reflecting: error))")
                     throw PostgresError.mapError(error)
                 }
             }
 
-            logger.error("Operation failed: \(error)")
+            logger.error("Operation failed (non-connection error)")
             throw PostgresError.mapError(error)
         }
     }
