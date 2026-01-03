@@ -39,18 +39,25 @@ final class TableRefreshService: TableRefreshServiceProtocol {
         // Verify this is still the selected database before any work
         guard appState.connection.selectedDatabase?.id == database.id else { return }
 
+        // Extract connection values before async boundaries (Swift 6 Sendable compliance)
+        let connectionId = connection.id
+        let host = connection.host
+        let port = connection.port
+        let username = connection.username
+        let sslMode = connection.sslModeEnum
+
         do {
             // Reconnect if not connected to target database
             if appState.connection.databaseService.connectedDatabase != database.name {
-                let password = try keychainService.getPassword(for: connection.id) ?? ""
+                let password = try keychainService.getPassword(for: connectionId) ?? ""
                 try await withDatabaseTimeout {
                     try await appState.connection.databaseService.connect(
-                        host: connection.host,
-                        port: connection.port,
-                        username: connection.username,
+                        host: host,
+                        port: port,
+                        username: username,
                         password: password,
                         database: database.name,
-                        sslMode: connection.sslModeEnum
+                        sslMode: sslMode
                     )
                 }
             }
