@@ -21,12 +21,14 @@ class QueryService: QueryServiceProtocol {
         self.clock = clock ?? SystemClock()
     }
 
-    /// Execute a SQL query
+    /// Execute a SQL query with timeout
     func executeQuery(_ sql: String) async -> QueryResult {
         let startTime = clock.now()
 
         do {
-            let (rows, columnNames) = try await databaseService.executeQuery(sql)
+            let (rows, columnNames) = try await withDatabaseTimeout {
+                try await self.databaseService.executeQuery(sql)
+            }
             let endTime = clock.now()
             let executionTime = endTime.timeIntervalSince(startTime)
 
@@ -70,7 +72,9 @@ class QueryService: QueryServiceProtocol {
         queryState.currentQueryTask = Task { @MainActor in
             do {
                 DebugLog.print("📊 [QueryService] Executing query... (ID: \(thisQueryID))")
-                let (rows, columnNames) = try await databaseService.executeQuery(query)
+                let (rows, columnNames) = try await withDatabaseTimeout {
+                    try await self.databaseService.executeQuery(query)
+                }
 
                 // Check if task was cancelled or a newer query has started
                 guard !Task.isCancelled, thisQueryID == queryState.queryCounter else {

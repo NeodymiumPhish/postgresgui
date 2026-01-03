@@ -57,4 +57,10 @@ enum Constants {
         static let lastConnectionId = "lastConnectionId"
         static let lastDatabaseName = "lastDatabaseName"
     }
+
+    // Timeouts
+    enum Timeout {
+        /// Default timeout for database operations (queries, table loading)
+        static let databaseOperation: TimeInterval = 15.0
+    }
 }

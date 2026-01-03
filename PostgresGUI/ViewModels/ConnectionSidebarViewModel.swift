@@ -278,4 +278,10 @@ class ConnectionSidebarViewModel {
             appState: appState
         )
     }
+
+    /// Retry loading tables after a timeout
+    func retryTableLoading() async {
+        guard let database = appState.connection.selectedDatabase else { return }
+        await loadTables(for: database)
+    }
 }

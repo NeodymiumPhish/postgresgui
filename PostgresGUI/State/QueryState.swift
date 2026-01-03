@@ -20,6 +20,8 @@ class QueryState {
     var isExecutingQuery: Bool = false
     var queryError: Error? = nil
     var showQueryResults: Bool = false
+    var showTimeoutAlert: Bool = false
+    var lastQueryText: String? = nil  // For retry on timeout
     var queryExecutionTime: TimeInterval? = nil
     var selectedRowIDs: Set<UUID> = []
 
@@ -27,6 +29,12 @@ class QueryState {
     var queryErrorMessage: String? {
         guard let error = queryError else { return nil }
         return PostgresError.extractDetailedMessage(error)
+    }
+
+    /// Check if the current error is a timeout
+    var isTimeoutError: Bool {
+        guard let error = queryError else { return false }
+        return DatabaseError.isTimeout(error)
     }
 
     /// Format execution time for display
@@ -140,6 +148,10 @@ class QueryState {
             queryError = result.error
             queryColumnNames = nil
             showQueryResults = true
+            // Show timeout alert if this was a timeout error
+            if DatabaseError.isTimeout(result.error!) {
+                showTimeoutAlert = true
+            }
         }
         isExecutingQuery = false
     }
@@ -171,6 +183,8 @@ class QueryState {
         isExecutingQuery = false
         queryError = nil
         showQueryResults = false
+        showTimeoutAlert = false
+        lastQueryText = nil
         queryExecutionTime = nil
         selectedRowIDs = []
         currentPage = 0

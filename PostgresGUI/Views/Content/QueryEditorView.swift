@@ -71,6 +71,23 @@ struct QueryEditorView: View {
         } message: {
             Text(viewModel?.saveErrorMessage ?? "")
         }
+        .alert("Query Timed Out", isPresented: Binding(
+            get: { appState.query.showTimeoutAlert },
+            set: { appState.query.showTimeoutAlert = $0 }
+        )) {
+            Button("Try Again") {
+                appState.query.showTimeoutAlert = false
+                appState.query.queryError = nil
+                Task {
+                    await viewModel?.executeQuery()
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                appState.query.showTimeoutAlert = false
+            }
+        } message: {
+            Text("The query took longer than \(Int(Constants.Timeout.databaseOperation)) seconds. The database may be slow or unresponsive.")
+        }
         .onChange(of: appState.query.queryText) { _, newText in
             viewModel?.handleQueryTextChange(newText)
         }

@@ -39,6 +39,14 @@ class ConnectionState {
     var databasesVersion: Int = 0
     var tables: [TableInfo] = []
     var isLoadingTables: Bool = false
+    var tableLoadingError: Error? = nil
+    var showTableLoadingTimeoutAlert: Bool = false
+
+    /// Check if the current table loading error is a timeout
+    var isTableLoadingTimeout: Bool {
+        guard let error = tableLoadingError else { return false }
+        return DatabaseError.isTimeout(error)
+    }
 
     // Separate metadata cache to avoid triggering List re-renders
     // Key: table ID (schema.name), Value: (primaryKeyColumns, columnInfo)

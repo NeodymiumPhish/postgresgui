@@ -43,14 +43,16 @@ final class TableRefreshService: TableRefreshServiceProtocol {
             // Reconnect if not connected to target database
             if appState.connection.databaseService.connectedDatabase != database.name {
                 let password = try keychainService.getPassword(for: connection.id) ?? ""
-                try await appState.connection.databaseService.connect(
-                    host: connection.host,
-                    port: connection.port,
-                    username: connection.username,
-                    password: password,
-                    database: database.name,
-                    sslMode: connection.sslModeEnum
-                )
+                try await withDatabaseTimeout {
+                    try await appState.connection.databaseService.connect(
+                        host: connection.host,
+                        port: connection.port,
+                        username: connection.username,
+                        password: password,
+                        database: database.name,
+                        sslMode: connection.sslModeEnum
+                    )
+                }
             }
 
             guard !Task.isCancelled else { return }
@@ -58,7 +60,9 @@ final class TableRefreshService: TableRefreshServiceProtocol {
             // Verify still selected after reconnect
             guard appState.connection.selectedDatabase?.id == database.id else { return }
 
-            let tables = try await appState.connection.databaseService.fetchTables(database: database.name)
+            let tables = try await withDatabaseTimeout {
+                try await appState.connection.databaseService.fetchTables(database: database.name)
+            }
 
             // Final check before writing - prevent stale data from overwriting newer results
             guard !Task.isCancelled,
@@ -74,6 +78,11 @@ final class TableRefreshService: TableRefreshServiceProtocol {
             guard appState.connection.selectedDatabase?.id == database.id else { return }
             DebugLog.print("❌ [TableRefreshService] Error loading tables: \(error)")
             appState.connection.tables = []
+            appState.connection.tableLoadingError = error
+            // Show alert for timeout errors
+            if DatabaseError.isTimeout(error) {
+                appState.connection.showTableLoadingTimeoutAlert = true
+            }
         }
     }
 
@@ -91,12 +100,15 @@ final class TableRefreshService: TableRefreshServiceProtocol {
             }
         }
         appState.connection.isLoadingTables = true
+        appState.connection.tableLoadingError = nil
 
         guard appState.connection.databaseService.isConnected else { return }
 
         // Refresh databases
         do {
-            appState.connection.databases = try await appState.connection.databaseService.fetchDatabases()
+            appState.connection.databases = try await withDatabaseTimeout {
+                try await appState.connection.databaseService.fetchDatabases()
+            }
             appState.connection.databasesVersion += 1
         } catch {
             DebugLog.print("❌ [TableRefreshService] Error refreshing databases: \(error)")
@@ -107,7 +119,9 @@ final class TableRefreshService: TableRefreshServiceProtocol {
 
         // Refresh tables
         do {
-            let tables = try await appState.connection.databaseService.fetchTables(database: database.name)
+            let tables = try await withDatabaseTimeout {
+                try await appState.connection.databaseService.fetchTables(database: database.name)
+            }
 
             // Final check before writing
             guard appState.connection.selectedDatabase?.id == databaseId else { return }
@@ -119,6 +133,11 @@ final class TableRefreshService: TableRefreshServiceProtocol {
             DebugLog.print("❌ [TableRefreshService] Error refreshing tables: \(error)")
             appState.connection.tables = []
             appState.connection.selectedTable = nil
+            appState.connection.tableLoadingError = error
+            // Show alert for timeout errors
+            if DatabaseError.isTimeout(error) {
+                appState.connection.showTableLoadingTimeoutAlert = true
+            }
         }
     }
 

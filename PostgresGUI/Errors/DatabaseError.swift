@@ -12,6 +12,7 @@ enum DatabaseError: Error, LocalizedError {
     case missingPrimaryKeyValue(column: String)
     case queryFailed(String)
     case unknownError(String)
+    case timeout
 
     var errorDescription: String? {
         switch self {
@@ -23,6 +24,16 @@ enum DatabaseError: Error, LocalizedError {
             return message
         case .unknownError(let message):
             return message
+        case .timeout:
+            return "The operation timed out. The database may be slow or unresponsive."
         }
+    }
+
+    /// Check if an error is a timeout error
+    static func isTimeout(_ error: Error) -> Bool {
+        if let dbError = error as? DatabaseError, case .timeout = dbError {
+            return true
+        }
+        return false
     }
 }

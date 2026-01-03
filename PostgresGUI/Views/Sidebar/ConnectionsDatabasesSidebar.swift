@@ -66,6 +66,14 @@ struct ConnectionsDatabasesSidebar: View {
                     await viewModel?.deleteConnection(connection)
                 }
             ))
+            .modifier(TableLoadingTimeoutAlertModifier(
+                appState: appState,
+                retryAction: {
+                    Task {
+                        await viewModel?.retryTableLoading()
+                    }
+                }
+            ))
     }
 
     private var contentWithChangeHandlers: some View {
@@ -245,6 +253,30 @@ private struct ConnectionAlertsModifier: ViewModifier {
                 }
             } message: { connection in
                 Text("Are you sure you want to delete '\(connection.displayName)'? This action cannot be undone.")
+            }
+    }
+}
+
+private struct TableLoadingTimeoutAlertModifier: ViewModifier {
+    let appState: AppState
+    let retryAction: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .alert("Loading Tables Timed Out", isPresented: Binding(
+                get: { appState.connection.showTableLoadingTimeoutAlert },
+                set: { appState.connection.showTableLoadingTimeoutAlert = $0 }
+            )) {
+                Button("Try Again") {
+                    appState.connection.showTableLoadingTimeoutAlert = false
+                    appState.connection.tableLoadingError = nil
+                    retryAction()
+                }
+                Button("Cancel", role: .cancel) {
+                    appState.connection.showTableLoadingTimeoutAlert = false
+                }
+            } message: {
+                Text("Loading tables took longer than \(Int(Constants.Timeout.databaseOperation)) seconds. The database may be slow or unresponsive.")
             }
     }
 }
