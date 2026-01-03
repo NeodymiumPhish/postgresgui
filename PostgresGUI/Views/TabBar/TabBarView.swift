@@ -61,7 +61,12 @@ struct TabBarView: View {
         }
     }
 
-    private func connectionName(for tab: TabState) -> String {
+    private func connectionName(for tab: TabViewModel) -> String {
+        // Check if tab is pending deletion
+        guard !tab.isPendingDeletion else {
+            return "Closing..."
+        }
+
         // If tab has a saved query, show "db / query_name"
         if let savedQueryId = tab.savedQueryId,
            let savedQuery = savedQueries.first(where: { $0.id == savedQueryId }) {
@@ -82,13 +87,14 @@ struct TabBarView: View {
         return "New Tab \(tab.order + 1)"
     }
 
-    private func selectTab(_ tab: TabState) {
+    private func selectTab(_ tab: TabViewModel) {
+        guard !tab.isPendingDeletion else { return }
         guard tab.id != tabManager.activeTab?.id else { return }
 
         // Save only query state before switching - don't save connection/database
         // as those are already stored in the tab and should only be updated
         // when the user explicitly changes them (not during rapid tab switching)
-        if let activeTab = tabManager.activeTab {
+        if let activeTab = tabManager.activeTab, !activeTab.isPendingDeletion {
             tabManager.updateActiveTab(
                 connectionId: activeTab.connectionId,
                 databaseName: activeTab.databaseName,
@@ -104,12 +110,15 @@ struct TabBarView: View {
         NotificationCenter.default.post(name: .tabDidChange, object: tab)
     }
 
-    private func closeTab(_ tab: TabState) {
+    private func closeTab(_ tab: TabViewModel) {
+        guard !tab.isPendingDeletion else { return }
+
+        let wasActive = tab.id == tabManager.activeTab?.id
         tabManager.closeTab(tab)
 
-        // If we closed the active tab, notify to reload
-        if tab.id == tabManager.activeTab?.id {
-            NotificationCenter.default.post(name: .tabDidChange, object: tabManager.activeTab)
+        // If we closed the active tab, notify to reload with the new active tab
+        if wasActive, let newActiveTab = tabManager.activeTab {
+            NotificationCenter.default.post(name: .tabDidChange, object: newActiveTab)
         }
     }
 
@@ -120,7 +129,7 @@ struct TabBarView: View {
 }
 
 struct TabItemView: View {
-    let tab: TabState
+    let tab: TabViewModel
     let isActive: Bool
     let connectionName: String
     let onSelect: () -> Void

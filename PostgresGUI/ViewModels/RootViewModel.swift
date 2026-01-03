@@ -3,7 +3,8 @@
 //  PostgresGUI
 //
 //  Handles app initialization, tab switching, and connection restoration.
-//  Extracted from RootView to separate business logic from presentation.
+//  Uses TabViewModel (in-memory) for safe async operations - never accesses
+//  SwiftData TabState directly.
 //
 //  Created by ghazi on 12/30/25.
 //
@@ -72,7 +73,7 @@ class RootViewModel {
             return
         }
 
-        // Get active tab's connection
+        // Get active tab's connection (use TabViewModel, not TabState)
         guard let activeTab = tabManager.activeTab,
               let connectionId = activeTab.connectionId,
               let connection = connections.first(where: { $0.id == connectionId }) else {
@@ -139,14 +140,18 @@ class RootViewModel {
     }
 
     /// Handle tab switch: restore query state, connect if needed, load tables
-    func handleTabChange(_ tab: TabState?, connections: [ConnectionProfile]) async {
-        guard let tab = tab else { return }
+    /// Now takes TabViewModel which is safe to access (not tied to SwiftData)
+    func handleTabChange(_ tab: TabViewModel?, connections: [ConnectionProfile]) async {
+        guard let tab = tab, !tab.isPendingDeletion else { return }
 
         // Increment generation to invalidate any in-flight tab switches
         tabSwitchGeneration &+= 1
         let myGeneration = tabSwitchGeneration
 
-        DebugLog.print("📑 [RootViewModel] Tab changed to: \(tab.id) (generation: \(myGeneration))")
+        // Capture tab ID for validity checks after async operations
+        let tabId = tab.id
+
+        DebugLog.print("📑 [RootViewModel] Tab changed to: \(tabId) (generation: \(myGeneration))")
 
         // Set flag to prevent result-clearing during tab restore
         appState.query.isRestoringFromTab = true
@@ -202,6 +207,14 @@ class RootViewModel {
             // Check if superseded after async operation
             guard isTabSwitchCurrent(myGeneration) else {
                 DebugLog.print("📑 [RootViewModel] Tab switch superseded after connection (gen \(myGeneration) vs \(tabSwitchGeneration))")
+                appState.query.isRestoringFromTab = false
+                return
+            }
+
+            // Check if tab was deleted during connection
+            guard tabManager.isTabValid(tabId) else {
+                DebugLog.print("📑 [RootViewModel] Tab was deleted during connection, aborting")
+                appState.connection.isLoadingTables = false
                 appState.query.isRestoringFromTab = false
                 return
             }
@@ -264,8 +277,23 @@ class RootViewModel {
             return
         }
 
-        // Restore database selection
-        if let databaseName = tab.databaseName,
+        // Check if tab was deleted during database fetch
+        guard tabManager.isTabValid(tabId) else {
+            DebugLog.print("📑 [RootViewModel] Tab was deleted during database fetch, aborting")
+            appState.connection.isLoadingTables = false
+            appState.query.isRestoringFromTab = false
+            return
+        }
+
+        // Restore database selection (use current tab state, not captured values)
+        guard let currentTab = tabManager.tab(by: tabId) else {
+            DebugLog.print("📑 [RootViewModel] Tab no longer exists, aborting")
+            appState.connection.isLoadingTables = false
+            appState.query.isRestoringFromTab = false
+            return
+        }
+
+        if let databaseName = currentTab.databaseName,
            let database = appState.connection.databases.first(where: { $0.name == databaseName }) {
             appState.connection.selectedDatabase = database
             await loadTables(for: database, connection: connection)
@@ -277,8 +305,15 @@ class RootViewModel {
                 return
             }
 
+            // Check if tab still valid
+            guard let finalTab = tabManager.tab(by: tabId) else {
+                DebugLog.print("📑 [RootViewModel] Tab deleted after loading tables, aborting")
+                appState.query.isRestoringFromTab = false
+                return
+            }
+
             // Restore table selection from tab (after tables are loaded)
-            restoreTableSelectionFromTab(tab)
+            restoreTableSelectionFromTab(finalTab)
             // Yield to let SwiftUI process onChange before clearing flag
             await Task.yield()
             appState.query.isRestoringFromTab = false
@@ -293,7 +328,7 @@ class RootViewModel {
 
     /// Save current state to active tab before switching or closing
     func saveCurrentStateToTab() {
-        guard let activeTab = tabManager.activeTab else { return }
+        guard let activeTab = tabManager.activeTab, !activeTab.isPendingDeletion else { return }
         tabManager.updateActiveTab(
             connectionId: activeTab.connectionId,
             databaseName: activeTab.databaseName,
@@ -330,14 +365,21 @@ class RootViewModel {
 
     // MARK: - Private Helpers
 
-    private func restoreQueryStateFromTab(_ tab: TabState) {
+    private func restoreQueryStateFromTab(_ tab: TabViewModel) {
         appState.query.queryText = tab.queryText
         appState.query.currentSavedQueryId = tab.savedQueryId
         restoreSavedQueryMetadata(for: tab.savedQueryId)
     }
 
-    private func restoreCachedResultsFromTab(_ tab: TabState) {
+    private func restoreCachedResultsFromTab(_ tab: TabViewModel) {
         DebugLog.print("📊 [RootViewModel] Restoring cached results from tab \(tab.id)")
+
+        // Check for pending deletion before accessing properties
+        guard !tab.isPendingDeletion else {
+            DebugLog.print("📊 [RootViewModel] Tab is pending deletion, skipping cache restore")
+            return
+        }
+
         if let cachedResults = tab.cachedResults {
             appState.query.queryResults = cachedResults
             appState.query.queryColumnNames = tab.cachedColumnNames
@@ -356,7 +398,9 @@ class RootViewModel {
         }
     }
 
-    private func restoreTableSelectionFromTab(_ tab: TabState) {
+    private func restoreTableSelectionFromTab(_ tab: TabViewModel) {
+        guard !tab.isPendingDeletion else { return }
+
         if let tableSchema = tab.selectedTableSchema,
            let tableName = tab.selectedTableName,
            let table = appState.connection.tables.first(where: {

@@ -3,10 +3,12 @@
 //  PostgresGUI
 //
 //  Service for managing tab state persistence with SwiftData.
-//  Handles creation, updates, and restoration of query tabs.
+//  Handles syncing between in-memory TabViewModels and persistent TabState.
 //
-//  Design: Conforms to TabServiceProtocol for dependency injection and testing.
-//  Protocol is defined in Services/Protocols/TabServiceProtocol.swift.
+//  Architecture:
+//  - TabViewModel (in-memory) = what UI interacts with
+//  - TabState (SwiftData) = persistence only
+//  - This service bridges the two layers
 //
 
 import Foundation
@@ -19,6 +21,137 @@ class TabService: TabServiceProtocol {
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
     }
+
+    // MARK: - Loading (SwiftData -> ViewModels)
+
+    /// Load all tabs from SwiftData and convert to ViewModels
+    func loadAllTabViewModels() -> [TabViewModel] {
+        let descriptor = FetchDescriptor<TabState>(
+            sortBy: [SortDescriptor(\.order, order: .forward)]
+        )
+        do {
+            let tabStates = try modelContext.fetch(descriptor)
+            return tabStates.map { TabViewModel(from: $0) }
+        } catch {
+            DebugLog.print("Failed to load tabs: \(error)")
+            return []
+        }
+    }
+
+    /// Get the active tab as ViewModel
+    func getActiveTabViewModel() -> TabViewModel? {
+        let descriptor = FetchDescriptor<TabState>(
+            predicate: #Predicate<TabState> { $0.isActive == true }
+        )
+        do {
+            if let tabState = try modelContext.fetch(descriptor).first {
+                return TabViewModel(from: tabState)
+            }
+            return nil
+        } catch {
+            DebugLog.print("Failed to get active tab: \(error)")
+            return nil
+        }
+    }
+
+    // MARK: - Syncing (ViewModels -> SwiftData)
+
+    /// Sync a TabViewModel back to its TabState in SwiftData
+    func syncToStorage(_ viewModel: TabViewModel) {
+        guard let tabState = fetchTabState(by: viewModel.id) else {
+            DebugLog.print("⚠️ [TabService] Cannot sync - TabState not found for \(viewModel.id)")
+            return
+        }
+
+        tabState.connectionId = viewModel.connectionId
+        tabState.databaseName = viewModel.databaseName
+        tabState.queryText = viewModel.queryText
+        tabState.savedQueryId = viewModel.savedQueryId
+        tabState.isActive = viewModel.isActive
+        tabState.order = viewModel.order
+        tabState.lastAccessedAt = viewModel.lastAccessedAt
+        tabState.selectedTableSchema = viewModel.selectedTableSchema
+        tabState.selectedTableName = viewModel.selectedTableName
+
+        // Sync cached results
+        if let results = viewModel.cachedResults {
+            tabState.setCachedResults(results, columnNames: viewModel.cachedColumnNames)
+        } else {
+            tabState.clearCachedResults()
+        }
+
+        save()
+    }
+
+    /// Sync multiple ViewModels to storage
+    func syncAllToStorage(_ viewModels: [TabViewModel]) {
+        for viewModel in viewModels {
+            guard !viewModel.isPendingDeletion else { continue }
+            syncToStorage(viewModel)
+        }
+    }
+
+    /// Set a tab as active (deactivates all others)
+    func setActiveTab(_ viewModel: TabViewModel) {
+        // Deactivate all tabs in storage
+        let allTabs = loadAllTabs()
+        for tabState in allTabs {
+            tabState.isActive = false
+        }
+
+        // Activate the selected one
+        if let tabState = fetchTabState(by: viewModel.id) {
+            tabState.isActive = true
+            tabState.lastAccessedAt = Date()
+        }
+
+        save()
+    }
+
+    /// Create a new tab and return its ViewModel
+    func createTabViewModel(inheritingFrom viewModel: TabViewModel? = nil) -> TabViewModel {
+        let allTabs = loadAllTabs()
+        let maxOrder = allTabs.map(\.order).max() ?? -1
+
+        let newTabState = TabState(
+            connectionId: viewModel?.connectionId,
+            databaseName: viewModel?.databaseName,
+            queryText: "",
+            isActive: false,
+            order: maxOrder + 1
+        )
+
+        modelContext.insert(newTabState)
+        save()
+
+        return TabViewModel(from: newTabState)
+    }
+
+    /// Delete a tab from storage
+    func deleteTabFromStorage(_ viewModel: TabViewModel) {
+        guard let tabState = fetchTabState(by: viewModel.id) else {
+            DebugLog.print("⚠️ [TabService] Cannot delete - TabState not found for \(viewModel.id)")
+            return
+        }
+
+        modelContext.delete(tabState)
+        save()
+    }
+
+    /// Update cached results for a tab
+    func updateTabResults(_ viewModel: TabViewModel, results: [TableRow]?, columnNames: [String]?) {
+        DebugLog.print("💾 [TabService] Saving \(results?.count ?? 0) results to tab \(viewModel.id)")
+
+        guard let tabState = fetchTabState(by: viewModel.id) else {
+            DebugLog.print("⚠️ [TabService] Cannot update results - TabState not found")
+            return
+        }
+
+        tabState.setCachedResults(results, columnNames: columnNames)
+        save()
+    }
+
+    // MARK: - Legacy Protocol Conformance (for gradual migration)
 
     func loadAllTabs() -> [TabState] {
         let descriptor = FetchDescriptor<TabState>(
@@ -45,12 +178,10 @@ class TabService: TabServiceProtocol {
     }
 
     func setActiveTab(_ tab: TabState) {
-        // Deactivate all tabs first
         let allTabs = loadAllTabs()
         for t in allTabs {
             t.isActive = false
         }
-        // Activate the selected tab and update last accessed time
         tab.isActive = true
         tab.lastAccessedAt = Date()
         save()
@@ -117,5 +248,14 @@ class TabService: TabServiceProtocol {
         } catch {
             DebugLog.print("Failed to save tab state: \(error)")
         }
+    }
+
+    // MARK: - Private Helpers
+
+    private func fetchTabState(by id: UUID) -> TabState? {
+        let descriptor = FetchDescriptor<TabState>(
+            predicate: #Predicate<TabState> { $0.id == id }
+        )
+        return try? modelContext.fetch(descriptor).first
     }
 }

@@ -78,8 +78,9 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .tabDidChange)) { notification in
             tabChangeTask?.cancel()
             tabChangeTask = Task {
+                // Now expects TabViewModel instead of TabState
                 await viewModel?.handleTabChange(
-                    notification.object as? TabState,
+                    notification.object as? TabViewModel,
                     connections: connections
                 )
             }
