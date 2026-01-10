@@ -22,7 +22,7 @@
 ### Creating Your First Connection
 
 1. Launch PostgresGUI
-2. Click "New Connection" or use the quick localhost connection option
+2. Click "New Connection"
 3. Enter your connection details:
    - Host (e.g., localhost or your server address)
    - Port (default: 5432)
