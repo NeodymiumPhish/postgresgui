@@ -31,16 +31,8 @@
 4. Click "Test Connection" to verify
 5. Save your connection profile
 
-### Running SQL Queries
-
-1. Click the "Query" tab or button to open the query editor
-2. Write your SQL query
-3. Press `Cmd+Return` to execute
-4. View results in the table below, including execution time and row count
-
 ### Keyboard Shortcuts
 
-- `Cmd+R` - Refresh current view
 - `Cmd+Return` - Execute SQL query
 - `Space` - View selected row in JSON format
 - `Delete` - Delete selected row(s)
