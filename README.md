@@ -28,7 +28,6 @@
    - Port (default: 5432)
    - Database name (default: postgres)
    - Username and password
-   - Optional: Configure SSL settings
 4. Click "Test Connection" to verify
 5. Save your connection profile
 
