@@ -45,22 +45,10 @@ struct SavedQueriesSidebarSection: View {
             if let viewModel = viewModel {
                 // Header group: Title + Search
                 VStack(spacing: 8) {
-                    // Title with New Query button
+                    // Title
                     HStack {
                         Text("Queries")
                             .font(.headline)
-
-                        Button {
-                            viewModel.createNewQuery(
-                                savedQueries: savedQueries, modelContext: modelContext)
-                            if let newQueryId = appState.query.currentSavedQueryId {
-                                selectedQueryIDs = [newQueryId]
-                            }
-                        } label: {
-                            Image(systemName: "plus.circle")
-                                .font(.system(size: 12))
-                        }
-                        .buttonStyle(.plain)
 
                         Spacer()
                     }
@@ -93,38 +81,62 @@ struct SavedQueriesSidebarSection: View {
 
     @ViewBuilder
     private func searchAndSortHeader(viewModel: SavedQueriesViewModel) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
+        HStack(spacing: 0) {
+            HStack(spacing: 4) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
 
-            TextField(
-                "Filter queries",
-                text: Binding(
-                    get: { viewModel.searchText },
-                    set: { viewModel.searchText = $0 }
+                TextField(
+                    "Filter queries",
+                    text: Binding(
+                        get: { viewModel.searchText },
+                        set: { viewModel.searchText = $0 }
+                    )
                 )
-            )
-            .font(.system(size: 12))
-            .textFieldStyle(.plain)
+                .font(.system(size: 12))
+                .textFieldStyle(.plain)
 
-            sortMenu(viewModel: viewModel)
+                sortMenu(viewModel: viewModel)
+            }
+            .padding(.leading, 8)
+            .padding(.trailing, 4)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(Color(nsColor: .textBackgroundColor))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(Color.secondary, lineWidth: 0.5)
+                    .shadow(color: Color.black.opacity(0.15), radius: 1, x: 0, y: 1)
+                    .clipShape(Capsule())
+            )
+            .clipShape(Capsule())
+
+            addQueryButton(viewModel: viewModel)
         }
-        .padding(.leading, 8)
-        .padding(.trailing, 4)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(Color(nsColor: .textBackgroundColor))
-        )
-        .overlay(
-            Capsule()
-                .stroke(Color.secondary, lineWidth: 0.5)
-                .shadow(color: Color.black.opacity(0.15), radius: 1, x: 0, y: 1)
-                .clipShape(Capsule())
-        )
-        .clipShape(Capsule())
         .padding(.horizontal, 10)
+    }
+
+    // MARK: - Add Query Button
+
+    @ViewBuilder
+    private func addQueryButton(viewModel: SavedQueriesViewModel) -> some View {
+        Button {
+            viewModel.createNewQuery(
+                savedQueries: savedQueries, modelContext: modelContext)
+            if let newQueryId = appState.query.currentSavedQueryId {
+                selectedQueryIDs = [newQueryId]
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 12, weight: .medium))
+                .frame(width: 16, height: 16)
+        }
+        .buttonStyle(.bordered)
+        .glassEffect(.regular.interactive())
+        .clipShape(Circle())
     }
 
     // MARK: - Sort Menu
