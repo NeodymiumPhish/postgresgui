@@ -1,9 +1,9 @@
 # PostgresGUI - A native PostgreSQL client for macOS
 
+![PostgresGUI screenshot in dark mode](https://github.com/PostgresGUI/website/blob/main/public/screenshots2/PostgresGUI%20-%20Dark%20mode.png?raw=true)
 
-[![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)](https://postgresgui.com)
-[![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos)
-
+[![Version](https://img.shields.io/badge/version-1.0.6-blue.svg)](https://postgresgui.com)
+  [![Platform](https://img.shields.io/badge/platform-macOS%2026-lightgrey.svg)](https://www.apple.com/macos)
 
 ## Features
 
@@ -22,26 +22,17 @@
 ### Creating Your First Connection
 
 1. Launch PostgresGUI
-2. Click "New Connection" or use the quick localhost connection option
+2. Click "New Connection"
 3. Enter your connection details:
    - Host (e.g., localhost or your server address)
    - Port (default: 5432)
    - Database name (default: postgres)
    - Username and password
-   - Optional: Configure SSL settings
 4. Click "Test Connection" to verify
 5. Save your connection profile
 
-### Running SQL Queries
-
-1. Click the "Query" tab or button to open the query editor
-2. Write your SQL query
-3. Press `Cmd+Return` to execute
-4. View results in the table below, including execution time and row count
-
 ### Keyboard Shortcuts
 
-- `Cmd+R` - Refresh current view
 - `Cmd+Return` - Execute SQL query
 - `Space` - View selected row in JSON format
 - `Delete` - Delete selected row(s)
