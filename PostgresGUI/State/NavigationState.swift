@@ -18,6 +18,7 @@ class NavigationState {
     var isShowingConnectionForm: Bool = false
     var connectionToEdit: ConnectionProfile? = nil
     var isShowingCreateDatabase: Bool = false
+    var isShowingKeyboardShortcuts: Bool = false
 
     // Sheet management helpers
     func showConnectionForm() {

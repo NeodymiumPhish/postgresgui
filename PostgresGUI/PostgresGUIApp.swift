@@ -84,6 +84,12 @@ struct PostgresGUIApp: App {
                 }) {
                     Label("Help and Support...", systemImage: "questionmark.circle")
                 }
+
+                Button(action: {
+                    NotificationCenter.default.post(name: .showKeyboardShortcuts, object: nil)
+                }) {
+                    Label("Keyboard Shortcuts...", systemImage: "keyboard")
+                }
             }
         }
     }
@@ -101,4 +107,5 @@ struct PostgresGUIApp: App {
 extension Notification.Name {
     static let createNewTab = Notification.Name("createNewTab")
     static let closeCurrentTab = Notification.Name("closeCurrentTab")
+    static let showKeyboardShortcuts = Notification.Name("showKeyboardShortcuts")
 }

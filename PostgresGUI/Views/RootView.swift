@@ -104,6 +104,15 @@ struct RootView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .showKeyboardShortcuts)) { _ in
+            appState.navigation.isShowingKeyboardShortcuts = true
+        }
+        .sheet(isPresented: Binding(
+            get: { appState.navigation.isShowingKeyboardShortcuts },
+            set: { appState.navigation.isShowingKeyboardShortcuts = $0 }
+        )) {
+            KeyboardShortcutsView()
+        }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .background {
                 Task { @MainActor in
