@@ -79,6 +79,8 @@ struct QueryResultsView: View {
     @Environment(TabManager.self) private var tabManager
     @State private var viewModel: QueryResultsViewModel?
     @State private var sortOrder: [TableRowComparator] = []
+    // Tracks date format changes to trigger view refresh
+    @AppStorage(SettingsKeys.dateFormat) private var dateFormatSetting: String = DateFormat.iso.rawValue
     var searchText: String = ""
     var onDeleteKeyPressed: (() -> Void)?
     var onSpaceKeyPressed: (() -> Void)?
@@ -87,6 +89,7 @@ struct QueryResultsView: View {
         VStack(spacing: 0) {
             // Results or error display
             resultsContent
+                .id(dateFormatSetting) // Force refresh when date format changes
 
             // Pagination row (only show if there's more than one page)
             if appState.query.currentPage > 0 || appState.query.hasNextPage {

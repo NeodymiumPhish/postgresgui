@@ -23,53 +23,16 @@ enum Formatters {
         return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
     }
 
-    /// Format PostgreSQL timestamp values
+    /// Format PostgreSQL timestamp values using user's preferred format
     static func formatTimestamp(_ value: String) -> String {
-        // Try to parse ISO8601 timestamp (e.g., "2024-11-30T12:34:56Z")
-        let iso8601Formatter = ISO8601DateFormatter()
-        iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let service = currentDateFormatService()
+        return service.formatTimestamp(value)
+    }
 
-        if let date = iso8601Formatter.date(from: value) {
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateStyle = .medium
-            dateFormatter.timeStyle = .medium
-            return dateFormatter.string(from: date)
-        }
-
-        // Try without fractional seconds
-        iso8601Formatter.formatOptions = [.withInternetDateTime]
-        if let date = iso8601Formatter.date(from: value) {
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateStyle = .medium
-            dateFormatter.timeStyle = .medium
-            return dateFormatter.string(from: date)
-        }
-
-        // Try PostgreSQL timestamp format (e.g., "2024-11-30 12:34:56")
-        let postgresFormatter = DateFormatter()
-        postgresFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        postgresFormatter.locale = Locale(identifier: "en_US_POSIX")
-
-        if let date = postgresFormatter.date(from: value) {
-            let displayFormatter = DateFormatter()
-            displayFormatter.dateStyle = .medium
-            displayFormatter.timeStyle = .medium
-            return displayFormatter.string(from: date)
-        }
-
-        // Try date-only format (e.g., "2024-11-30")
-        let dateOnlyFormatter = DateFormatter()
-        dateOnlyFormatter.dateFormat = "yyyy-MM-dd"
-        dateOnlyFormatter.locale = Locale(identifier: "en_US_POSIX")
-
-        if let date = dateOnlyFormatter.date(from: value) {
-            let displayFormatter = DateFormatter()
-            displayFormatter.dateStyle = .medium
-            displayFormatter.timeStyle = .none
-            return displayFormatter.string(from: date)
-        }
-
-        // If no format matches, return original value
-        return value
+    /// Creates a DateFormatService based on current user settings
+    private static func currentDateFormatService() -> DateFormatServiceProtocol {
+        let rawValue = UserDefaults.standard.string(forKey: SettingsKeys.dateFormat) ?? DateFormat.iso.rawValue
+        let format = DateFormat(rawValue: rawValue) ?? .iso
+        return DateFormatService(dateFormat: format)
     }
 }

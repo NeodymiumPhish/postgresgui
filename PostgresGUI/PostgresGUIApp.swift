@@ -100,6 +100,10 @@ struct PostgresGUIApp: App {
                 }
             }
         }
+
+        Settings {
+            SettingsView()
+        }
     }
 
     // Menu commands can't access TabManager directly, so we use notifications.
