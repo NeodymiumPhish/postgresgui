@@ -129,6 +129,12 @@ struct PostgresResultMapper: ResultMapperProtocol {
 
     /// Decode a PostgresCell to a string representation
     private func decodeCellValue(_ cell: PostgresCell) -> String? {
+        // Try network types first (inet, cidr, macaddr, macaddr8)
+        // These are stored as binary and need special decoding
+        if let networkValue = decodeNetworkType(cell) {
+            return networkValue
+        }
+
         // Try String first
         if let stringValue = try? cell.decode(String.self, context: .default) {
             if !containsInvalidControlCharacters(stringValue) {
@@ -334,5 +340,30 @@ struct PostgresResultMapper: ResultMapperProtocol {
         }
 
         return nil
+    }
+
+    /// Decode network address types (inet, cidr, macaddr, macaddr8) from binary format
+    private func decodeNetworkType(_ cell: PostgresCell) -> String? {
+        let oid = cell.dataType.rawValue
+
+        // Check if this is a network type (inet=869, cidr=650, macaddr=829, macaddr8=774)
+        guard oid == 869 || oid == 650 || oid == 829 || oid == 774 else {
+            return nil
+        }
+
+        // Get raw bytes from the cell
+        guard let bytes = cell.bytes else {
+            return nil
+        }
+
+        let buffer = bytes
+        let byteCount = buffer.readableBytes
+        guard byteCount > 0 else { return nil }
+
+        guard let byteArray = buffer.getBytes(at: 0, length: byteCount) else {
+            return nil
+        }
+
+        return NetworkTypeDecoder.decode(bytes: byteArray, dataTypeOID: oid)
     }
 }

@@ -14,6 +14,7 @@ private enum ColumnInputType {
     case dateOnly       // "date"
     case timeOnly       // "time without time zone", "time with time zone"
     case dateTime       // "timestamp without time zone", "timestamp with time zone"
+    case networkAddress(NetworkAddressType)  // "inet", "cidr", "macaddr", "macaddr8"
     case multilineText  // "text", "json", "jsonb", "xml", arrays
     case singleLineText // default
 
@@ -32,6 +33,9 @@ private enum ColumnInputType {
         if type.contains("timestamp") {
             return .dateTime
         }
+        if let networkType = NetworkAddressType.from(dataType: type) {
+            return .networkAddress(networkType)
+        }
         if type == "text" || type == "json" || type == "jsonb" || type == "xml" || type.contains("[]") {
             return .multilineText
         }
@@ -46,6 +50,26 @@ private enum ColumnInputType {
         case .dateTime: return .dateTime
         default: return nil
         }
+    }
+
+    /// Convert to NetworkAddressType if applicable
+    var networkAddressType: NetworkAddressType? {
+        if case .networkAddress(let type) = self {
+            return type
+        }
+        return nil
+    }
+
+    /// Check if this is a boolean type
+    var isBoolean: Bool {
+        if case .boolean = self { return true }
+        return false
+    }
+
+    /// Check if this is a multiline text type
+    var isMultilineText: Bool {
+        if case .multilineText = self { return true }
+        return false
     }
 }
 
@@ -65,6 +89,7 @@ struct RowEditorView: View {
     @State private var nullFlags: [String: Bool] = [:]
     @State private var dateValues: [String: Date] = [:]
     @State private var booleanValues: [String: Bool?] = [:]  // nil = NULL
+    @State private var validationErrors: [String: String] = [:]  // Column name -> error message
     @State private var isSaving = false
     @State private var saveError: String?
 
@@ -126,7 +151,7 @@ struct RowEditorView: View {
                 } else {
                     initialTextValues[columnName] = ""
                     initialNullFlags[columnName] = true
-                    if inputType == .boolean {
+                    if inputType.isBoolean {
                         initialBooleanValues[columnName] = nil
                     }
                 }
@@ -134,7 +159,7 @@ struct RowEditorView: View {
                 // Column doesn't exist in row.values, default to empty
                 initialTextValues[columnName] = ""
                 initialNullFlags[columnName] = false
-                if inputType == .boolean {
+                if inputType.isBoolean {
                     initialBooleanValues[columnName] = false
                 }
             }
@@ -262,39 +287,52 @@ struct RowEditorView: View {
     @ViewBuilder
     private func editableField(columnName: String, inputType: ColumnInputType, isNullable: Bool) -> some View {
         let isNull = nullFlags[columnName] ?? false
+        let hasValidationError = validationErrors[columnName] != nil
 
-        HStack(alignment: inputType == .multilineText ? .top : .center, spacing: 8) {
-            Group {
-                switch inputType {
-                case .boolean:
-                    booleanPicker(columnName: columnName, isNullable: isNullable)
-                case .dateOnly:
-                    datePicker(columnName: columnName, displayedComponents: .date, inputType: inputType)
-                case .timeOnly:
-                    datePicker(columnName: columnName, displayedComponents: .hourAndMinute, inputType: inputType)
-                case .dateTime:
-                    datePicker(columnName: columnName, displayedComponents: [.date, .hourAndMinute], inputType: inputType)
-                case .multilineText:
-                    multilineTextField(columnName: columnName, isDisabled: isNull)
-                case .singleLineText:
-                    singleLineTextField(columnName: columnName, isDisabled: isNull)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: inputType.isMultilineText ? .top : .center, spacing: 8) {
+                Group {
+                    switch inputType {
+                    case .boolean:
+                        booleanPicker(columnName: columnName, isNullable: isNullable)
+                    case .dateOnly:
+                        datePicker(columnName: columnName, displayedComponents: .date, inputType: inputType)
+                    case .timeOnly:
+                        datePicker(columnName: columnName, displayedComponents: .hourAndMinute, inputType: inputType)
+                    case .dateTime:
+                        datePicker(columnName: columnName, displayedComponents: [.date, .hourAndMinute], inputType: inputType)
+                    case .networkAddress(let networkType):
+                        networkAddressField(columnName: columnName, networkType: networkType, isDisabled: isNull, hasError: hasValidationError)
+                    case .multilineText:
+                        multilineTextField(columnName: columnName, isDisabled: isNull)
+                    case .singleLineText:
+                        singleLineTextField(columnName: columnName, isDisabled: isNull)
+                    }
+                }
+
+                // NULL checkbox for non-boolean nullable columns
+                // Boolean has NULL built into its picker
+                if isNullable && !inputType.isBoolean {
+                    Toggle("NULL", isOn: Binding(
+                        get: { nullFlags[columnName] ?? false },
+                        set: { isNull in
+                            nullFlags[columnName] = isNull
+                            if isNull {
+                                dateValues.removeValue(forKey: columnName)
+                                validationErrors.removeValue(forKey: columnName)
+                            }
+                        }
+                    ))
+                    .toggleStyle(.checkbox)
+                    .padding(.top, inputType.isMultilineText ? 4 : 0)
                 }
             }
 
-            // NULL checkbox for non-boolean nullable columns
-            // Boolean has NULL built into its picker
-            if isNullable && inputType != .boolean {
-                Toggle("NULL", isOn: Binding(
-                    get: { nullFlags[columnName] ?? false },
-                    set: { isNull in
-                        nullFlags[columnName] = isNull
-                        if isNull {
-                            dateValues.removeValue(forKey: columnName)
-                        }
-                    }
-                ))
-                .toggleStyle(.checkbox)
-                .padding(.top, inputType == .multilineText ? 4 : 0)
+            // Show validation error if present
+            if let error = validationErrors[columnName] {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.red)
             }
         }
     }
@@ -423,10 +461,94 @@ struct RowEditorView: View {
         .opacity(isDisabled ? 0.6 : 1.0)
     }
 
+    // MARK: - Network Address Field
+
+    @ViewBuilder
+    private func networkAddressField(columnName: String, networkType: NetworkAddressType, isDisabled: Bool, hasError: Bool) -> some View {
+        TextField("", text: Binding(
+            get: { textValues[columnName] ?? "" },
+            set: { newValue in
+                textValues[columnName] = newValue
+                // Validate on change and update error state
+                if !newValue.isEmpty {
+                    let result = NetworkTypeValidation.validate(newValue, type: networkType)
+                    if let error = result.errorMessage {
+                        validationErrors[columnName] = error
+                    } else {
+                        validationErrors.removeValue(forKey: columnName)
+                    }
+                } else {
+                    validationErrors.removeValue(forKey: columnName)
+                }
+            }
+        ))
+        .textFieldStyle(.roundedBorder)
+        .disabled(isDisabled)
+        .frame(maxWidth: 380)
+        .overlay(
+            RoundedRectangle(cornerRadius: 5)
+                .stroke(hasError ? Color.red.opacity(0.5) : Color.clear, lineWidth: 1)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 5)
+                .stroke(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.black.opacity(0.1),
+                            Color.clear
+                        ]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+                .blendMode(.multiply)
+        )
+        .shadow(color: Color.black.opacity(0.05), radius: 1, x: 0, y: 1)
+    }
+
+    // MARK: - Validation
+
+    /// Validate all network address fields and return true if all are valid
+    private func validateNetworkFields() -> Bool {
+        var allValid = true
+
+        for columnName in columnNames {
+            // Skip if null
+            if nullFlags[columnName] == true {
+                continue
+            }
+
+            let column = columnInfo.first { $0.name == columnName }
+            let dataType = column?.dataType.lowercased() ?? ""
+            let inputType = ColumnInputType.from(dataType: dataType)
+
+            if let networkType = inputType.networkAddressType {
+                let value = textValues[columnName] ?? ""
+                if !value.isEmpty {
+                    let result = NetworkTypeValidation.validate(value, type: networkType)
+                    if let error = result.errorMessage {
+                        validationErrors[columnName] = error
+                        allValid = false
+                    }
+                }
+            }
+        }
+
+        return allValid
+    }
+
     private func save() async {
         isSaving = true
 
         DebugLog.print("💾 [RowEditorView.save] START")
+
+        // Validate network address fields before saving
+        guard validateNetworkFields() else {
+            DebugLog.print("  ❌ Network address validation failed")
+            isSaving = false
+            return
+        }
 
         // Sync date values to textValues before saving
         for (columnName, date) in dateValues {
