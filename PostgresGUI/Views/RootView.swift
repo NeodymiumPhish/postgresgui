@@ -113,6 +113,15 @@ struct RootView: View {
         )) {
             KeyboardShortcutsView()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .showHelp)) { _ in
+            appState.navigation.isShowingHelp = true
+        }
+        .sheet(isPresented: Binding(
+            get: { appState.navigation.isShowingHelp },
+            set: { appState.navigation.isShowingHelp = $0 }
+        )) {
+            HelpView()
+        }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .background {
                 Task { @MainActor in

@@ -11,17 +11,8 @@ struct KeyboardShortcutsView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: Constants.Spacing.large) {
-                    ShortcutSection(title: "General") {
-                        ShortcutRow(keys: "⌘ T", description: "New Tab")
-                        ShortcutRow(keys: "⌘ W", description: "Close Tab")
-                    }
-
-                    ShortcutSection(title: "Query Editor") {
-                        ShortcutRow(keys: "⌘ ↵", description: "Run Query")
-                    }
-                }
-                .padding()
+                KeyboardShortcutsContent()
+                    .padding()
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -36,7 +27,23 @@ struct KeyboardShortcutsView: View {
     }
 }
 
-private struct ShortcutSection<Content: View>: View {
+/// Reusable keyboard shortcuts content (used in KeyboardShortcutsView and HelpView)
+struct KeyboardShortcutsContent: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: Constants.Spacing.large) {
+            ShortcutSection(title: "General") {
+                ShortcutRow(keys: "⌘ T", description: "New Tab")
+                ShortcutRow(keys: "⌘ W", description: "Close Tab")
+            }
+
+            ShortcutSection(title: "Query Editor") {
+                ShortcutRow(keys: "⌘ ↵", description: "Run Query")
+            }
+        }
+    }
+}
+
+struct ShortcutSection<Content: View>: View {
     let title: String
     @ViewBuilder let content: Content
 
@@ -54,7 +61,7 @@ private struct ShortcutSection<Content: View>: View {
     }
 }
 
-private struct ShortcutRow: View {
+struct ShortcutRow: View {
     let keys: String
     let description: String
 
