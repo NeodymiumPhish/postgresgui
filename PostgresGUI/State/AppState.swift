@@ -108,6 +108,34 @@ class AppState {
         )
     }
 
+    // MARK: - Schema Context
+
+    /// Set the search_path for query context when a schema is selected
+    @MainActor
+    func setSchemaSearchPath(_ schema: String?) async {
+        guard connection.isConnected else { return }
+
+        // Build search_path: selected schema first, then public as fallback
+        let searchPath: String
+        if let schema = schema {
+            searchPath = schema == "public" ? "public" : "\(schema), public"
+        } else {
+            // "All Schemas" selected - reset to default
+            searchPath = "public"
+        }
+
+        let sql = "SET search_path TO \(searchPath)"
+        DebugLog.print("🔧 Setting search_path: \(searchPath)")
+
+        do {
+            _ = try await connection.databaseService.executeQuery(sql)
+            connection.schemaError = nil
+        } catch {
+            DebugLog.print("❌ Failed to set search_path: \(error)")
+            connection.schemaError = "Failed to set schema context: \(error.localizedDescription)"
+        }
+    }
+
     // MARK: - Cleanup
 
     /// Clean up resources when window is closing

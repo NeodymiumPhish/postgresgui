@@ -82,6 +82,7 @@ final class TableRefreshService: TableRefreshServiceProtocol {
             appState.connection.tables = tables
             appState.connection.schemas = schemas
             appState.connection.selectedSchema = nil  // Reset schema filter on database change
+            await appState.setSchemaSearchPath(nil)  // Reset search_path to default
         } catch is CancellationError {
             // Silently ignore cancellation
         } catch ConnectionError.connectionCancelled {

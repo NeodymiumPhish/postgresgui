@@ -74,6 +74,18 @@ struct ConnectionsDatabasesSidebar: View {
                     }
                 }
             ))
+            .alert("Schema Error", isPresented: Binding(
+                get: { appState.connection.schemaError != nil },
+                set: { if !$0 { appState.connection.schemaError = nil } }
+            )) {
+                Button("OK", role: .cancel) {
+                    appState.connection.schemaError = nil
+                }
+            } message: {
+                if let error = appState.connection.schemaError {
+                    Text(error)
+                }
+            }
     }
 
     private var contentWithChangeHandlers: some View {
@@ -98,14 +110,35 @@ struct ConnectionsDatabasesSidebar: View {
     private var mainContent: some View {
         VStack(spacing: 0) {
             makeConnectionDatabasePicker()
+            if appState.connection.selectedDatabase != nil && appState.connection.schemas.count > 1 {
+                SchemaPicker(
+                    schemas: appState.connection.schemas,
+                    selectedSchema: appState.connection.selectedSchema,
+                    onSelect: handleSelectSchema
+                )
+            }
             makeTablesList()
+        }
+    }
+
+    private func handleSelectSchema(_ schema: String?) {
+        appState.connection.selectedSchema = schema
+        // Clear selected table if it's not in the new schema
+        if let selected = appState.connection.selectedTable,
+           let schema = schema,
+           selected.schema != schema {
+            appState.connection.selectedTable = nil
+        }
+        // Set search_path for query context
+        Task {
+            await appState.setSchemaSearchPath(schema)
         }
     }
 
     @ViewBuilder
     private func makeTablesList() -> some View {
         TablesListIsolated(
-            tables: appState.connection.tables,
+            tables: appState.connection.filteredTables,
             selectedTable: Binding(
                 get: { appState.connection.selectedTable },
                 set: { appState.connection.selectedTable = $0 }

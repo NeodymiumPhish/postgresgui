@@ -34,6 +34,7 @@ class ConnectionState {
     var selectedDatabase: DatabaseInfo?
     var selectedTable: TableInfo?
     var selectedSchema: String? = nil  // nil means "All Schemas"
+    var schemaError: String? = nil  // Error message when SET search_path fails
 
     // Data caches (populated by DatabaseService)
     var databases: [DatabaseInfo] = []
