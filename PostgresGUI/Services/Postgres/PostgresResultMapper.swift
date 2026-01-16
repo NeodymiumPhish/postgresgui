@@ -104,8 +104,9 @@ struct PostgresResultMapper: ResultMapperProtocol {
             throw DatabaseError.unknownError("Expected PostgresDatabaseRow")
         }
 
-        let (schemaName, tableName) = try postgresRow.row.decode((String, String).self)
-        return TableInfo(name: tableName, schema: schemaName)
+        let (schemaName, tableName, tableTypeString) = try postgresRow.row.decode((String, String, String).self)
+        let tableType = TableType(rawValue: tableTypeString) ?? .regular
+        return TableInfo(name: tableName, schema: schemaName, tableType: tableType)
     }
 
     // MARK: - Private Helpers

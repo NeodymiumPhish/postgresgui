@@ -52,6 +52,9 @@ protocol DatabaseServiceProtocol: AnyObject {
     /// Fetch list of tables in the connected database
     func fetchTables(database: String) async throws -> [TableInfo]
 
+    /// Fetch list of schemas in the connected database
+    func fetchSchemas(database: String) async throws -> [String]
+
     /// Delete a table
     func deleteTable(schema: String, table: String) async throws
 

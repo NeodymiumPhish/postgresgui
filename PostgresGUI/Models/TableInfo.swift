@@ -7,19 +7,35 @@
 
 import Foundation
 
+enum TableType: String {
+    case regular
+    case foreign
+}
+
 struct TableInfo: Identifiable {
     let id: String
     let name: String
     let schema: String
+    let tableType: TableType
     var primaryKeyColumns: [String]? = nil
     var columnInfo: [ColumnInfo]? = nil
 
-    init(name: String, schema: String = "public", primaryKeyColumns: [String]? = nil, columnInfo: [ColumnInfo]? = nil) {
+    init(name: String, schema: String = "public", tableType: TableType = .regular, primaryKeyColumns: [String]? = nil, columnInfo: [ColumnInfo]? = nil) {
         self.id = "\(schema).\(name)"
         self.name = name
         self.schema = schema
+        self.tableType = tableType
         self.primaryKeyColumns = primaryKeyColumns
         self.columnInfo = columnInfo
+    }
+
+    /// Display name showing schema prefix for non-public schemas
+    var displayName: String {
+        if schema == "public" {
+            return name
+        } else {
+            return "\(schema).\(name)"
+        }
     }
 }
 

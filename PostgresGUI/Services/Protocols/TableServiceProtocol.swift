@@ -13,6 +13,9 @@ protocol TableServiceProtocol {
     /// Fetch list of tables in the connected database
     func fetchTables(database: String) async throws -> [TableInfo]
 
+    /// Fetch list of schemas in the connected database
+    func fetchSchemas(database: String) async throws -> [String]
+
     /// Fetch table data with pagination
     func fetchTableData(
         schema: String,

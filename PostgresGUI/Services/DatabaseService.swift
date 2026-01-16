@@ -178,6 +178,15 @@ class DatabaseService {
         return try await tableService.fetchTables(database: database)
     }
 
+    /// Fetch list of schemas in the connected database
+    func fetchSchemas(database: String) async throws -> [String] {
+        guard _isConnected else {
+            throw ConnectionError.notConnected
+        }
+
+        return try await tableService.fetchSchemas(database: database)
+    }
+
     /// Fetch table data with pagination
     func fetchTableData(
         schema: String,

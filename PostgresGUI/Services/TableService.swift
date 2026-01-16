@@ -29,6 +29,15 @@ class TableService: TableServiceProtocol {
         }
     }
 
+    /// Fetch list of schemas in the connected database
+    func fetchSchemas(database: String) async throws -> [String] {
+        logger.debug("Fetching schemas for database: \(database)")
+
+        return try await connectionManager.withConnection { conn in
+            try await self.queryExecutor.fetchSchemas(connection: conn)
+        }
+    }
+
     /// Fetch table data with pagination
     func fetchTableData(
         schema: String,

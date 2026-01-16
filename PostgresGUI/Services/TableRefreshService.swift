@@ -71,11 +71,17 @@ final class TableRefreshService: TableRefreshServiceProtocol {
                 try await appState.connection.databaseService.fetchTables(database: database.name)
             }
 
+            let schemas = try await withDatabaseTimeout {
+                try await appState.connection.databaseService.fetchSchemas(database: database.name)
+            }
+
             // Final check before writing - prevent stale data from overwriting newer results
             guard !Task.isCancelled,
                   appState.connection.selectedDatabase?.id == database.id else { return }
 
             appState.connection.tables = tables
+            appState.connection.schemas = schemas
+            appState.connection.selectedSchema = nil  // Reset schema filter on database change
         } catch is CancellationError {
             // Silently ignore cancellation
         } catch ConnectionError.connectionCancelled {
@@ -124,16 +130,21 @@ final class TableRefreshService: TableRefreshServiceProtocol {
         // Verify still selected before fetching tables
         guard appState.connection.selectedDatabase?.id == databaseId else { return }
 
-        // Refresh tables
+        // Refresh tables and schemas
         do {
             let tables = try await withDatabaseTimeout {
                 try await appState.connection.databaseService.fetchTables(database: database.name)
+            }
+
+            let schemas = try await withDatabaseTimeout {
+                try await appState.connection.databaseService.fetchSchemas(database: database.name)
             }
 
             // Final check before writing
             guard appState.connection.selectedDatabase?.id == databaseId else { return }
 
             appState.connection.tables = tables
+            appState.connection.schemas = schemas
             updateSelectedTable(appState: appState)
         } catch {
             guard appState.connection.selectedDatabase?.id == databaseId else { return }

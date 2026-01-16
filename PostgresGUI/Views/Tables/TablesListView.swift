@@ -94,9 +94,9 @@ struct TableListRowView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "tablecells")
+            Image(systemName: table.tableType == .foreign ? "tablecells.fill" : "tablecells")
                 .foregroundColor(.secondary)
-            Text(table.name)
+            Text(table.displayName)
                 .lineLimit(1)
             Spacer()
 

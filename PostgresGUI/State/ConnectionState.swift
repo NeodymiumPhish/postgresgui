@@ -33,11 +33,21 @@ class ConnectionState {
     // Current selections
     var selectedDatabase: DatabaseInfo?
     var selectedTable: TableInfo?
+    var selectedSchema: String? = nil  // nil means "All Schemas"
 
     // Data caches (populated by DatabaseService)
     var databases: [DatabaseInfo] = []
     var databasesVersion: Int = 0
+    var schemas: [String] = []
     var tables: [TableInfo] = []
+
+    /// Tables filtered by selected schema (if any)
+    var filteredTables: [TableInfo] {
+        guard let selectedSchema = selectedSchema else {
+            return tables
+        }
+        return tables.filter { $0.schema == selectedSchema }
+    }
     var isLoadingTables: Bool = false
     var tableLoadingError: Error? = nil
     var showTableLoadingTimeoutAlert: Bool = false
@@ -97,8 +107,10 @@ class ConnectionState {
         currentConnection = nil
         selectedDatabase = nil
         selectedTable = nil
+        selectedSchema = nil
         databases = []
         databasesVersion += 1
+        schemas = []
         tables = []
         tableMetadataCache = [:]
 

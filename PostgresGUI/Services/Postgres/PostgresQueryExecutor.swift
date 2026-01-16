@@ -73,9 +73,12 @@ struct PostgresQueryExecutor: QueryExecutorProtocol {
 
     func fetchTables(connection: DatabaseConnectionProtocol) async throws -> [TableInfo] {
         let sql = """
-        SELECT schemaname, tablename
+        SELECT schemaname, tablename, 'regular' as tabletype
         FROM pg_tables
         WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+        UNION ALL
+        SELECT foreign_table_schema, foreign_table_name, 'foreign' as tabletype
+        FROM information_schema.foreign_tables
         ORDER BY schemaname, tablename
         """
 
@@ -94,6 +97,34 @@ struct PostgresQueryExecutor: QueryExecutorProtocol {
 
         logger.info("Fetched \(tables.count) tables")
         return tables
+    }
+
+    func fetchSchemas(connection: DatabaseConnectionProtocol) async throws -> [String] {
+        let sql = """
+        SELECT DISTINCT schemaname
+        FROM pg_tables
+        WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+        UNION
+        SELECT DISTINCT foreign_table_schema
+        FROM information_schema.foreign_tables
+        ORDER BY schemaname
+        """
+
+        logger.debug("Fetching schemas")
+
+        let rows = try await connection.executeQuery(sql)
+        var schemas: [String] = []
+
+        for try await row in rows {
+            guard let postgresRow = row as? PostgresDatabaseRow else {
+                throw DatabaseError.unknownError("Expected PostgresDatabaseRow")
+            }
+            let schemaName = try postgresRow.row.decode(String.self)
+            schemas.append(schemaName)
+        }
+
+        logger.info("Fetched \(schemas.count) schemas")
+        return schemas
     }
 
     func fetchTableData(

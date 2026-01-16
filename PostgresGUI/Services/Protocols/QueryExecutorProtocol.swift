@@ -22,6 +22,9 @@ protocol QueryExecutorProtocol {
     
     /// Fetch all tables from user schemas
     func fetchTables(connection: DatabaseConnectionProtocol) async throws -> [TableInfo]
+
+    /// Fetch all user schemas (excludes system schemas)
+    func fetchSchemas(connection: DatabaseConnectionProtocol) async throws -> [String]
     
     /// Fetch table data with pagination
     func fetchTableData(
