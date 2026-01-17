@@ -30,6 +30,9 @@ final class TabViewModel: Identifiable {
     var selectedTableSchema: String?
     var selectedTableName: String?
 
+    // Schema filter (for sidebar filtering)
+    var selectedSchemaFilter: String?
+
     // Cached query results (in-memory only, persisted separately)
     var cachedResults: [TableRow]?
     var cachedColumnNames: [String]?
@@ -49,6 +52,7 @@ final class TabViewModel: Identifiable {
         lastAccessedAt: Date = Date(),
         selectedTableSchema: String? = nil,
         selectedTableName: String? = nil,
+        selectedSchemaFilter: String? = nil,
         cachedResults: [TableRow]? = nil,
         cachedColumnNames: [String]? = nil
     ) {
@@ -63,6 +67,7 @@ final class TabViewModel: Identifiable {
         self.lastAccessedAt = lastAccessedAt
         self.selectedTableSchema = selectedTableSchema
         self.selectedTableName = selectedTableName
+        self.selectedSchemaFilter = selectedSchemaFilter
         self.cachedResults = cachedResults
         self.cachedColumnNames = cachedColumnNames
     }
@@ -81,6 +86,7 @@ final class TabViewModel: Identifiable {
             lastAccessedAt: tabState.lastAccessedAt,
             selectedTableSchema: tabState.selectedTableSchema,
             selectedTableName: tabState.selectedTableName,
+            selectedSchemaFilter: tabState.selectedSchemaFilter,
             cachedResults: tabState.cachedResults,
             cachedColumnNames: tabState.cachedColumnNames
         )
@@ -98,6 +104,7 @@ final class TabViewModel: Identifiable {
             order: order,
             selectedTableSchema: selectedTableSchema,
             selectedTableName: selectedTableName,
+            selectedSchemaFilter: selectedSchemaFilter,
             cachedResults: cachedResults,
             cachedColumnNames: cachedColumnNames
         )
@@ -121,6 +128,7 @@ struct TabSnapshot: Sendable {
     let order: Int
     let selectedTableSchema: String?
     let selectedTableName: String?
+    let selectedSchemaFilter: String?
     let cachedResults: [TableRow]?
     let cachedColumnNames: [String]?
 }

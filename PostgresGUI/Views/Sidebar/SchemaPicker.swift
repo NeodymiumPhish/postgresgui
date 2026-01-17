@@ -47,7 +47,7 @@ struct SchemaPicker: View {
             dropdownContent
         }
         .padding(.horizontal, 22)
-        .padding(.top, 8)
+        .padding(.top, 10)
     }
 
     // MARK: - Dropdown Content

@@ -24,6 +24,9 @@ final class TabState: Identifiable {
     var selectedTableSchema: String?
     var selectedTableName: String?
 
+    // Schema filter (for sidebar filtering)
+    var selectedSchemaFilter: String?
+
     // Cached query results
     var cachedResultsData: Data?
     var cachedColumnNames: [String]?
@@ -40,6 +43,7 @@ final class TabState: Identifiable {
         lastAccessedAt: Date = Date(),
         selectedTableSchema: String? = nil,
         selectedTableName: String? = nil,
+        selectedSchemaFilter: String? = nil,
         cachedResultsData: Data? = nil,
         cachedColumnNames: [String]? = nil
     ) {
@@ -54,6 +58,7 @@ final class TabState: Identifiable {
         self.lastAccessedAt = lastAccessedAt
         self.selectedTableSchema = selectedTableSchema
         self.selectedTableName = selectedTableName
+        self.selectedSchemaFilter = selectedSchemaFilter
         self.cachedResultsData = cachedResultsData
         self.cachedColumnNames = cachedColumnNames
     }

@@ -175,6 +175,15 @@ class TabManager {
         tabService?.syncToStorage(activeTab)
     }
 
+    func updateActiveTabSchemaFilter(_ schemaFilter: String?) {
+        guard let activeTab = activeTab, !activeTab.isPendingDeletion else { return }
+
+        activeTab.selectedSchemaFilter = schemaFilter
+
+        // Sync to storage
+        tabService?.syncToStorage(activeTab)
+    }
+
     func updateActiveTabResults(results: [TableRow]?, columnNames: [String]?) {
         guard let activeTab = activeTab, !activeTab.isPendingDeletion else { return }
 

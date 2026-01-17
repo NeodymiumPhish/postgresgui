@@ -401,6 +401,13 @@ class RootViewModel {
     private func restoreTableSelectionFromTab(_ tab: TabViewModel) {
         guard !tab.isPendingDeletion else { return }
 
+        // Restore schema filter
+        appState.connection.selectedSchema = tab.selectedSchemaFilter
+        Task {
+            await appState.setSchemaSearchPath(tab.selectedSchemaFilter)
+        }
+
+        // Restore table selection
         if let tableSchema = tab.selectedTableSchema,
            let tableName = tab.selectedTableName,
            let table = appState.connection.tables.first(where: {

@@ -133,6 +133,8 @@ struct ConnectionsDatabasesSidebar: View {
         Task {
             await appState.setSchemaSearchPath(schema)
         }
+        // Save to tab state
+        tabManager.updateActiveTabSchemaFilter(schema)
     }
 
     @ViewBuilder

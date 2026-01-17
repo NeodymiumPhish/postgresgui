@@ -69,7 +69,7 @@ struct TablesListIsolated: View {
                     .tag(table)
                     .listRowSeparator(.visible)
                 }
-                .padding(.top, 12)
+                .padding(.top, 8)
                 .onChange(of: selectedTable?.id) { oldValue, newValue in
                     DebugLog.print("🔍 [TablesListView] selectedTable changed - old: \(oldValue ?? "nil"), new: \(newValue ?? "nil")")
                 }

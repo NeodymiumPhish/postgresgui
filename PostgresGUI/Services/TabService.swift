@@ -72,6 +72,7 @@ class TabService: TabServiceProtocol {
         tabState.lastAccessedAt = viewModel.lastAccessedAt
         tabState.selectedTableSchema = viewModel.selectedTableSchema
         tabState.selectedTableName = viewModel.selectedTableName
+        tabState.selectedSchemaFilter = viewModel.selectedSchemaFilter
 
         // Sync cached results
         if let results = viewModel.cachedResults {
