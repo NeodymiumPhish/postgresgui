@@ -41,6 +41,12 @@ struct SchemaGroupView: View {
                     .background(Color.secondary.opacity(0.15))
                     .clipShape(Capsule())
             }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation {
+                    isExpanded.toggle()
+                }
+            }
         }
     }
 }

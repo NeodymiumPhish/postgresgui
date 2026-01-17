@@ -37,6 +37,7 @@ struct SchemaPicker: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
+            .contentShape(Capsule())
             .overlay(
                 Capsule()
                     .stroke(Color.secondary.opacity(0.5), lineWidth: 0.5)
