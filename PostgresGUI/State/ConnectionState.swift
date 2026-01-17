@@ -36,6 +36,9 @@ class ConnectionState {
     var selectedSchema: String? = nil  // nil means "All Schemas"
     var schemaError: String? = nil  // Error message when SET search_path fails
 
+    // Schema group expansion state (for sidebar)
+    var expandedSchemas: Set<String> = []
+
     // Data caches (populated by DatabaseService)
     var databases: [DatabaseInfo] = []
     var databasesVersion: Int = 0
@@ -48,6 +51,11 @@ class ConnectionState {
             return tables
         }
         return tables.filter { $0.schema == selectedSchema }
+    }
+
+    /// Tables grouped by schema (uses filteredTables)
+    var groupedTables: [SchemaGroup] {
+        groupTablesBySchema(filteredTables)
     }
     var isLoadingTables: Bool = false
     var tableLoadingError: Error? = nil
@@ -109,6 +117,7 @@ class ConnectionState {
         selectedDatabase = nil
         selectedTable = nil
         selectedSchema = nil
+        expandedSchemas = []
         databases = []
         databasesVersion += 1
         schemas = []

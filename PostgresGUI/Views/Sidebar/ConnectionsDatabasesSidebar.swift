@@ -137,11 +137,18 @@ struct ConnectionsDatabasesSidebar: View {
 
     @ViewBuilder
     private func makeTablesList() -> some View {
+        @Bindable var appState = appState
+
         TablesListIsolated(
             tables: appState.connection.filteredTables,
+            groupedTables: appState.connection.groupedTables,
             selectedTable: Binding(
                 get: { appState.connection.selectedTable },
                 set: { appState.connection.selectedTable = $0 }
+            ),
+            expandedSchemas: Binding(
+                get: { appState.connection.expandedSchemas },
+                set: { appState.connection.expandedSchemas = $0 }
             ),
             isLoadingTables: appState.connection.isLoadingTables,
             isExecutingQuery: appState.query.isExecutingQuery,

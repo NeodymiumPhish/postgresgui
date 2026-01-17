@@ -15,10 +15,15 @@ struct TablesListView: View {
         @Bindable var appState = appState
 
         TablesListIsolated(
-            tables: appState.connection.tables,
+            tables: appState.connection.filteredTables,
+            groupedTables: appState.connection.groupedTables,
             selectedTable: Binding(
                 get: { appState.connection.selectedTable },
                 set: { appState.connection.selectedTable = $0 }
+            ),
+            expandedSchemas: Binding(
+                get: { appState.connection.expandedSchemas },
+                set: { appState.connection.expandedSchemas = $0 }
             ),
             isLoadingTables: appState.connection.isLoadingTables,
             isExecutingQuery: appState.query.isExecutingQuery,
@@ -33,17 +38,23 @@ struct TablesListView: View {
 // Isolated view that only depends on explicit parameters, not AppState environment
 struct TablesListIsolated: View {
     let tables: [TableInfo]
+    let groupedTables: [SchemaGroup]
     @Binding var selectedTable: TableInfo?
+    @Binding var expandedSchemas: Set<String>
     let isLoadingTables: Bool
     let isExecutingQuery: Bool
     let selectedDatabase: DatabaseInfo?
 
     let refreshQueryAction: (TableInfo) async -> Void
 
+    /// Whether to show grouped view (multiple schemas present)
+    private var shouldShowGrouped: Bool {
+        groupedTables.count > 1
+    }
+
     var body: some View {
-        // Debug: Log when isLoadingTables changes
         let _ = {
-            DebugLog.print("🔍 [TablesListView] Body computed - isLoadingTables: \(isLoadingTables), tablesCount: \(tables.count), selectedTable: \(selectedTable?.name ?? "nil")")
+            DebugLog.print("🔍 [TablesListView] Body computed - isLoadingTables: \(isLoadingTables), tablesCount: \(tables.count), selectedTable: \(selectedTable?.name ?? "nil"), grouped: \(shouldShowGrouped)")
         }()
 
         Group {
@@ -59,44 +70,77 @@ struct TablesListIsolated: View {
                     } icon: { }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if shouldShowGrouped {
+                groupedTablesList
             } else {
-                List(tables, selection: $selectedTable) { table in
-                    TableListRowView(
-                        table: table,
-                        isExecutingQuery: isExecutingQuery,
-                        refreshQueryAction: refreshQueryAction
-                    )
-                    .tag(table)
-                    .listRowSeparator(.visible)
-                }
-                .padding(.top, 8)
-                .onChange(of: selectedTable?.id) { oldValue, newValue in
-                    DebugLog.print("🔍 [TablesListView] selectedTable changed - old: \(oldValue ?? "nil"), new: \(newValue ?? "nil")")
-                }
-                .onChange(of: isLoadingTables) { oldValue, newValue in
-                    DebugLog.print("🔍 [TablesListView] isLoadingTables changed - old: \(oldValue), new: \(newValue)")
-                }
-                .onChange(of: tables.count) { oldValue, newValue in
-                    DebugLog.print("🔍 [TablesListView] tables.count changed - old: \(oldValue), new: \(newValue)")
-                }
+                flatTablesList
             }
         }
     }
+
+    // MARK: - Flat List (single schema or filtered)
+
+    private var flatTablesList: some View {
+        List(tables, selection: $selectedTable) { table in
+            TableListRowView(
+                table: table,
+                isExecutingQuery: isExecutingQuery,
+                refreshQueryAction: refreshQueryAction
+            )
+            .tag(table)
+            .listRowSeparator(.visible)
+        }
+        .padding(.top, 8)
+    }
+
+    // MARK: - Grouped List (multiple schemas)
+
+    private var groupedTablesList: some View {
+        List(selection: $selectedTable) {
+            ForEach(groupedTables) { group in
+                SchemaGroupView(
+                    group: group,
+                    isExpanded: Binding(
+                        get: { expandedSchemas.contains(group.name) },
+                        set: { isExpanded in
+                            if isExpanded {
+                                expandedSchemas.insert(group.name)
+                            } else {
+                                expandedSchemas.remove(group.name)
+                            }
+                        }
+                    ),
+                    selectedTable: $selectedTable,
+                    isExecutingQuery: isExecutingQuery,
+                    refreshQueryAction: refreshQueryAction
+                )
+            }
+        }
+        .padding(.top, 8)
+    }
 }
+
+// MARK: - Table Row View
 
 struct TableListRowView: View {
     let table: TableInfo
     let isExecutingQuery: Bool
     let refreshQueryAction: (TableInfo) async -> Void
+    var showSchemaPrefix: Bool = true
 
     @State private var isHovered = false
     @State private var isButtonHovered = false
+
+    /// Display name based on whether schema prefix should be shown
+    private var displayText: String {
+        showSchemaPrefix ? table.displayName : table.name
+    }
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: table.tableType == .foreign ? "tablecells.fill" : "tablecells")
                 .foregroundColor(.secondary)
-            Text(table.displayName)
+            Text(displayText)
                 .lineLimit(1)
             Spacer()
 
