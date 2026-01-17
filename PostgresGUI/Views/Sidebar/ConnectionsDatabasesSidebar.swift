@@ -129,10 +129,8 @@ struct ConnectionsDatabasesSidebar: View {
            selected.schema != schema {
             appState.connection.selectedTable = nil
         }
-        // Set search_path for query context
-        Task {
-            await appState.setSchemaSearchPath(schema)
-        }
+        // Set search_path for query context (debounced to handle rapid changes)
+        appState.setSchemaSearchPathDebounced(schema)
         // Save to tab state
         tabManager.updateActiveTabSchemaFilter(schema)
     }

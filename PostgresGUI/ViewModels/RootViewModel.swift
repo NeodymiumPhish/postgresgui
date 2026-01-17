@@ -403,9 +403,7 @@ class RootViewModel {
 
         // Restore schema filter
         appState.connection.selectedSchema = tab.selectedSchemaFilter
-        Task {
-            await appState.setSchemaSearchPath(tab.selectedSchemaFilter)
-        }
+        appState.setSchemaSearchPathDebounced(tab.selectedSchemaFilter)
 
         // Restore table selection
         if let tableSchema = tab.selectedTableSchema,

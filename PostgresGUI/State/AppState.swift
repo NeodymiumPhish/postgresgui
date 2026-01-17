@@ -20,6 +20,10 @@ class AppState {
 
     private let tableMetadataService: TableMetadataServiceProtocol
 
+    // MARK: - Debounce State
+
+    private var schemaSearchPathTask: Task<Void, Never>?
+
     // MARK: - Initialization
 
     init(
@@ -110,7 +114,18 @@ class AppState {
 
     // MARK: - Schema Context
 
+    /// Set the search_path with debounce to prevent race conditions during rapid tab switching
+    func setSchemaSearchPathDebounced(_ schema: String?) {
+        schemaSearchPathTask?.cancel()
+        schemaSearchPathTask = Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            await setSchemaSearchPath(schema)
+        }
+    }
+
     /// Set the search_path for query context when a schema is selected
+    /// Use `setSchemaSearchPathDebounced` for tab switches and user-initiated schema changes
     @MainActor
     func setSchemaSearchPath(_ schema: String?) async {
         guard connection.isConnected else { return }
