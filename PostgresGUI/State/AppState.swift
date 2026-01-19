@@ -133,14 +133,14 @@ class AppState {
         // Build search_path: selected schema first, then public as fallback
         let searchPath: String
         if let schema = schema {
-            searchPath = schema == "public" ? "public" : "\(schema), public"
+            searchPath = schema == "public" ? "public" : "\"\(schema)\", public"
         } else {
             // "All Schemas" selected - reset to default
             searchPath = "public"
         }
 
         let sql = "SET search_path TO \(searchPath)"
-        DebugLog.print("🔧 Setting search_path: \(searchPath)")
+        DebugLog.print("🔧 Setting schema: \(schema ?? "nil") → SQL: \(sql)")
 
         do {
             _ = try await connection.databaseService.executeQuery(sql)

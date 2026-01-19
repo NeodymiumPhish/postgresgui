@@ -60,7 +60,7 @@ class QueryService: QueryServiceProtocol {
 
         DebugLog.print("🔍 [QueryService] Auto-generating query for table: \(table.schema).\(table.name) (ID: \(thisQueryID))")
 
-        let query = "SELECT * FROM \(table.schema).\(table.name) LIMIT \(limit) OFFSET \(offset);"
+        let query = "SELECT * FROM \"\(table.schema)\".\"\(table.name)\" LIMIT \(limit) OFFSET \(offset);"
         DebugLog.print("📝 [QueryService] Generated query: \(query) (ID: \(thisQueryID))")
 
         let startTime = clock.now()
