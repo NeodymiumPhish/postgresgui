@@ -59,6 +59,23 @@
 
 All dependencies are managed through Swift Package Manager and will be downloaded automatically on first build.
 
+### About Contributing
+
+You might encounter "Automatic signing failed" issues when building from source. This happens because the project's code signing settings are tied to the maintainer's Apple Developer Team ID and bundle identifier.
+
+**To fix this, please try the following:**
+
+1. Select the **PostgresGUI** target in Xcode
+2. Go to the **Signing & Capabilities** tab
+3. Change the **Bundle Identifier** to something unique (e.g., `com.yourname.PostgresGUI-dev`)
+4. Set **Team** to your Personal Team or your own Apple Developer account
+
+**Why the signing configuration is hardcoded:**
+
+The signing settings are intentionally kept hardcoded in the repository. The app uses Keychain to securely store database passwords, and Keychain access is tied to the app's code signature. Without consistent code signing (same Team ID and bundle identifier), macOS treats each build as a different app and prompts the user for Keychain permission every time the app accesses stored passwords — which is disruptive.
+
+If you'd like to contribute, feel free to submit a pull request. I can test it locally on my machine and provide screenshots to confirm everything works correctly. (Fikri Ghazi Jan 18, 2026)
+
 ## Support
 
 - Visit [postgresgui.com/support](https://postgresgui.com/support) for help and documentation
