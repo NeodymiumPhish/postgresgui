@@ -66,4 +66,35 @@ class TableService: TableServiceProtocol {
             try await self.queryExecutor.dropTable(connection: conn, schema: schema, table: table)
         }
     }
+
+    /// Truncate a table (delete all rows)
+    func truncateTable(schema: String, table: String) async throws {
+        logger.info("Truncating table: \(schema).\(table)")
+
+        try await connectionManager.withConnection { conn in
+            try await self.queryExecutor.truncateTable(connection: conn, schema: schema, table: table)
+        }
+    }
+
+    /// Generate DDL (CREATE TABLE statement) for a table
+    func generateDDL(schema: String, table: String) async throws -> String {
+        logger.debug("Generating DDL for: \(schema).\(table)")
+
+        return try await connectionManager.withConnection { conn in
+            try await self.queryExecutor.generateDDL(connection: conn, schema: schema, table: table)
+        }
+    }
+
+    /// Fetch all table data (no pagination, for export)
+    func fetchAllTableData(schema: String, table: String) async throws -> ([TableRow], [String]) {
+        logger.debug("Fetching all data from: \(schema).\(table)")
+
+        return try await connectionManager.withConnection { conn in
+            // Use a sanitized SELECT * query with no limit
+            let sanitizedSchema = schema.replacingOccurrences(of: "\"", with: "\"\"")
+            let sanitizedTable = table.replacingOccurrences(of: "\"", with: "\"\"")
+            let sql = "SELECT * FROM \"\(sanitizedSchema)\".\"\(sanitizedTable)\""
+            return try await self.queryExecutor.executeQuery(connection: conn, sql: sql)
+        }
+    }
 }

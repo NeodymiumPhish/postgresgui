@@ -58,6 +58,15 @@ protocol DatabaseServiceProtocol: AnyObject {
     /// Delete a table
     func deleteTable(schema: String, table: String) async throws
 
+    /// Truncate a table (delete all rows)
+    func truncateTable(schema: String, table: String) async throws
+
+    /// Generate DDL (CREATE TABLE statement) for a table
+    func generateDDL(schema: String, table: String) async throws -> String
+
+    /// Fetch all table data (no pagination, for export)
+    func fetchAllTableData(schema: String, table: String) async throws -> ([TableRow], [String])
+
     // MARK: - Query Execution
 
     /// Execute arbitrary SQL query and return results along with column names

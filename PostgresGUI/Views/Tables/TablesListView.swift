@@ -123,6 +123,8 @@ struct TablesListIsolated: View {
 // MARK: - Table Row View
 
 struct TableListRowView: View {
+    @Environment(AppState.self) private var appState
+
     let table: TableInfo
     let isExecutingQuery: Bool
     let refreshQueryAction: (TableInfo) async -> Void
@@ -130,6 +132,7 @@ struct TableListRowView: View {
 
     @State private var isHovered = false
     @State private var isButtonHovered = false
+    @State private var viewModel: TableContextMenuViewModel?
 
     /// Display name based on whether schema prefix should be shown
     private var displayText: String {
@@ -145,14 +148,7 @@ struct TableListRowView: View {
             Spacer()
 
             Menu {
-                Button {
-                    Task {
-                        await refreshQueryAction(table)
-                    }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                .disabled(isExecutingQuery)
+                tableMenuContent
             } label: {
                 Image(systemName: "ellipsis")
                     .foregroundColor(isButtonHovered ? .primary : .secondary)
@@ -173,14 +169,87 @@ struct TableListRowView: View {
             isHovered = hovering
         }
         .contextMenu {
-            Button {
-                Task {
-                    await refreshQueryAction(table)
-                }
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
+            tableMenuContent
+        }
+        .onAppear {
+            if viewModel == nil {
+                viewModel = TableContextMenuViewModel(table: table, appState: appState)
             }
-            .disabled(isExecutingQuery)
+        }
+        .onChange(of: table.id) { _, newValue in
+            // Update viewModel when table changes (e.g., in a reused row)
+            viewModel = TableContextMenuViewModel(table: table, appState: appState)
+        }
+        .modifier(TableContextMenuModalsWrapper(viewModel: $viewModel))
+    }
+
+    // MARK: - Menu Content
+
+    @ViewBuilder
+    private var tableMenuContent: some View {
+        // Refresh
+        Button {
+            Task {
+                await refreshQueryAction(table)
+            }
+        } label: {
+            Label("Refresh", systemImage: "arrow.clockwise")
+        }
+        .disabled(isExecutingQuery)
+
+        Divider()
+
+        // Generate DDL
+        Button {
+            Task {
+                await viewModel?.generateDDL()
+            }
+        } label: {
+            Label("Generate DDL", systemImage: "doc.text")
+        }
+        .disabled(isExecutingQuery)
+
+        // Export
+        Button {
+            viewModel?.showExportSheet = true
+        } label: {
+            Label("Export...", systemImage: "square.and.arrow.up")
+        }
+        .disabled(isExecutingQuery)
+
+        Divider()
+
+        // Truncate (destructive)
+        Button(role: .destructive) {
+            viewModel?.showTruncateConfirmation = true
+        } label: {
+            Label("Truncate...", systemImage: "trash.slash")
+        }
+        .disabled(isExecutingQuery)
+
+        // Drop (destructive)
+        Button(role: .destructive) {
+            viewModel?.showDropConfirmation = true
+        } label: {
+            Label("Drop...", systemImage: "trash")
+        }
+        .disabled(isExecutingQuery)
+    }
+}
+
+// MARK: - Modals Wrapper
+
+/// Wrapper to safely handle optional viewModel binding
+private struct TableContextMenuModalsWrapper: ViewModifier {
+    @Binding var viewModel: TableContextMenuViewModel?
+
+    func body(content: Content) -> some View {
+        if let vm = viewModel {
+            content.tableContextMenuModals(viewModel: vm) {
+                // No additional action needed after drop - the ViewModel handles refresh
+            }
+        } else {
+            content
         }
     }
 }
