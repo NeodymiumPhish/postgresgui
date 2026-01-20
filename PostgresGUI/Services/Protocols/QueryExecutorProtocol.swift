@@ -41,6 +41,20 @@ protocol QueryExecutorProtocol {
         schema: String,
         table: String
     ) async throws
+
+    /// Truncate a table (delete all rows)
+    func truncateTable(
+        connection: DatabaseConnectionProtocol,
+        schema: String,
+        table: String
+    ) async throws
+
+    /// Generate DDL (CREATE TABLE statement) for a table
+    func generateDDL(
+        connection: DatabaseConnectionProtocol,
+        schema: String,
+        table: String
+    ) async throws -> String
     
     /// Fetch column information for a table
     func fetchColumns(

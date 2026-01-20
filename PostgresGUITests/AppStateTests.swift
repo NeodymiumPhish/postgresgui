@@ -41,7 +41,11 @@ final class DelayedMockDatabaseService: DatabaseServiceProtocol {
     func createDatabase(name: String) async throws {}
     func deleteDatabase(name: String) async throws {}
     func fetchTables(database: String) async throws -> [TableInfo] { [] }
+    func fetchSchemas(database: String) async throws -> [String] { [] }
     func deleteTable(schema: String, table: String) async throws {}
+    func truncateTable(schema: String, table: String) async throws {}
+    func generateDDL(schema: String, table: String) async throws -> String { "" }
+    func fetchAllTableData(schema: String, table: String) async throws -> ([TableRow], [String]) { ([], []) }
 
     func executeQuery(_ sql: String) async throws -> ([TableRow], [String]) {
         if queryDelay > 0 {

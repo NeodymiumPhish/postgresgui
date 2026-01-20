@@ -215,6 +215,33 @@ class DatabaseService {
         try await tableService.deleteTable(schema: schema, table: table)
     }
 
+    /// Truncate a table (delete all rows)
+    func truncateTable(schema: String, table: String) async throws {
+        guard _isConnected else {
+            throw ConnectionError.notConnected
+        }
+
+        try await tableService.truncateTable(schema: schema, table: table)
+    }
+
+    /// Generate DDL (CREATE TABLE statement) for a table
+    func generateDDL(schema: String, table: String) async throws -> String {
+        guard _isConnected else {
+            throw ConnectionError.notConnected
+        }
+
+        return try await tableService.generateDDL(schema: schema, table: table)
+    }
+
+    /// Fetch all table data (no pagination, for export)
+    func fetchAllTableData(schema: String, table: String) async throws -> ([TableRow], [String]) {
+        guard _isConnected else {
+            throw ConnectionError.notConnected
+        }
+
+        return try await tableService.fetchAllTableData(schema: schema, table: table)
+    }
+
     // MARK: - Query Execution
 
     /// Execute arbitrary SQL query and return results along with column names
