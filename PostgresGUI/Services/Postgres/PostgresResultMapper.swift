@@ -359,7 +359,8 @@ struct PostgresResultMapper: ResultMapperProtocol {
             1041, 651, 1040, 775,         // Network arrays
             1005, 1007, 1016,             // Integer arrays
             1009, 1015, 1014, 1002,       // Text arrays
-            2951, 1000                    // UUID and bool arrays
+            2951, 1000,                   // UUID and bool arrays
+            1186, 1187                    // Interval and interval[]
         ]
         guard supportedOIDs.contains(oid) else {
             return nil
