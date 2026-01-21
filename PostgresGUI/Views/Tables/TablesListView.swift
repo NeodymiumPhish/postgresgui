@@ -17,6 +17,7 @@ struct TablesListView: View {
         TablesListIsolated(
             tables: appState.connection.filteredTables,
             groupedTables: appState.connection.groupedTables,
+            selectedSchema: appState.connection.selectedSchema,
             selectedTable: Binding(
                 get: { appState.connection.selectedTable },
                 set: { appState.connection.selectedTable = $0 }
@@ -39,6 +40,7 @@ struct TablesListView: View {
 struct TablesListIsolated: View {
     let tables: [TableInfo]
     let groupedTables: [SchemaGroup]
+    let selectedSchema: String?  // nil means "All Schemas"
     @Binding var selectedTable: TableInfo?
     @Binding var expandedSchemas: Set<String>
     let isLoadingTables: Bool
@@ -85,7 +87,8 @@ struct TablesListIsolated: View {
             TableListRowView(
                 table: table,
                 isExecutingQuery: isExecutingQuery,
-                refreshQueryAction: refreshQueryAction
+                refreshQueryAction: refreshQueryAction,
+                showSchemaPrefix: selectedSchema == nil
             )
             .tag(table)
             .listRowSeparator(.visible)

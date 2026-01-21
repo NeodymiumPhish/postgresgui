@@ -142,6 +142,7 @@ struct ConnectionsDatabasesSidebar: View {
         TablesListIsolated(
             tables: appState.connection.filteredTables,
             groupedTables: appState.connection.groupedTables,
+            selectedSchema: appState.connection.selectedSchema,
             selectedTable: Binding(
                 get: { appState.connection.selectedTable },
                 set: { appState.connection.selectedTable = $0 }
