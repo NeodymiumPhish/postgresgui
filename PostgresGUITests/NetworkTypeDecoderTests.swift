@@ -263,4 +263,251 @@ struct NetworkTypeDecoderTests {
             #expect(result == nil)
         }
     }
+
+    // MARK: - INTERVAL Tests
+
+    @Suite("decodeInterval")
+    struct DecodeIntervalTests {
+
+        @Test func decodesSimpleTime() {
+            // 00:10:33 = 633,000,000 microseconds, 0 days, 0 months
+            // 633000000 = 0x0000000025bad040
+            let bytes: [UInt8] = [
+                0x00, 0x00, 0x00, 0x00, 0x25, 0xba, 0xd0, 0x40,  // 633000000 microseconds (big-endian)
+                0x00, 0x00, 0x00, 0x00,  // 0 days
+                0x00, 0x00, 0x00, 0x00   // 0 months
+            ]
+            let result = NetworkTypeDecoder.decodeInterval(bytes)
+            #expect(result == "00:10:33")
+        }
+
+        @Test func decodesZeroInterval() {
+            // 00:00:00
+            let bytes: [UInt8] = [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // 0 microseconds
+                0x00, 0x00, 0x00, 0x00,  // 0 days
+                0x00, 0x00, 0x00, 0x00   // 0 months
+            ]
+            let result = NetworkTypeDecoder.decodeInterval(bytes)
+            #expect(result == "00:00:00")
+        }
+
+        @Test func decodesOneHour() {
+            // 01:00:00 = 3,600,000,000 microseconds
+            // 3600000000 = 0x00000000D693A400
+            let bytes: [UInt8] = [
+                0x00, 0x00, 0x00, 0x00, 0xD6, 0x93, 0xA4, 0x00,  // 3600000000 microseconds
+                0x00, 0x00, 0x00, 0x00,  // 0 days
+                0x00, 0x00, 0x00, 0x00   // 0 months
+            ]
+            let result = NetworkTypeDecoder.decodeInterval(bytes)
+            #expect(result == "01:00:00")
+        }
+
+        @Test func decodesDaysOnly() {
+            // 5 days, 0 time
+            let bytes: [UInt8] = [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // 0 microseconds
+                0x00, 0x00, 0x00, 0x05,  // 5 days
+                0x00, 0x00, 0x00, 0x00   // 0 months
+            ]
+            let result = NetworkTypeDecoder.decodeInterval(bytes)
+            #expect(result == "5 days")
+        }
+
+        @Test func decodesSingleDay() {
+            // 1 day (singular form)
+            let bytes: [UInt8] = [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // 0 microseconds
+                0x00, 0x00, 0x00, 0x01,  // 1 day
+                0x00, 0x00, 0x00, 0x00   // 0 months
+            ]
+            let result = NetworkTypeDecoder.decodeInterval(bytes)
+            #expect(result == "1 day")
+        }
+
+        @Test func decodesMonthsOnly() {
+            // 3 months
+            let bytes: [UInt8] = [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // 0 microseconds
+                0x00, 0x00, 0x00, 0x00,  // 0 days
+                0x00, 0x00, 0x00, 0x03   // 3 months
+            ]
+            let result = NetworkTypeDecoder.decodeInterval(bytes)
+            #expect(result == "3 mons")
+        }
+
+        @Test func decodesSingleMonth() {
+            // 1 month (singular form)
+            let bytes: [UInt8] = [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // 0 microseconds
+                0x00, 0x00, 0x00, 0x00,  // 0 days
+                0x00, 0x00, 0x00, 0x01   // 1 month
+            ]
+            let result = NetworkTypeDecoder.decodeInterval(bytes)
+            #expect(result == "1 mon")
+        }
+
+        @Test func decodesYearsFromMonths() {
+            // 14 months = 1 year 2 months
+            let bytes: [UInt8] = [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // 0 microseconds
+                0x00, 0x00, 0x00, 0x00,  // 0 days
+                0x00, 0x00, 0x00, 0x0E   // 14 months
+            ]
+            let result = NetworkTypeDecoder.decodeInterval(bytes)
+            #expect(result == "1 year 2 mons")
+        }
+
+        @Test func decodesComplexInterval() {
+            // 1 year 2 months 3 days 04:05:06
+            // 14 months, 3 days, 14706000000 microseconds
+            // 04:05:06 = 4*3600 + 5*60 + 6 = 14706 seconds = 14706000000 us
+            // 14706000000 = 0x000000036C6C6580
+            let bytes: [UInt8] = [
+                0x00, 0x00, 0x00, 0x03, 0x6C, 0x6C, 0x65, 0x80,  // 14706000000 microseconds
+                0x00, 0x00, 0x00, 0x03,  // 3 days
+                0x00, 0x00, 0x00, 0x0E   // 14 months
+            ]
+            let result = NetworkTypeDecoder.decodeInterval(bytes)
+            #expect(result == "1 year 2 mons 3 days 04:05:06")
+        }
+
+        @Test func decodesFractionalSeconds() {
+            // 00:00:01.5 = 1,500,000 microseconds
+            // 1500000 = 0x000000000016E360
+            let bytes: [UInt8] = [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0xE3, 0x60,  // 1500000 microseconds
+                0x00, 0x00, 0x00, 0x00,  // 0 days
+                0x00, 0x00, 0x00, 0x00   // 0 months
+            ]
+            let result = NetworkTypeDecoder.decodeInterval(bytes)
+            #expect(result == "00:00:01.5")
+        }
+
+        @Test func decodesNegativeTime() {
+            // -00:10:33 = -633,000,000 microseconds
+            // -633000000 in two's complement = 0xFFFFFFFFDA452FC0
+            let bytes: [UInt8] = [
+                0xFF, 0xFF, 0xFF, 0xFF, 0xDA, 0x45, 0x2F, 0xC0,  // -633000000 microseconds
+                0x00, 0x00, 0x00, 0x00,  // 0 days
+                0x00, 0x00, 0x00, 0x00   // 0 months
+            ]
+            let result = NetworkTypeDecoder.decodeInterval(bytes)
+            #expect(result == "-00:10:33")
+        }
+
+        @Test func decodesNegativeDays() {
+            // -3 days
+            // -3 in two's complement = 0xFFFFFFFD
+            let bytes: [UInt8] = [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // 0 microseconds
+                0xFF, 0xFF, 0xFF, 0xFD,  // -3 days
+                0x00, 0x00, 0x00, 0x00   // 0 months
+            ]
+            let result = NetworkTypeDecoder.decodeInterval(bytes)
+            #expect(result == "-3 days")
+        }
+
+        @Test func decodesDaysWithTime() {
+            // 2 days 03:30:00
+            // 03:30:00 = 3*3600 + 30*60 = 12600 seconds = 12600000000 us
+            // 12600000000 = 0x00000002EF54D400
+            let bytes: [UInt8] = [
+                0x00, 0x00, 0x00, 0x02, 0xEF, 0x54, 0xD4, 0x00,  // 12600000000 microseconds
+                0x00, 0x00, 0x00, 0x02,  // 2 days
+                0x00, 0x00, 0x00, 0x00   // 0 months
+            ]
+            let result = NetworkTypeDecoder.decodeInterval(bytes)
+            #expect(result == "2 days 03:30:00")
+        }
+
+        @Test func rejectsTooShort() {
+            let bytes: [UInt8] = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+            let result = NetworkTypeDecoder.decodeInterval(bytes)
+            #expect(result == nil)
+        }
+
+        @Test func rejectsTooLong() {
+            let bytes: [UInt8] = Array(repeating: 0x00, count: 20)
+            let result = NetworkTypeDecoder.decodeInterval(bytes)
+            #expect(result == nil)
+        }
+    }
+
+    @Suite("decodeInterval with OID")
+    struct DecodeIntervalWithOIDTests {
+
+        @Test func decodesIntervalByOID() {
+            let bytes: [UInt8] = [
+                0x00, 0x00, 0x00, 0x00, 0x25, 0xba, 0xd0, 0x40,  // 633000000 microseconds
+                0x00, 0x00, 0x00, 0x00,  // 0 days
+                0x00, 0x00, 0x00, 0x00   // 0 months
+            ]
+            let result = NetworkTypeDecoder.decode(bytes: bytes, dataTypeOID: 1186)
+            #expect(result == "00:10:33")
+        }
+
+        @Test func decodesIntervalArrayByOID() {
+            // Array with single interval element: 00:10:33
+            // Header: 1 dimension, no nulls, element OID, dimension=1, lower bound=1
+            let bytes: [UInt8] = [
+                0x00, 0x00, 0x00, 0x01,  // 1 dimension
+                0x00, 0x00, 0x00, 0x00,  // no null bitmap
+                0x00, 0x00, 0x04, 0xA2,  // element OID 1186
+                0x00, 0x00, 0x00, 0x01,  // dimension size = 1
+                0x00, 0x00, 0x00, 0x01,  // lower bound = 1
+                0x00, 0x00, 0x00, 0x10,  // element length = 16
+                // interval bytes
+                0x00, 0x00, 0x00, 0x00, 0x25, 0xba, 0xd0, 0x40,  // 633000000 microseconds
+                0x00, 0x00, 0x00, 0x00,  // 0 days
+                0x00, 0x00, 0x00, 0x00   // 0 months
+            ]
+            let result = NetworkTypeDecoder.decode(bytes: bytes, dataTypeOID: 1187)
+            #expect(result == "[00:10:33]")
+        }
+
+        @Test func decodesIntervalArrayWithMultipleElements() {
+            // Array with two interval elements: 00:10:33 and 1 day
+            let bytes: [UInt8] = [
+                0x00, 0x00, 0x00, 0x01,  // 1 dimension
+                0x00, 0x00, 0x00, 0x00,  // no null bitmap
+                0x00, 0x00, 0x04, 0xA2,  // element OID 1186
+                0x00, 0x00, 0x00, 0x02,  // dimension size = 2
+                0x00, 0x00, 0x00, 0x01,  // lower bound = 1
+                // First element: 00:10:33
+                0x00, 0x00, 0x00, 0x10,  // element length = 16
+                0x00, 0x00, 0x00, 0x00, 0x25, 0xba, 0xd0, 0x40,  // 633000000 microseconds
+                0x00, 0x00, 0x00, 0x00,  // 0 days
+                0x00, 0x00, 0x00, 0x00,  // 0 months
+                // Second element: 1 day
+                0x00, 0x00, 0x00, 0x10,  // element length = 16
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // 0 microseconds
+                0x00, 0x00, 0x00, 0x01,  // 1 day
+                0x00, 0x00, 0x00, 0x00   // 0 months
+            ]
+            let result = NetworkTypeDecoder.decode(bytes: bytes, dataTypeOID: 1187)
+            #expect(result == "[00:10:33, 1 day]")
+        }
+
+        @Test func decodesIntervalArrayWithNull() {
+            // Array with NULL and 00:10:33
+            let bytes: [UInt8] = [
+                0x00, 0x00, 0x00, 0x01,  // 1 dimension
+                0x00, 0x00, 0x00, 0x01,  // has null bitmap
+                0x00, 0x00, 0x04, 0xA2,  // element OID 1186
+                0x00, 0x00, 0x00, 0x02,  // dimension size = 2
+                0x00, 0x00, 0x00, 0x01,  // lower bound = 1
+                // First element: NULL
+                0xFF, 0xFF, 0xFF, 0xFF,  // element length = -1 (NULL)
+                // Second element: 00:10:33
+                0x00, 0x00, 0x00, 0x10,  // element length = 16
+                0x00, 0x00, 0x00, 0x00, 0x25, 0xba, 0xd0, 0x40,  // 633000000 microseconds
+                0x00, 0x00, 0x00, 0x00,  // 0 days
+                0x00, 0x00, 0x00, 0x00   // 0 months
+            ]
+            let result = NetworkTypeDecoder.decode(bytes: bytes, dataTypeOID: 1187)
+            #expect(result == "[NULL, 00:10:33]")
+        }
+    }
 }

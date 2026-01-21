@@ -80,6 +80,89 @@ enum NetworkTypeDecoder {
         return bytes.map { String(format: "%02x", $0) }.joined(separator: ":")
     }
 
+    /// Decode a PostgreSQL INTERVAL value from binary format
+    /// Format: [microseconds:8][days:4][months:4] - all big-endian
+    /// - Parameter bytes: Raw bytes from PostgreSQL (16 bytes)
+    /// - Returns: String representation like "00:10:33" or "1 year 2 mons 3 days 04:05:06" or nil if invalid
+    static func decodeInterval(_ bytes: [UInt8]) -> String? {
+        guard bytes.count == 16 else { return nil }
+
+        // 1. Parse Microseconds (Offset 0-8)
+        // Safer than load(as:) for unaligned memory
+        var microRaw: UInt64 = 0
+        for i in 0..<8 { microRaw = (microRaw << 8) | UInt64(bytes[i]) }
+        let microseconds = Int64(bitPattern: microRaw)
+
+        // 2. Parse Days (Offset 8-12)
+        var daysRaw: UInt32 = 0
+        for i in 8..<12 { daysRaw = (daysRaw << 8) | UInt32(bytes[i]) }
+        let days = Int32(bitPattern: daysRaw)
+
+        // 3. Parse Months (Offset 12-16)
+        var monthsRaw: UInt32 = 0
+        for i in 12..<16 { monthsRaw = (monthsRaw << 8) | UInt32(bytes[i]) }
+        let months = Int32(bitPattern: monthsRaw)
+
+        return formatInterval(microseconds: microseconds, days: days, months: months)
+    }
+
+    /// Format interval components into PostgreSQL standard interval format
+    private static func formatInterval(microseconds: Int64, days: Int32, months: Int32) -> String {
+        var parts: [String] = []
+
+        // Handle months component (years and months)
+        if months != 0 {
+            let years = months / 12
+            let remainingMonths = months % 12
+
+            if years != 0 {
+                parts.append(abs(years) == 1 ? "\(years) year" : "\(years) years")
+            }
+            if remainingMonths != 0 {
+                parts.append(abs(remainingMonths) == 1 ? "\(remainingMonths) mon" : "\(remainingMonths) mons")
+            }
+        }
+
+        // Handle days component
+        if days != 0 {
+            parts.append(abs(days) == 1 ? "\(days) day" : "\(days) days")
+        }
+
+        // Handle time component (microseconds)
+        if microseconds != 0 || parts.isEmpty {
+            let timeString = formatTimePart(microseconds: microseconds)
+            parts.append(timeString)
+        }
+
+        return parts.joined(separator: " ")
+    }
+
+    /// Format microseconds into HH:MM:SS or HH:MM:SS.ffffff format
+    private static func formatTimePart(microseconds: Int64) -> String {
+        let isNegative = microseconds < 0
+        let absMicroseconds = abs(microseconds)
+
+        let totalSeconds = absMicroseconds / 1_000_000
+        let remainingMicroseconds = absMicroseconds % 1_000_000
+
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+
+        let sign = isNegative ? "-" : ""
+
+        if remainingMicroseconds == 0 {
+            return String(format: "%@%02lld:%02lld:%02lld", sign, hours, minutes, seconds)
+        } else {
+            // Format fractional seconds, trimming trailing zeros
+            var fraction = String(format: "%06lld", remainingMicroseconds)
+            while fraction.hasSuffix("0") && !fraction.isEmpty {
+                fraction.removeLast()
+            }
+            return String(format: "%@%02lld:%02lld:%02lld.%@", sign, hours, minutes, seconds, fraction)
+        }
+    }
+
     /// Attempt to decode network type from raw bytes based on data type OID
     /// - Parameters:
     ///   - bytes: Raw bytes from PostgreSQL
@@ -129,6 +212,12 @@ enum NetworkTypeDecoder {
         // Boolean array
         case 1000:  // bool[]
             return decodeBoolArray(bytes)
+
+        // Interval types
+        case 1186:  // interval
+            return decodeInterval(bytes)
+        case 1187:  // interval[]
+            return decodeIntervalArray(bytes)
 
         default:
             return nil
@@ -340,6 +429,44 @@ enum NetworkTypeDecoder {
                 let value = bytes[offset] != 0
                 elements.append(String(value))
                 offset += 1
+            }
+        }
+
+        return "[\(elements.joined(separator: ", "))]"
+    }
+
+    /// Decode a PostgreSQL INTERVAL array from binary format
+    private static func decodeIntervalArray(_ bytes: [UInt8]) -> String? {
+        guard bytes.count >= 12 else { return nil }
+
+        let numDimensions = Int32(bigEndian: bytes[0..<4].withUnsafeBytes { $0.load(as: Int32.self) })
+        guard numDimensions == 1 else { return nil }
+
+        guard bytes.count >= 20 else { return nil }
+        let dimensionSize = Int32(bigEndian: bytes[12..<16].withUnsafeBytes { $0.load(as: Int32.self) })
+
+        var offset = 20
+        var elements: [String] = []
+
+        for _ in 0..<dimensionSize {
+            guard offset + 4 <= bytes.count else { return nil }
+
+            let elementLength = Int32(bigEndian: bytes[offset..<(offset + 4)].withUnsafeBytes { $0.load(as: Int32.self) })
+            offset += 4
+
+            if elementLength == -1 {
+                elements.append("NULL")
+            } else {
+                guard elementLength == 16 else { return nil }  // INTERVAL is always 16 bytes
+                guard offset + 16 <= bytes.count else { return nil }
+
+                let elementBytes = Array(bytes[offset..<(offset + 16)])
+                if let decoded = decodeInterval(elementBytes) {
+                    elements.append(decoded)
+                } else {
+                    return nil
+                }
+                offset += 16
             }
         }
 
