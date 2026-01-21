@@ -343,12 +343,25 @@ struct PostgresResultMapper: ResultMapperProtocol {
         return nil
     }
 
-    /// Decode network address types (inet, cidr, macaddr, macaddr8) from binary format
+    /// Decode binary types that PostgresNIO doesn't handle natively
+    /// This includes network types, their arrays, and primitive array types
     private func decodeNetworkType(_ cell: PostgresCell) -> String? {
         let oid = cell.dataType.rawValue
 
-        // Check if this is a network type (inet=869, cidr=650, macaddr=829, macaddr8=774)
-        guard oid == 869 || oid == 650 || oid == 829 || oid == 774 else {
+        // OIDs handled by NetworkTypeDecoder:
+        // Network scalar: inet=869, cidr=650, macaddr=829, macaddr8=774
+        // Network arrays: inet[]=1041, cidr[]=651, macaddr[]=1040, macaddr8[]=775
+        // Integer arrays: int2[]=1005, int4[]=1007, int8[]=1016
+        // Text arrays: text[]=1009, varchar[]=1015, char[]=1014, bpchar[]=1002
+        // Other arrays: uuid[]=2951, bool[]=1000
+        let supportedOIDs: Set<UInt32> = [
+            869, 650, 829, 774,           // Network scalars
+            1041, 651, 1040, 775,         // Network arrays
+            1005, 1007, 1016,             // Integer arrays
+            1009, 1015, 1014, 1002,       // Text arrays
+            2951, 1000                    // UUID and bool arrays
+        ]
+        guard supportedOIDs.contains(oid) else {
             return nil
         }
 

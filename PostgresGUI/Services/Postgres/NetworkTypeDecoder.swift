@@ -2,13 +2,14 @@
 //  NetworkTypeDecoder.swift
 //  PostgresGUI
 //
-//  Decodes PostgreSQL network address types (inet, cidr, macaddr, macaddr8) from binary format.
-//  PostgresNIO returns these as raw bytes - this decoder converts them to human-readable strings.
+//  Decodes PostgreSQL binary types that PostgresNIO doesn't handle natively.
+//  This includes network address types (inet, cidr, macaddr, macaddr8) and
+//  primitive array types (int2[], int4[], int8[], text[], etc.) from binary format.
 //
 
 import Foundation
 
-/// Decodes PostgreSQL network types from binary format to string representation
+/// Decodes PostgreSQL binary types from raw bytes to string representation
 enum NetworkTypeDecoder {
 
     // MARK: - Address Family Constants
@@ -94,9 +95,255 @@ enum NetworkTypeDecoder {
             return decodeMacaddr(bytes)
         case 774:  // macaddr8
             return decodeMacaddr8(bytes)
+        case 1041:  // inet[]
+            return decodeNetworkArray(bytes, elementDecoder: decodeInetOrCidr)
+        case 651:   // cidr[]
+            return decodeNetworkArray(bytes, elementDecoder: decodeInetOrCidr)
+        case 1040:  // macaddr[]
+            return decodeNetworkArray(bytes, elementDecoder: decodeMacaddr)
+        case 775:   // macaddr8[]
+            return decodeNetworkArray(bytes, elementDecoder: decodeMacaddr8)
+
+        // Integer array types
+        case 1005:  // int2[]
+            return decodeIntegerArray(bytes, elementSize: 2)
+        case 1007:  // int4[]
+            return decodeIntegerArray(bytes, elementSize: 4)
+        case 1016:  // int8[]
+            return decodeIntegerArray(bytes, elementSize: 8)
+
+        // Text array types
+        case 1009:  // text[]
+            return decodeTextArray(bytes)
+        case 1015:  // varchar[]
+            return decodeTextArray(bytes)
+        case 1014:  // char[]
+            return decodeTextArray(bytes)
+        case 1002:  // char(1)[] (bpchar array)
+            return decodeTextArray(bytes)
+
+        // UUID array
+        case 2951:  // uuid[]
+            return decodeUUIDArray(bytes)
+
+        // Boolean array
+        case 1000:  // bool[]
+            return decodeBoolArray(bytes)
+
         default:
             return nil
         }
+    }
+
+    // MARK: - Array Decoding
+
+    /// Decode a PostgreSQL array of network types from binary format
+    /// PostgreSQL binary array format:
+    /// - 4 bytes: number of dimensions
+    /// - 4 bytes: has null bitmap flag
+    /// - 4 bytes: element type OID
+    /// For each dimension:
+    /// - 4 bytes: dimension size
+    /// - 4 bytes: lower bound (usually 1)
+    /// For each element:
+    /// - 4 bytes: element length (-1 for NULL)
+    /// - N bytes: element data
+    private static func decodeNetworkArray(_ bytes: [UInt8], elementDecoder: ([UInt8]) -> String?) -> String? {
+        guard bytes.count >= 12 else { return nil }
+
+        // Read number of dimensions (big-endian)
+        let numDimensions = Int32(bigEndian: bytes[0..<4].withUnsafeBytes { $0.load(as: Int32.self) })
+
+        // We only support 1-dimensional arrays
+        guard numDimensions == 1 else { return nil }
+
+        // Skip has-null flag (4 bytes) and element OID (4 bytes)
+        // Read dimension size
+        guard bytes.count >= 20 else { return nil }
+        let dimensionSize = Int32(bigEndian: bytes[12..<16].withUnsafeBytes { $0.load(as: Int32.self) })
+
+        // Start reading elements after header (20 bytes for 1D array)
+        var offset = 20
+        var elements: [String] = []
+
+        for _ in 0..<dimensionSize {
+            guard offset + 4 <= bytes.count else { return nil }
+
+            // Read element length
+            let elementLength = Int32(bigEndian: bytes[offset..<(offset + 4)].withUnsafeBytes { $0.load(as: Int32.self) })
+            offset += 4
+
+            if elementLength == -1 {
+                // NULL element
+                elements.append("NULL")
+            } else {
+                guard offset + Int(elementLength) <= bytes.count else { return nil }
+
+                let elementBytes = Array(bytes[offset..<(offset + Int(elementLength))])
+                if let decoded = elementDecoder(elementBytes) {
+                    elements.append(decoded)
+                } else {
+                    return nil
+                }
+                offset += Int(elementLength)
+            }
+        }
+
+        return "[\(elements.joined(separator: ", "))]"
+    }
+
+    /// Decode a PostgreSQL integer array from binary format
+    private static func decodeIntegerArray(_ bytes: [UInt8], elementSize: Int) -> String? {
+        guard bytes.count >= 12 else { return nil }
+
+        let numDimensions = Int32(bigEndian: bytes[0..<4].withUnsafeBytes { $0.load(as: Int32.self) })
+        guard numDimensions == 1 else { return nil }
+
+        guard bytes.count >= 20 else { return nil }
+        let dimensionSize = Int32(bigEndian: bytes[12..<16].withUnsafeBytes { $0.load(as: Int32.self) })
+
+        var offset = 20
+        var elements: [String] = []
+
+        for _ in 0..<dimensionSize {
+            guard offset + 4 <= bytes.count else { return nil }
+
+            let elementLength = Int32(bigEndian: bytes[offset..<(offset + 4)].withUnsafeBytes { $0.load(as: Int32.self) })
+            offset += 4
+
+            if elementLength == -1 {
+                elements.append("NULL")
+            } else {
+                guard elementLength == elementSize else { return nil }
+                guard offset + elementSize <= bytes.count else { return nil }
+
+                let elementBytes = Array(bytes[offset..<(offset + elementSize)])
+                let value: String
+                switch elementSize {
+                case 2:
+                    let int16 = Int16(bigEndian: elementBytes.withUnsafeBytes { $0.load(as: Int16.self) })
+                    value = String(int16)
+                case 4:
+                    let int32 = Int32(bigEndian: elementBytes.withUnsafeBytes { $0.load(as: Int32.self) })
+                    value = String(int32)
+                case 8:
+                    let int64 = Int64(bigEndian: elementBytes.withUnsafeBytes { $0.load(as: Int64.self) })
+                    value = String(int64)
+                default:
+                    return nil
+                }
+                elements.append(value)
+                offset += elementSize
+            }
+        }
+
+        return "[\(elements.joined(separator: ", "))]"
+    }
+
+    /// Decode a PostgreSQL text/varchar array from binary format
+    private static func decodeTextArray(_ bytes: [UInt8]) -> String? {
+        guard bytes.count >= 12 else { return nil }
+
+        let numDimensions = Int32(bigEndian: bytes[0..<4].withUnsafeBytes { $0.load(as: Int32.self) })
+        guard numDimensions == 1 else { return nil }
+
+        guard bytes.count >= 20 else { return nil }
+        let dimensionSize = Int32(bigEndian: bytes[12..<16].withUnsafeBytes { $0.load(as: Int32.self) })
+
+        var offset = 20
+        var elements: [String] = []
+
+        for _ in 0..<dimensionSize {
+            guard offset + 4 <= bytes.count else { return nil }
+
+            let elementLength = Int32(bigEndian: bytes[offset..<(offset + 4)].withUnsafeBytes { $0.load(as: Int32.self) })
+            offset += 4
+
+            if elementLength == -1 {
+                elements.append("NULL")
+            } else {
+                guard offset + Int(elementLength) <= bytes.count else { return nil }
+
+                let elementBytes = Array(bytes[offset..<(offset + Int(elementLength))])
+                if let text = String(bytes: elementBytes, encoding: .utf8) {
+                    elements.append("\"\(text)\"")
+                } else {
+                    return nil
+                }
+                offset += Int(elementLength)
+            }
+        }
+
+        return "[\(elements.joined(separator: ", "))]"
+    }
+
+    /// Decode a PostgreSQL UUID array from binary format
+    private static func decodeUUIDArray(_ bytes: [UInt8]) -> String? {
+        guard bytes.count >= 12 else { return nil }
+
+        let numDimensions = Int32(bigEndian: bytes[0..<4].withUnsafeBytes { $0.load(as: Int32.self) })
+        guard numDimensions == 1 else { return nil }
+
+        guard bytes.count >= 20 else { return nil }
+        let dimensionSize = Int32(bigEndian: bytes[12..<16].withUnsafeBytes { $0.load(as: Int32.self) })
+
+        var offset = 20
+        var elements: [String] = []
+
+        for _ in 0..<dimensionSize {
+            guard offset + 4 <= bytes.count else { return nil }
+
+            let elementLength = Int32(bigEndian: bytes[offset..<(offset + 4)].withUnsafeBytes { $0.load(as: Int32.self) })
+            offset += 4
+
+            if elementLength == -1 {
+                elements.append("NULL")
+            } else {
+                guard elementLength == 16 else { return nil }
+                guard offset + 16 <= bytes.count else { return nil }
+
+                let uuidBytes = Array(bytes[offset..<(offset + 16)])
+                let uuid = NSUUID(uuidBytes: uuidBytes) as UUID
+                elements.append(uuid.uuidString)
+                offset += 16
+            }
+        }
+
+        return "[\(elements.joined(separator: ", "))]"
+    }
+
+    /// Decode a PostgreSQL boolean array from binary format
+    private static func decodeBoolArray(_ bytes: [UInt8]) -> String? {
+        guard bytes.count >= 12 else { return nil }
+
+        let numDimensions = Int32(bigEndian: bytes[0..<4].withUnsafeBytes { $0.load(as: Int32.self) })
+        guard numDimensions == 1 else { return nil }
+
+        guard bytes.count >= 20 else { return nil }
+        let dimensionSize = Int32(bigEndian: bytes[12..<16].withUnsafeBytes { $0.load(as: Int32.self) })
+
+        var offset = 20
+        var elements: [String] = []
+
+        for _ in 0..<dimensionSize {
+            guard offset + 4 <= bytes.count else { return nil }
+
+            let elementLength = Int32(bigEndian: bytes[offset..<(offset + 4)].withUnsafeBytes { $0.load(as: Int32.self) })
+            offset += 4
+
+            if elementLength == -1 {
+                elements.append("NULL")
+            } else {
+                guard elementLength == 1 else { return nil }
+                guard offset + 1 <= bytes.count else { return nil }
+
+                let value = bytes[offset] != 0
+                elements.append(String(value))
+                offset += 1
+            }
+        }
+
+        return "[\(elements.joined(separator: ", "))]"
     }
 
     // MARK: - IPv4 Formatting
