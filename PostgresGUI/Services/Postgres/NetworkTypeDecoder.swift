@@ -87,20 +87,21 @@ enum NetworkTypeDecoder {
     static func decodeInterval(_ bytes: [UInt8]) -> String? {
         guard bytes.count == 16 else { return nil }
 
-        // Read microseconds (8 bytes, big-endian)
-        let microseconds = bytes[0..<8].withUnsafeBytes { buffer -> Int64 in
-            Int64(bigEndian: buffer.load(as: Int64.self))
-        }
+        // 1. Parse Microseconds (Offset 0-8)
+        // Safer than load(as:) for unaligned memory
+        var microRaw: UInt64 = 0
+        for i in 0..<8 { microRaw = (microRaw << 8) | UInt64(bytes[i]) }
+        let microseconds = Int64(bitPattern: microRaw)
 
-        // Read days (4 bytes, big-endian)
-        let days = bytes[8..<12].withUnsafeBytes { buffer -> Int32 in
-            Int32(bigEndian: buffer.load(as: Int32.self))
-        }
+        // 2. Parse Days (Offset 8-12)
+        var daysRaw: UInt32 = 0
+        for i in 8..<12 { daysRaw = (daysRaw << 8) | UInt32(bytes[i]) }
+        let days = Int32(bitPattern: daysRaw)
 
-        // Read months (4 bytes, big-endian)
-        let months = bytes[12..<16].withUnsafeBytes { buffer -> Int32 in
-            Int32(bigEndian: buffer.load(as: Int32.self))
-        }
+        // 3. Parse Months (Offset 12-16)
+        var monthsRaw: UInt32 = 0
+        for i in 12..<16 { monthsRaw = (monthsRaw << 8) | UInt32(bytes[i]) }
+        let months = Int32(bitPattern: monthsRaw)
 
         return formatInterval(microseconds: microseconds, days: days, months: months)
     }
@@ -435,26 +436,41 @@ enum NetworkTypeDecoder {
     }
 
     /// Decode a PostgreSQL INTERVAL array from binary format
-    static func decodeInterval(_ bytes: [UInt8]) -> String? {
-        guard bytes.count == 16 else { return nil }
+    private static func decodeIntervalArray(_ bytes: [UInt8]) -> String? {
+        guard bytes.count >= 12 else { return nil }
 
-        // 1. Parse Microseconds (Offset 0-8)
-        // Safer than load(as:) for unaligned memory
-        var microRaw: UInt64 = 0
-        for i in 0..<8 { microRaw = (microRaw << 8) | UInt64(bytes[i]) }
-        let microseconds = Int64(bitPattern: microRaw)
+        let numDimensions = Int32(bigEndian: bytes[0..<4].withUnsafeBytes { $0.load(as: Int32.self) })
+        guard numDimensions == 1 else { return nil }
 
-        // 2. Parse Days (Offset 8-12)
-        var daysRaw: UInt32 = 0
-        for i in 8..<12 { daysRaw = (daysRaw << 8) | UInt32(bytes[i]) }
-        let days = Int32(bitPattern: daysRaw)
+        guard bytes.count >= 20 else { return nil }
+        let dimensionSize = Int32(bigEndian: bytes[12..<16].withUnsafeBytes { $0.load(as: Int32.self) })
 
-        // 3. Parse Months (Offset 12-16)
-        var monthsRaw: UInt32 = 0
-        for i in 12..<16 { monthsRaw = (monthsRaw << 8) | UInt32(bytes[i]) }
-        let months = Int32(bitPattern: monthsRaw)
+        var offset = 20
+        var elements: [String] = []
 
-        return formatInterval(microseconds: microseconds, days: days, months: months)
+        for _ in 0..<dimensionSize {
+            guard offset + 4 <= bytes.count else { return nil }
+
+            let elementLength = Int32(bigEndian: bytes[offset..<(offset + 4)].withUnsafeBytes { $0.load(as: Int32.self) })
+            offset += 4
+
+            if elementLength == -1 {
+                elements.append("NULL")
+            } else {
+                guard elementLength == 16 else { return nil }  // INTERVAL is always 16 bytes
+                guard offset + 16 <= bytes.count else { return nil }
+
+                let elementBytes = Array(bytes[offset..<(offset + 16)])
+                if let decoded = decodeInterval(elementBytes) {
+                    elements.append(decoded)
+                } else {
+                    return nil
+                }
+                offset += 16
+            }
+        }
+
+        return "[\(elements.joined(separator: ", "))]"
     }
 
     // MARK: - IPv4 Formatting
