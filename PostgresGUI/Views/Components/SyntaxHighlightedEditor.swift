@@ -183,6 +183,15 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
         textView.isVerticallyResizable = true
         textView.autoresizingMask = [.width]
 
+        // Disable automatic text substitutions for code editing
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.isAutomaticSpellingCorrectionEnabled = false
+        textView.isAutomaticTextCompletionEnabled = false
+        textView.isAutomaticDataDetectionEnabled = false
+        textView.isAutomaticLinkDetectionEnabled = false
+
         // Set up scroll view
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
