@@ -127,6 +127,14 @@ class QueryEditorViewModel {
                     results: result.rows,
                     columnNames: result.columnNames.isEmpty ? nil : result.columnNames
                 )
+
+                // Cache results in-memory for restoration when switching queries
+                if let savedQueryId = appState.query.currentSavedQueryId {
+                    let columnNames = result.columnNames.isEmpty ? [] : result.columnNames
+                    appState.query.cacheResults(for: savedQueryId, rows: result.rows, columnNames: columnNames)
+                    appState.query.lastExecutedAt = Date()
+                    DebugLog.print("💾 [QueryEditorViewModel] Cached \(result.rows.count) results in-memory for SavedQuery")
+                }
             }
 
             // Refresh tables list if query modified schema

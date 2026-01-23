@@ -73,6 +73,8 @@ final class TabViewModel: Identifiable {
     }
 
     /// Create from a TabState (SwiftData model)
+    /// Note: cachedResults are intentionally NOT restored from TabState.
+    /// Results should only persist in-memory during a session, not across app restarts.
     convenience init(from tabState: TabState) {
         self.init(
             id: tabState.id,
@@ -87,8 +89,8 @@ final class TabViewModel: Identifiable {
             selectedTableSchema: tabState.selectedTableSchema,
             selectedTableName: tabState.selectedTableName,
             selectedSchemaFilter: tabState.selectedSchemaFilter,
-            cachedResults: tabState.cachedResults,
-            cachedColumnNames: tabState.cachedColumnNames
+            cachedResults: nil,
+            cachedColumnNames: nil
         )
     }
 

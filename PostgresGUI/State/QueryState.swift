@@ -7,6 +7,13 @@
 
 import Foundation
 
+/// Cached query results for a SavedQuery (in-memory only, not persisted)
+struct CachedQueryResult {
+    let rows: [TableRow]
+    let columnNames: [String]
+    let executedAt: Date
+}
+
 /// Manages query execution state and results
 @Observable
 @MainActor
@@ -24,6 +31,9 @@ class QueryState {
     var lastQueryText: String? = nil  // For retry on timeout
     var queryExecutionTime: TimeInterval? = nil
     var selectedRowIDs: Set<UUID> = []
+
+    // In-memory cache for SavedQuery results (keyed by SavedQuery.id)
+    private var savedQueryResultsCache: [UUID: CachedQueryResult] = [:]
 
     /// Formatted error message for display
     var queryErrorMessage: String? {
@@ -50,6 +60,7 @@ class QueryState {
     var currentSavedQueryId: UUID? = nil
     var lastSavedAt: Date? = nil
     var currentQueryName: String? = nil
+    var lastExecutedAt: Date? = nil
 
     // Status display state
     var statusMessage: String? = nil
@@ -192,6 +203,7 @@ class QueryState {
         currentSavedQueryId = nil
         lastSavedAt = nil
         currentQueryName = nil
+        lastExecutedAt = nil
         statusTimer?.cancel()
         statusTimer = nil
         statusMessage = nil
@@ -204,5 +216,31 @@ class QueryState {
     func cleanup() {
         cancelCurrentQuery()
         reset()
+    }
+
+    // MARK: - SavedQuery Results Cache (In-Memory)
+
+    /// Cache results for a SavedQuery (in-memory only, cleared on app restart)
+    func cacheResults(for savedQueryId: UUID, rows: [TableRow], columnNames: [String]) {
+        savedQueryResultsCache[savedQueryId] = CachedQueryResult(
+            rows: rows,
+            columnNames: columnNames,
+            executedAt: Date()
+        )
+    }
+
+    /// Retrieve cached results for a SavedQuery
+    func getCachedResults(for savedQueryId: UUID) -> CachedQueryResult? {
+        savedQueryResultsCache[savedQueryId]
+    }
+
+    /// Clear cached results for a specific SavedQuery
+    func clearCachedResults(for savedQueryId: UUID) {
+        savedQueryResultsCache.removeValue(forKey: savedQueryId)
+    }
+
+    /// Clear all cached SavedQuery results
+    func clearAllCachedResults() {
+        savedQueryResultsCache.removeAll()
     }
 }
