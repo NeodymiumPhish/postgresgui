@@ -74,12 +74,8 @@ class TabService: TabServiceProtocol {
         tabState.selectedTableName = viewModel.selectedTableName
         tabState.selectedSchemaFilter = viewModel.selectedSchemaFilter
 
-        // Sync cached results
-        if let results = viewModel.cachedResults {
-            tabState.setCachedResults(results, columnNames: viewModel.cachedColumnNames)
-        } else {
-            tabState.clearCachedResults()
-        }
+        // Note: cachedResults are intentionally NOT persisted to TabState.
+        // Results should only exist in-memory during a session, not across app restarts.
 
         save()
     }
@@ -139,17 +135,11 @@ class TabService: TabServiceProtocol {
         save()
     }
 
-    /// Update cached results for a tab
+    /// Update cached results for a tab (in-memory only, not persisted to disk)
     func updateTabResults(_ viewModel: TabViewModel, results: [TableRow]?, columnNames: [String]?) {
-        DebugLog.print("💾 [TabService] Saving \(results?.count ?? 0) results to tab \(viewModel.id)")
-
-        guard let tabState = fetchTabState(by: viewModel.id) else {
-            DebugLog.print("⚠️ [TabService] Cannot update results - TabState not found")
-            return
-        }
-
-        tabState.setCachedResults(results, columnNames: columnNames)
-        save()
+        DebugLog.print("💾 [TabService] Caching \(results?.count ?? 0) results in-memory for tab \(viewModel.id)")
+        // Results are only stored in the TabViewModel (in-memory), not persisted to TabState
+        // This is intentional - results should not survive app restarts
     }
 
     // MARK: - Legacy Protocol Conformance (for gradual migration)
@@ -228,9 +218,9 @@ class TabService: TabServiceProtocol {
     }
 
     func updateTabResults(_ tab: TabState, results: [TableRow]?, columnNames: [String]?) {
-        DebugLog.print("💾 [TabService] Saving \(results?.count ?? 0) results to tab \(tab.id)")
-        tab.setCachedResults(results, columnNames: columnNames)
-        save()
+        // Results are only stored in-memory (TabViewModel), not persisted to TabState
+        // This is intentional - results should not survive app restarts
+        DebugLog.print("💾 [TabService] Results caching is in-memory only (not persisted)")
     }
 
     func clearSavedQueryId(_ tab: TabState) {

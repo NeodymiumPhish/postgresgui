@@ -104,10 +104,20 @@ struct QueryEditorView: View {
                 .foregroundColor(.secondary)
                 .font(.system(size: Constants.FontSize.small))
                 .lineLimit(1)
-        } else if let queryName = appState.query.currentQueryName {
-            Text(queryName)
-                .foregroundColor(.secondary)
-                .font(.system(size: Constants.FontSize.small))
+        } else {
+            HStack(spacing: Constants.Spacing.small) {
+                if let lastExecutedAt = appState.query.lastExecutedAt {
+                    Text("Last Executed: \(lastExecutedAt.formatted(date: .abbreviated, time: .shortened))")
+                        .foregroundColor(.secondary)
+                        .font(.system(size: Constants.FontSize.small))
+                }
+
+                if let queryName = appState.query.currentQueryName {
+                    Text(queryName)
+                        .foregroundColor(.secondary)
+                        .font(.system(size: Constants.FontSize.small))
+                }
+            }
         }
     }
 }

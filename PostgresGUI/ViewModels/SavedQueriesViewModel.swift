@@ -144,6 +144,7 @@ class SavedQueriesViewModel {
             appState.query.queryError = nil
             appState.query.queryExecutionTime = nil
             appState.query.statusMessage = nil
+            appState.query.lastExecutedAt = nil
 
             DebugLog.print("📝 [SavedQueriesViewModel] Created new query: \(newQuery.name)")
         } catch {
@@ -157,10 +158,19 @@ class SavedQueriesViewModel {
         appState.query.lastSavedAt = query.updatedAt
         appState.query.currentQueryName = query.name
 
-        // Don't clear results - they should remain until user runs a different query
-        // Only clear the status message since it's no longer relevant
-        appState.query.statusMessage = nil
+        // Restore cached results from in-memory cache if available, otherwise clear results pane
+        if let cached = appState.query.getCachedResults(for: query.id) {
+            appState.query.updateQueryResults(cached.rows, columnNames: cached.columnNames)
+            appState.query.lastExecutedAt = cached.executedAt
+            DebugLog.print("📂 [SavedQueriesViewModel] Restored \(cached.rows.count) cached results for: \(query.name)")
+        } else {
+            // Clear results when switching to a query with no cached results
+            appState.query.clearQueryResults()
+            appState.query.lastExecutedAt = nil
+            DebugLog.print("📂 [SavedQueriesViewModel] Cleared results (no cache) for: \(query.name)")
+        }
 
+        appState.query.statusMessage = nil
         DebugLog.print("📂 [SavedQueriesViewModel] Loaded query: \(query.name)")
     }
 
