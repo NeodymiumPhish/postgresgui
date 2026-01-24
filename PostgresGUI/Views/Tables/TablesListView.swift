@@ -49,9 +49,25 @@ struct TablesListIsolated: View {
 
     let refreshQueryAction: (TableInfo) async -> Void
 
+    /// Number of tables to load per batch for incremental rendering
+    private static let batchSize = 100
+
+    /// Current number of tables to display (for incremental loading)
+    @State private var displayedCount: Int = TablesListIsolated.batchSize
+
     /// Whether to show grouped view (multiple schemas present)
     private var shouldShowGrouped: Bool {
         groupedTables.count > 1
+    }
+
+    /// Tables to display (limited for performance)
+    private var displayedTables: ArraySlice<TableInfo> {
+        tables.prefix(displayedCount)
+    }
+
+    /// Whether there are more tables to load
+    private var hasMoreTables: Bool {
+        displayedCount < tables.count
     }
 
     var body: some View {
@@ -78,22 +94,53 @@ struct TablesListIsolated: View {
                 flatTablesList
             }
         }
+        .onChange(of: tables.count) { _, _ in
+            // Reset displayed count when tables change (e.g., schema filter changed)
+            displayedCount = Self.batchSize
+        }
+        .onChange(of: selectedSchema) { _, _ in
+            // Reset displayed count when schema filter changes
+            displayedCount = Self.batchSize
+        }
     }
 
     // MARK: - Flat List (single schema or filtered)
 
     private var flatTablesList: some View {
-        List(tables, selection: $selectedTable) { table in
-            TableListRowView(
-                table: table,
-                isExecutingQuery: isExecutingQuery,
-                refreshQueryAction: refreshQueryAction,
-                showSchemaPrefix: selectedSchema == nil
-            )
-            .tag(table)
-            .listRowSeparator(.visible)
+        List(selection: $selectedTable) {
+            ForEach(displayedTables, id: \.id) { table in
+                TableListRowView(
+                    table: table,
+                    isExecutingQuery: isExecutingQuery,
+                    refreshQueryAction: refreshQueryAction,
+                    showSchemaPrefix: selectedSchema == nil
+                )
+                .tag(table)
+                .listRowSeparator(.visible)
+            }
+
+            // "Load more" button when there are more tables to show
+            if hasMoreTables {
+                loadMoreButton
+            }
         }
         .padding(.top, 8)
+    }
+
+    private var loadMoreButton: some View {
+        Button {
+            displayedCount = min(displayedCount + Self.batchSize, tables.count)
+        } label: {
+            HStack {
+                Spacer()
+                Text("Load more (\(tables.count - displayedCount) remaining)")
+                    .font(.caption)
+                    .foregroundColor(.accentColor)
+                Spacer()
+            }
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Grouped List (multiple schemas)
@@ -174,19 +221,21 @@ struct TableListRowView: View {
         .contextMenu {
             tableMenuContent
         }
-        .onAppear {
-            if viewModel == nil {
-                viewModel = TableContextMenuViewModel(table: table, appState: appState)
-            }
-        }
-        .onChange(of: table.id) { _, newValue in
-            // Update viewModel when table changes (e.g., in a reused row)
-            viewModel = TableContextMenuViewModel(table: table, appState: appState)
-        }
         .modifier(TableContextMenuModalsWrapper(viewModel: $viewModel))
     }
 
     // MARK: - Menu Content
+
+    /// Ensures the viewModel exists, creating it lazily if needed.
+    /// Called when menu actions require the ViewModel.
+    private func ensureViewModel() -> TableContextMenuViewModel {
+        if let existing = viewModel {
+            return existing
+        }
+        let vm = TableContextMenuViewModel(table: table, appState: appState)
+        viewModel = vm
+        return vm
+    }
 
     @ViewBuilder
     private var tableMenuContent: some View {
@@ -205,7 +254,7 @@ struct TableListRowView: View {
         // Generate DDL
         Button {
             Task {
-                await viewModel?.generateDDL()
+                await ensureViewModel().generateDDL()
             }
         } label: {
             Label("Generate DDL", systemImage: "doc.text")
@@ -214,7 +263,7 @@ struct TableListRowView: View {
 
         // Export
         Button {
-            viewModel?.showExportSheet = true
+            ensureViewModel().showExportSheet = true
         } label: {
             Label("Export...", systemImage: "square.and.arrow.up")
         }
@@ -224,7 +273,7 @@ struct TableListRowView: View {
 
         // Truncate (destructive)
         Button(role: .destructive) {
-            viewModel?.showTruncateConfirmation = true
+            ensureViewModel().showTruncateConfirmation = true
         } label: {
             Label("Truncate...", systemImage: "trash.slash")
         }
@@ -232,7 +281,7 @@ struct TableListRowView: View {
 
         // Drop (destructive)
         Button(role: .destructive) {
-            viewModel?.showDropConfirmation = true
+            ensureViewModel().showDropConfirmation = true
         } label: {
             Label("Drop...", systemImage: "trash")
         }

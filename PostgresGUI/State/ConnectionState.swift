@@ -33,7 +33,13 @@ class ConnectionState {
     // Current selections
     var selectedDatabase: DatabaseInfo?
     var selectedTable: TableInfo?
-    var selectedSchema: String? = nil  // nil means "All Schemas"
+    var selectedSchema: String? = nil {  // nil means "All Schemas"
+        didSet {
+            if oldValue != selectedSchema {
+                invalidateTableCache()
+            }
+        }
+    }
     var schemaError: String? = nil  // Error message when SET search_path fails
 
     // Schema group expansion state (for sidebar)
@@ -43,19 +49,27 @@ class ConnectionState {
     var databases: [DatabaseInfo] = []
     var databasesVersion: Int = 0
     var schemas: [String] = []
-    var tables: [TableInfo] = []
-
-    /// Tables filtered by selected schema (if any)
-    var filteredTables: [TableInfo] {
-        guard let selectedSchema = selectedSchema else {
-            return tables
+    var tables: [TableInfo] = [] {
+        didSet {
+            invalidateTableCache()
         }
-        return tables.filter { $0.schema == selectedSchema }
     }
 
-    /// Tables grouped by schema (uses filteredTables)
-    var groupedTables: [SchemaGroup] {
-        groupTablesBySchema(filteredTables)
+    /// Cached filtered tables - updated via invalidateTableCache()
+    private(set) var filteredTables: [TableInfo] = []
+
+    /// Cached grouped tables - updated via invalidateTableCache()
+    private(set) var groupedTables: [SchemaGroup] = []
+
+    /// Recomputes filteredTables and groupedTables from source data.
+    /// Called automatically when `tables` or `selectedSchema` changes.
+    private func invalidateTableCache() {
+        if let schema = selectedSchema {
+            filteredTables = tables.filter { $0.schema == schema }
+        } else {
+            filteredTables = tables
+        }
+        groupedTables = groupTablesBySchema(filteredTables)
     }
     var isLoadingTables: Bool = false
     var tableLoadingError: Error? = nil
