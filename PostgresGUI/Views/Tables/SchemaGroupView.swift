@@ -13,7 +13,6 @@ import SwiftUI
 struct SchemaGroupView: View {
     let group: SchemaGroup
     @Binding var isExpanded: Bool
-    @Binding var selectedTable: TableInfo?
     let isExecutingQuery: Bool
     let refreshQueryAction: (TableInfo) async -> Void
 
@@ -44,7 +43,6 @@ struct SchemaGroupView: View {
                         refreshQueryAction: refreshQueryAction,
                         showSchemaPrefix: false
                     )
-                    .tag(table)
                     .listRowSeparator(.visible)
                 }
 

@@ -47,8 +47,11 @@ class AppState {
     // MARK: - Query Execution
 
     /// Centralized query execution to prevent race conditions when rapidly switching tables
+    /// - Parameters:
+    ///   - table: The table to query
+    ///   - limit: Optional row limit. If nil, uses pagination (rowsPerPage). If specified, uses that exact limit with no pagination.
     @MainActor
-    func executeTableQuery(for table: TableInfo) async {
+    func executeTableQuery(for table: TableInfo, limit: Int? = nil) async {
         // Capture context to verify nothing changed after async operations
         // This prevents stale query results when user switches table, database, or connection
         let tableId = table.id
@@ -63,11 +66,26 @@ class AppState {
         // Set loading state
         query.startQueryExecution()
 
-        // Execute query (fetch +1 to detect if more pages exists)
+        // Determine the limit and pagination mode
+        let effectiveLimit: Int
+        let isPaginated: Bool
+        if let customLimit = limit {
+            // Custom limit specified - no pagination
+            effectiveLimit = customLimit
+            isPaginated = false
+            // Reset pagination state for non-paginated queries
+            query.currentPage = 0
+        } else {
+            // Use pagination - fetch +1 to detect if more pages exist
+            effectiveLimit = query.rowsPerPage + 1
+            isPaginated = true
+        }
+
+        // Execute query
         let result = await queryService.executeTableQuery(
             for: table,
-            limit: query.rowsPerPage + 1,
-            offset: calculateOffset(page: query.currentPage, pageSize: query.rowsPerPage)
+            limit: effectiveLimit,
+            offset: isPaginated ? calculateOffset(page: query.currentPage, pageSize: query.rowsPerPage) : 0
         )
 
         // Only update state if context hasn't changed (table, database, AND connection)
@@ -84,16 +102,22 @@ class AppState {
 
         // Update state based on result
         if result.isSuccess {
-            // Check if we got more rows than requested (indicates next page exists)
-            query.hasNextPage = hasMorePages(fetchedRowCount: result.rows.count, pageSize: query.rowsPerPage)
-            // Trim to actual page size
-            let trimmedRows = query.hasNextPage ? Array(result.rows.prefix(query.rowsPerPage)) : result.rows
-            let trimmedResult = QueryResult.success(
-                rows: trimmedRows,
-                columnNames: result.columnNames,
-                executionTime: result.executionTime
-            )
-            query.finishQueryExecution(with: trimmedResult)
+            if isPaginated {
+                // Check if we got more rows than requested (indicates next page exists)
+                query.hasNextPage = hasMorePages(fetchedRowCount: result.rows.count, pageSize: query.rowsPerPage)
+                // Trim to actual page size
+                let trimmedRows = query.hasNextPage ? Array(result.rows.prefix(query.rowsPerPage)) : result.rows
+                let trimmedResult = QueryResult.success(
+                    rows: trimmedRows,
+                    columnNames: result.columnNames,
+                    executionTime: result.executionTime
+                )
+                query.finishQueryExecution(with: trimmedResult)
+            } else {
+                // Non-paginated: use result as-is
+                query.hasNextPage = false
+                query.finishQueryExecution(with: result)
+            }
 
             // Fetch table metadata (primary keys, column info) for edit/delete operations
             await fetchTableMetadata(for: table)

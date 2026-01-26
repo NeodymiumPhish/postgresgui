@@ -31,7 +31,9 @@ class QueryResultsViewModel {
 
     // MARK: - Table Selection Handling
 
-    /// Handle table selection changes: execute query or use cached results
+    /// Handle table selection changes
+    /// Note: Table selection no longer auto-executes queries. Users must use the context menu
+    /// to "Show All Rows" or "Show 100 Rows" to view table data.
     func handleTableSelectionChange(oldValue: String?, newValue: String?) {
         let table = appState.connection.selectedTable
 
@@ -59,17 +61,16 @@ class QueryResultsViewModel {
             name: table?.name
         )
 
-        // Execute query when a table is selected
+        // Track table selection but do NOT auto-execute query
+        // Users must explicitly choose "Show All Rows" or "Show 100 Rows" from context menu
         if let table = table, table.id != lastExecutedTableID {
             lastExecutedTableID = table.id
 
-            // Skip query only if we have cached results for THIS specific table
+            // Only restore cached results if they exist for this table
             if shouldUseCached {
-                DebugLog.print("📋 [QueryResultsViewModel] Skipping query - using cached results for table \(table.name)")
+                DebugLog.print("📋 [QueryResultsViewModel] Using cached results for table \(table.name)")
             } else {
-                Task { @MainActor in
-                    await executeTableQuery(for: table)
-                }
+                DebugLog.print("📋 [QueryResultsViewModel] Table \(table.name) selected - use context menu to view data")
             }
         } else if newValue == nil {
             // Skip clearing if we're restoring from a tab switch

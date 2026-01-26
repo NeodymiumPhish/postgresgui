@@ -45,6 +45,10 @@ class ConnectionState {
     // Schema group expansion state (for sidebar)
     var expandedSchemas: Set<String> = []
 
+    // Table expansion state (for showing columns in sidebar)
+    // Key: table ID (schema.name), Value: whether columns are shown
+    var expandedTables: Set<String> = []
+
     // Data caches (populated by DatabaseService)
     var databases: [DatabaseInfo] = []
     var databasesVersion: Int = 0
@@ -132,6 +136,7 @@ class ConnectionState {
         selectedTable = nil
         selectedSchema = nil
         expandedSchemas = []
+        expandedTables = []
         databases = []
         databasesVersion += 1
         schemas = []

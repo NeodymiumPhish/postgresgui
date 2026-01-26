@@ -107,7 +107,7 @@ struct TablesListIsolated: View {
     // MARK: - Flat List (single schema or filtered)
 
     private var flatTablesList: some View {
-        List(selection: $selectedTable) {
+        List {
             ForEach(displayedTables, id: \.id) { table in
                 TableListRowView(
                     table: table,
@@ -115,7 +115,6 @@ struct TablesListIsolated: View {
                     refreshQueryAction: refreshQueryAction,
                     showSchemaPrefix: selectedSchema == nil
                 )
-                .tag(table)
                 .listRowSeparator(.visible)
             }
 
@@ -146,7 +145,7 @@ struct TablesListIsolated: View {
     // MARK: - Grouped List (multiple schemas)
 
     private var groupedTablesList: some View {
-        List(selection: $selectedTable) {
+        List {
             ForEach(groupedTables) { group in
                 SchemaGroupView(
                     group: group,
@@ -160,7 +159,6 @@ struct TablesListIsolated: View {
                             }
                         }
                     ),
-                    selectedTable: $selectedTable,
                     isExecutingQuery: isExecutingQuery,
                     refreshQueryAction: refreshQueryAction
                 )
@@ -183,6 +181,17 @@ struct TableListRowView: View {
     @State private var isHovered = false
     @State private var isButtonHovered = false
     @State private var viewModel: TableContextMenuViewModel?
+    @State private var isLoadingColumns = false
+
+    /// Whether this table's columns are expanded
+    private var isExpanded: Bool {
+        appState.connection.expandedTables.contains(table.id)
+    }
+
+    /// Column info from cache or table
+    private var columnInfo: [ColumnInfo]? {
+        appState.connection.getColumnInfo(for: table)
+    }
 
     /// Display name based on whether schema prefix should be shown
     private var displayText: String {
@@ -190,7 +199,31 @@ struct TableListRowView: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Main table row
+            tableHeader
+
+            // Column list (shown when expanded)
+            if isExpanded {
+                columnsList
+            }
+        }
+        .contextMenu {
+            tableMenuContent
+        }
+        .modifier(TableContextMenuModalsWrapper(viewModel: $viewModel))
+    }
+
+    // MARK: - Table Header
+
+    private var tableHeader: some View {
         HStack(spacing: 8) {
+            // Expand/collapse chevron
+            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+                .frame(width: 12)
+
             Image(systemName: table.tableType == .foreign ? "tablecells.fill" : "tablecells")
                 .foregroundColor(.secondary)
             Text(displayText)
@@ -215,13 +248,79 @@ struct TableListRowView: View {
         }
         .padding(.vertical, 1)
         .padding(.horizontal, 6)
+        .contentShape(Rectangle())
         .onHover { hovering in
             isHovered = hovering
         }
-        .contextMenu {
-            tableMenuContent
+        .onTapGesture {
+            toggleExpanded()
         }
-        .modifier(TableContextMenuModalsWrapper(viewModel: $viewModel))
+    }
+
+    // MARK: - Columns List
+
+    private var columnsList: some View {
+        Group {
+            if isLoadingColumns {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    Spacer()
+                }
+                .padding(.vertical, 4)
+                .padding(.leading, 44)
+            } else if let columns = columnInfo, !columns.isEmpty {
+                ForEach(columns) { column in
+                    TableColumnRowView(column: column)
+                }
+            } else {
+                Text("No columns found")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.leading, 44)
+                    .padding(.vertical, 2)
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func toggleExpanded() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if isExpanded {
+                appState.connection.expandedTables.remove(table.id)
+            } else {
+                appState.connection.expandedTables.insert(table.id)
+                // Fetch column info if not already cached
+                if columnInfo == nil {
+                    fetchColumnInfo()
+                }
+            }
+        }
+    }
+
+    private func fetchColumnInfo() {
+        isLoadingColumns = true
+        Task {
+            // Fetch column info directly without requiring table to be "selected"
+            // This bypasses TableMetadataService which has selection guards
+            do {
+                let columns = try await appState.connection.databaseService.fetchColumnInfo(
+                    schema: table.schema,
+                    table: table.name
+                )
+                // Cache the result
+                let existingCache = appState.connection.tableMetadataCache[table.id]
+                appState.connection.tableMetadataCache[table.id] = (
+                    primaryKeys: existingCache?.primaryKeys,
+                    columns: columns
+                )
+            } catch {
+                DebugLog.print("⚠️ [TableListRowView] Failed to fetch column info for \(table.name): \(error)")
+            }
+            isLoadingColumns = false
+        }
     }
 
     // MARK: - Menu Content
@@ -239,6 +338,29 @@ struct TableListRowView: View {
 
     @ViewBuilder
     private var tableMenuContent: some View {
+        // Show table data options
+        Button {
+            Task {
+                appState.connection.selectedTable = table
+                await appState.executeTableQuery(for: table)
+            }
+        } label: {
+            Label("Show All Rows", systemImage: "list.bullet")
+        }
+        .disabled(isExecutingQuery)
+
+        Button {
+            Task {
+                appState.connection.selectedTable = table
+                await appState.executeTableQuery(for: table, limit: 100)
+            }
+        } label: {
+            Label("Show 100 Rows", systemImage: "list.bullet")
+        }
+        .disabled(isExecutingQuery)
+
+        Divider()
+
         // Refresh
         Button {
             Task {
@@ -286,6 +408,92 @@ struct TableListRowView: View {
             Label("Drop...", systemImage: "trash")
         }
         .disabled(isExecutingQuery)
+    }
+}
+
+// MARK: - Table Column Row View (Sidebar)
+
+/// Compact column display for the table sidebar expansion
+struct TableColumnRowView: View {
+    let column: ColumnInfo
+
+    /// Simplified data type for display
+    private var simplifiedType: String {
+        let type = column.dataType.lowercased()
+
+        // Map common PostgreSQL types to simplified names
+        if type.hasPrefix("character varying") || type.hasPrefix("varchar") {
+            return "varchar"
+        } else if type.hasPrefix("character") || type == "char" || type == "bpchar" {
+            return "char"
+        } else if type == "integer" || type == "int4" {
+            return "int"
+        } else if type == "bigint" || type == "int8" {
+            return "bigint"
+        } else if type == "smallint" || type == "int2" {
+            return "smallint"
+        } else if type == "boolean" || type == "bool" {
+            return "bool"
+        } else if type.hasPrefix("timestamp") {
+            return "timestamp"
+        } else if type == "date" {
+            return "date"
+        } else if type == "time" || type.hasPrefix("time ") {
+            return "time"
+        } else if type.hasPrefix("numeric") || type.hasPrefix("decimal") {
+            return "numeric"
+        } else if type == "double precision" || type == "float8" {
+            return "double"
+        } else if type == "real" || type == "float4" {
+            return "float"
+        } else if type == "text" {
+            return "text"
+        } else if type == "uuid" {
+            return "uuid"
+        } else if type == "json" || type == "jsonb" {
+            return type
+        } else if type == "bytea" {
+            return "bytea"
+        } else if type.hasSuffix("[]") {
+            // Array types
+            let baseType = String(type.dropLast(2))
+            return "\(baseType)[]"
+        } else {
+            // Return as-is for other types
+            return column.dataType
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            // Key icon (only for PK/FK columns)
+            if column.isPrimaryKey {
+                Image(systemName: "key.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(.yellow)
+                    .frame(width: 12)
+            } else if column.isForeignKey {
+                Image(systemName: "key")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                    .frame(width: 12)
+            }
+
+            // Column name
+            Text(column.name)
+                .font(.system(.body, design: .monospaced))
+                .lineLimit(1)
+
+            Spacer()
+
+            // Data type (right-aligned)
+            Text(simplifiedType)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.secondary)
+        }
+        .padding(.leading, (column.isPrimaryKey || column.isForeignKey) ? 32 : 44)
+        .padding(.trailing, 6)
+        .padding(.vertical, 2)
     }
 }
 
