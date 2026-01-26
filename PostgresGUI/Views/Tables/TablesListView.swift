@@ -303,17 +303,33 @@ struct TableListRowView: View {
     private func fetchColumnInfo() {
         isLoadingColumns = true
         Task {
-            // Fetch column info directly without requiring table to be "selected"
+            // Fetch column info and primary keys directly without requiring table to be "selected"
             // This bypasses TableMetadataService which has selection guards
             do {
-                let columns = try await appState.connection.databaseService.fetchColumnInfo(
+                // Fetch both column info and primary keys in parallel
+                async let columnsTask = appState.connection.databaseService.fetchColumnInfo(
                     schema: table.schema,
                     table: table.name
                 )
+                async let primaryKeysTask = appState.connection.databaseService.fetchPrimaryKeyColumns(
+                    schema: table.schema,
+                    table: table.name
+                )
+
+                var columns = try await columnsTask
+                let primaryKeys = try await primaryKeysTask
+
+                // Mark primary key columns
+                let pkSet = Set(primaryKeys)
+                for i in columns.indices {
+                    if pkSet.contains(columns[i].name) {
+                        columns[i].isPrimaryKey = true
+                    }
+                }
+
                 // Cache the result
-                let existingCache = appState.connection.tableMetadataCache[table.id]
                 appState.connection.tableMetadataCache[table.id] = (
-                    primaryKeys: existingCache?.primaryKeys,
+                    primaryKeys: primaryKeys,
                     columns: columns
                 )
             } catch {
