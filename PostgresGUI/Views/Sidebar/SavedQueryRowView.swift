@@ -6,6 +6,8 @@
 import SwiftUI
 
 struct SavedQueryRowView: View {
+    @Environment(AppState.self) private var appState
+
     let query: SavedQuery
     let isSelected: Bool
     let selectedQueryCount: Int
@@ -19,6 +21,11 @@ struct SavedQueryRowView: View {
 
     @State private var isHovered = false
     @State private var isButtonHovered = false
+
+    /// Whether this query is currently executing
+    private var isExecuting: Bool {
+        appState.query.executingSavedQueryId == query.id
+    }
 
     private var showMultiSelectActions: Bool {
         isSelected && (selectedQueryCount > 1 || selectedFolderCount > 0)
@@ -34,8 +41,15 @@ struct SavedQueryRowView: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
-            Image(systemName: "doc.text")
-                .foregroundColor(.secondary)
+            // Show loading indicator or document icon
+            if isExecuting {
+                ProgressView()
+                    .scaleEffect(0.5)
+                    .frame(width: 16, height: 16)
+            } else {
+                Image(systemName: "doc.text")
+                    .foregroundColor(.secondary)
+            }
             Text(query.name)
                 .lineLimit(1)
             Spacer()
