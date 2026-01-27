@@ -85,11 +85,19 @@ struct QueryResultsView: View {
     var onDeleteKeyPressed: (() -> Void)?
     var onSpaceKeyPressed: (() -> Void)?
 
+    /// Whether the current query (for this saved query) is executing
+    private var isCurrentQueryExecuting: Bool {
+        appState.query.executingSavedQueryId == appState.query.currentSavedQueryId &&
+        appState.query.executingSavedQueryId != nil
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            // Results or error display
+            // Results or error display - greyed out during execution
             resultsContent
                 .id(dateFormatSetting) // Force refresh when date format changes
+                .opacity(isCurrentQueryExecuting ? 0.4 : 1.0)
+                .allowsHitTesting(!isCurrentQueryExecuting)
 
             // Pagination row (only show if there's more than one page)
             if appState.query.currentPage > 0 || appState.query.hasNextPage {
@@ -125,10 +133,6 @@ struct QueryResultsView: View {
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if appState.query.isExecutingQuery {
-            // Show loading state while query executes
-            ProgressView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if appState.query.queryResults.isEmpty {
             // Show empty table with headers if column names are available
             if let columnNames = getColumnNames(), !columnNames.isEmpty {

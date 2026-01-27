@@ -85,28 +85,55 @@ class QueryEditorViewModel {
             return
         }
 
+        // Capture the tab that initiated this query
+        guard let executingTab = tabManager.activeTab else {
+            DebugLog.print("⚠️ [QueryEditorViewModel] No active tab")
+            return
+        }
+
+        let executingTabId = executingTab.id
         let queryText = appState.query.queryText
         let queryType = QueryTypeDetector.detect(queryText)
         let tableName = QueryTypeDetector.extractTableName(queryText)
 
-        // Set loading state - but keep previous results visible to prevent flicker
+        // Capture the saved query ID that initiated this execution
+        let executingSavedQueryId = appState.query.currentSavedQueryId
+
+        // Start execution tracking on the tab
+        executingTab.startQueryExecution()
+
+        // Set loading state on global QueryState (for active tab display)
         appState.query.startQueryExecution()
+        appState.query.executingSavedQueryId = executingSavedQueryId
 
         // Execute query using QueryService
         let result = await queryService.executeQuery(queryText)
 
+        // Finish execution tracking on the tab
+        executingTab.finishQueryExecution()
+
+        // Check if this tab is still the active tab AND the same saved query is still selected
+        let isStillActiveTab = tabManager.activeTab?.id == executingTabId
+        let isSameSavedQuery = appState.query.currentSavedQueryId == executingSavedQueryId
+
+        // Clear the executing saved query ID
+        appState.query.executingSavedQueryId = nil
+
         if result.isSuccess {
             if queryType.isMutation && result.rows.isEmpty {
                 // Mutation query with no returned rows: keep previous results, show toast
-                // Manually finish execution without updating results
-                appState.query.isExecutingQuery = false
-                appState.query.queryExecutionTime = result.executionTime
-                
-                appState.query.showMutationToast(
-                    type: queryType,
-                    tableName: tableName
-                )
-                appState.query.setTemporaryStatus("Executed in \(QueryState.formatExecutionTime(result.executionTime))")
+                // Only update UI if same query is still active
+                if isStillActiveTab && isSameSavedQuery {
+                    appState.query.isExecutingQuery = false
+                    appState.query.queryExecutionTime = result.executionTime
+                    appState.query.stopElapsedTimeTracking()
+
+                    appState.query.showMutationToast(
+                        type: queryType,
+                        tableName: tableName
+                    )
+                    appState.query.setTemporaryStatus("Executed in \(QueryState.formatExecutionTime(result.executionTime))")
+                }
                 DebugLog.print("✅ [QueryEditorViewModel] Mutation query executed, showing toast")
 
                 // Refresh table results if mutation was on the currently selected table
@@ -117,23 +144,34 @@ class QueryEditorViewModel {
                 }
             } else {
                 // Query returned rows (SELECT, or mutation with RETURNING): show results
-                appState.query.finishQueryExecution(with: result)
-                appState.query.setTemporaryStatus("Executed in \(QueryState.formatExecutionTime(result.executionTime))")
+                // Only update global state if same query is still active
+                if isStillActiveTab && isSameSavedQuery {
+                    appState.query.finishQueryExecution(with: result)
+                    appState.query.setTemporaryStatus("Executed in \(QueryState.formatExecutionTime(result.executionTime))")
+                }
                 DebugLog.print("✅ [QueryEditorViewModel] Query executed, showing \(result.rows.count) results")
 
-                // Cache results to tab for restoration on tab switch
-                DebugLog.print("💾 [QueryEditorViewModel] Caching \(result.rows.count) results to tab")
-                tabManager.updateActiveTabResults(
-                    results: result.rows,
-                    columnNames: result.columnNames.isEmpty ? nil : result.columnNames
-                )
+                // Cache results to the executing tab (even if user switched away)
+                DebugLog.print("💾 [QueryEditorViewModel] Caching \(result.rows.count) results to tab \(executingTabId)")
+                executingTab.cachedResults = result.rows
+                executingTab.cachedColumnNames = result.columnNames.isEmpty ? nil : result.columnNames
 
-                // Cache results in-memory for restoration when switching queries
-                if let savedQueryId = appState.query.currentSavedQueryId {
+                // Also update via tabManager if this is still the active tab and same query
+                if isStillActiveTab && isSameSavedQuery {
+                    tabManager.updateActiveTabResults(
+                        results: result.rows,
+                        columnNames: result.columnNames.isEmpty ? nil : result.columnNames
+                    )
+                }
+
+                // Cache results in-memory for the executing saved query (not current one)
+                if let savedQueryId = executingSavedQueryId {
                     let columnNames = result.columnNames.isEmpty ? [] : result.columnNames
                     appState.query.cacheResults(for: savedQueryId, rows: result.rows, columnNames: columnNames)
-                    appState.query.lastExecutedAt = Date()
-                    DebugLog.print("💾 [QueryEditorViewModel] Cached \(result.rows.count) results in-memory for SavedQuery")
+                    if isSameSavedQuery {
+                        appState.query.lastExecutedAt = Date()
+                    }
+                    DebugLog.print("💾 [QueryEditorViewModel] Cached \(result.rows.count) results in-memory for SavedQuery \(savedQueryId)")
                 }
             }
 
@@ -152,15 +190,17 @@ class QueryEditorViewModel {
                 }
             }
         } else {
-            // Handle error
-            appState.query.finishQueryExecution(with: result)
+            // Handle error - update global state only if same query is still active
+            if isStillActiveTab && isSameSavedQuery {
+                appState.query.finishQueryExecution(with: result)
 
-            // Show truncated error message
-            let errorMessage = PostgresError.extractDetailedMessage(result.error!)
-            let truncatedError = errorMessage.count > 50
-                ? String(errorMessage.prefix(47)) + "..."
-                : errorMessage
-            appState.query.setTemporaryStatus("Error: \(truncatedError)")
+                // Show truncated error message
+                let errorMessage = PostgresError.extractDetailedMessage(result.error!)
+                let truncatedError = errorMessage.count > 50
+                    ? String(errorMessage.prefix(47)) + "..."
+                    : errorMessage
+                appState.query.setTemporaryStatus("Error: \(truncatedError)")
+            }
 
             DebugLog.print("❌ [QueryEditorViewModel] Query execution failed: \(result.error!)")
         }

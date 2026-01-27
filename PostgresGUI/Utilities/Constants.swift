@@ -61,6 +61,7 @@ enum Constants {
     // Timeouts
     enum Timeout {
         /// Default timeout for database operations (queries, table loading)
-        static let databaseOperation: TimeInterval = 15.0
+        /// Set to 5 minutes to allow long-running queries while still providing safety
+        static let databaseOperation: TimeInterval = 300.0
     }
 }

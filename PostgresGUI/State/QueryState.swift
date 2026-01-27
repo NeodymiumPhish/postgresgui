@@ -79,6 +79,15 @@ class QueryState {
     var currentQueryTask: Task<Void, Never>? = nil
     var queryCounter: Int = 0
 
+    /// The SavedQuery.id that initiated the currently executing query (if any)
+    /// Used to track which query should receive the results and show loading indicator
+    var executingSavedQueryId: UUID? = nil
+
+    // Elapsed time tracking for running queries
+    var queryStartTime: Date? = nil
+    var displayedElapsedTime: TimeInterval = 0
+    private var elapsedTimeTimer: Task<Void, Never>? = nil
+
     // Results version tracking (for optimistic update rollback safety)
     var resultsVersion: Int = 0
 
@@ -134,11 +143,52 @@ class QueryState {
         mutationToast = nil
     }
 
-    /// Cancel the current running query
+    /// Cancel the current running query and clear results
     func cancelCurrentQuery() {
         currentQueryTask?.cancel()
         currentQueryTask = nil
         queryCounter += 1
+        stopElapsedTimeTracking()
+        isExecutingQuery = false
+        executingSavedQueryId = nil
+        // Clear results when query is cancelled
+        clearQueryResults()
+        setTemporaryStatus("Query cancelled")
+    }
+
+    // MARK: - Elapsed Time Tracking
+
+    /// Start tracking elapsed time for a running query
+    func startElapsedTimeTracking() {
+        queryStartTime = Date()
+        displayedElapsedTime = 0
+        elapsedTimeTimer?.cancel()
+        elapsedTimeTimer = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                guard !Task.isCancelled, let start = self.queryStartTime else { return }
+                self.displayedElapsedTime = Date().timeIntervalSince(start)
+            }
+        }
+    }
+
+    /// Stop tracking elapsed time
+    func stopElapsedTimeTracking() {
+        elapsedTimeTimer?.cancel()
+        elapsedTimeTimer = nil
+        queryStartTime = nil
+    }
+
+    /// Format elapsed time for display (e.g., "1.2s" or "1:23.4")
+    static func formatElapsedTime(_ interval: TimeInterval) -> String {
+        let minutes = Int(interval) / 60
+        let seconds = Int(interval) % 60
+        let tenths = Int((interval.truncatingRemainder(dividingBy: 1)) * 10)
+
+        if minutes > 0 {
+            return String(format: "%d:%02d.%d", minutes, seconds, tenths)
+        }
+        return String(format: "%d.%d s", seconds, tenths)
     }
 
     // MARK: - Query Execution State Helpers
@@ -148,10 +198,12 @@ class QueryState {
         isExecutingQuery = true
         queryError = nil
         queryExecutionTime = nil
+        startElapsedTimeTracking()
     }
 
     /// Finish query execution with a result
     func finishQueryExecution(with result: QueryResult) {
+        stopElapsedTimeTracking()
         queryExecutionTime = result.executionTime
         if result.isSuccess {
             updateQueryResults(result.rows, columnNames: result.columnNames)
@@ -192,6 +244,7 @@ class QueryState {
         queryColumnNames = nil
         cachedResultsTableId = nil
         isExecutingQuery = false
+        executingSavedQueryId = nil
         queryError = nil
         showQueryResults = false
         showTimeoutAlert = false
@@ -214,6 +267,7 @@ class QueryState {
 
     /// Clean up when window closes
     func cleanup() {
+        stopElapsedTimeTracking()
         cancelCurrentQuery()
         reset()
     }

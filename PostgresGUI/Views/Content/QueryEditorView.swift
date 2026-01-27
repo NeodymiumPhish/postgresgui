@@ -14,25 +14,50 @@ struct QueryEditorView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: QueryEditorViewModel?
 
+    /// Check if the current query (for this saved query) is executing
+    private var isCurrentQueryExecuting: Bool {
+        appState.query.executingSavedQueryId == appState.query.currentSavedQueryId &&
+        appState.query.executingSavedQueryId != nil
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            // Toolbar with execute button and stats
+            // Toolbar with execute/cancel button and stats
             HStack(spacing: 4) {
-                Button(action: {
-                    Task {
-                        await viewModel?.executeQuery()
+                if isCurrentQueryExecuting {
+                    // Cancel Query button when this query is executing
+                    Button(action: {
+                        tabManager.activeTab?.cancelQuery()
+                        appState.query.cancelCurrentQuery()
+                    }) {
+                        Label {
+                            Text("Cancel Query")
+                        } icon: {
+                            Image(systemName: "xmark.circle.fill")
+                        }
                     }
-                }) {
-                    Label {
-                        Text("Run Query")
-                    } icon: {
-                        Image(systemName: "play.circle.fill")
+                    .buttonStyle(.glass)
+                    .clipShape(Capsule())
+                    .tint(.red)
+                    .keyboardShortcut(.escape, modifiers: [])
+                } else {
+                    // Run Query button when not executing
+                    Button(action: {
+                        Task {
+                            await viewModel?.executeQuery()
+                        }
+                    }) {
+                        Label {
+                            Text("Run Query")
+                        } icon: {
+                            Image(systemName: "play.circle.fill")
+                        }
                     }
+                    .buttonStyle(.glass)
+                    .clipShape(Capsule())
+                    .tint(.green)
+                    .keyboardShortcut(.return, modifiers: [.command])
                 }
-                .buttonStyle(.glass)
-                .clipShape(Capsule())
-                .tint(.green)
-                .keyboardShortcut(.return, modifiers: [.command])
 
                 Spacer()
 
@@ -95,10 +120,14 @@ struct QueryEditorView: View {
 
     @ViewBuilder
     private var statusView: some View {
-        if appState.query.isExecutingQuery {
-            Text("Running...")
-                .foregroundColor(.secondary)
-                .font(.system(size: Constants.FontSize.small))
+        if isCurrentQueryExecuting {
+            HStack(spacing: 4) {
+                ProgressView()
+                    .scaleEffect(0.5)
+                Text(QueryState.formatElapsedTime(appState.query.displayedElapsedTime))
+                    .foregroundColor(.secondary)
+                    .font(.system(size: Constants.FontSize.small, design: .monospaced))
+            }
         } else if let statusMessage = appState.query.statusMessage {
             Text(statusMessage)
                 .foregroundColor(.secondary)

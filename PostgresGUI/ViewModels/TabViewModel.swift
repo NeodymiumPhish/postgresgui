@@ -40,6 +40,23 @@ final class TabViewModel: Identifiable {
     /// Track if this tab has been marked for deletion
     var isPendingDeletion: Bool = false
 
+    // MARK: - Per-Tab Query Execution State
+
+    /// Whether this tab has a query currently executing
+    var isExecutingQuery: Bool = false
+
+    /// When the current query started (for elapsed time calculation)
+    var queryStartTime: Date? = nil
+
+    /// Displayed elapsed time (updated by timer)
+    var displayedElapsedTime: TimeInterval = 0
+
+    /// The task running the current query (for cancellation)
+    var currentQueryTask: Task<Void, Never>? = nil
+
+    /// Timer task for updating elapsed time display
+    private var elapsedTimeTimer: Task<Void, Never>? = nil
+
     init(
         id: UUID = UUID(),
         connectionId: UUID? = nil,
@@ -108,7 +125,9 @@ final class TabViewModel: Identifiable {
             selectedTableName: selectedTableName,
             selectedSchemaFilter: selectedSchemaFilter,
             cachedResults: cachedResults,
-            cachedColumnNames: cachedColumnNames
+            cachedColumnNames: cachedColumnNames,
+            isExecutingQuery: isExecutingQuery,
+            displayedElapsedTime: displayedElapsedTime
         )
     }
 
@@ -116,6 +135,52 @@ final class TabViewModel: Identifiable {
     func clearCachedResults() {
         cachedResults = nil
         cachedColumnNames = nil
+    }
+
+    // MARK: - Query Execution Methods
+
+    /// Start tracking a query execution on this tab
+    func startQueryExecution() {
+        isExecutingQuery = true
+        queryStartTime = Date()
+        displayedElapsedTime = 0
+
+        // Start elapsed time timer
+        elapsedTimeTimer?.cancel()
+        elapsedTimeTimer = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                guard !Task.isCancelled, let self = self, let start = self.queryStartTime else { return }
+                self.displayedElapsedTime = Date().timeIntervalSince(start)
+            }
+        }
+    }
+
+    /// Finish query execution on this tab
+    func finishQueryExecution() {
+        isExecutingQuery = false
+        elapsedTimeTimer?.cancel()
+        elapsedTimeTimer = nil
+        currentQueryTask = nil
+        // Keep queryStartTime and displayedElapsedTime for display purposes
+    }
+
+    /// Cancel the currently running query on this tab
+    func cancelQuery() {
+        currentQueryTask?.cancel()
+        currentQueryTask = nil
+        finishQueryExecution()
+    }
+
+    /// Format elapsed time for display
+    static func formatElapsedTime(_ interval: TimeInterval) -> String {
+        if interval < 60 {
+            return String(format: "%.1fs", interval)
+        } else {
+            let minutes = Int(interval) / 60
+            let seconds = interval.truncatingRemainder(dividingBy: 60)
+            return String(format: "%d:%05.2f", minutes, seconds)
+        }
     }
 }
 
@@ -133,4 +198,6 @@ struct TabSnapshot: Sendable {
     let selectedSchemaFilter: String?
     let cachedResults: [TableRow]?
     let cachedColumnNames: [String]?
+    let isExecutingQuery: Bool
+    let displayedElapsedTime: TimeInterval
 }
