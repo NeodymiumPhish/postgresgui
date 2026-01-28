@@ -11,6 +11,12 @@ import AppKit
 
 @main
 struct PostgresGUIApp: App {
+    init() {
+        #if DEBUG
+        DebugLog.configureLogging()
+        #endif
+    }
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             ConnectionProfile.self,
