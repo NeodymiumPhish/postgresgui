@@ -7,33 +7,6 @@
 
 import SwiftUI
 
-// MARK: - Timestamp Detection Utilities
-
-private enum TimestampUtils {
-    static let patterns = [
-        "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}",
-        "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}",
-        "^\\d{4}-\\d{2}-\\d{2}$"
-    ]
-
-    static func isTimestamp(_ value: String) -> Bool {
-        patterns.contains { value.range(of: $0, options: .regularExpression) != nil }
-    }
-
-    static func parseDate(_ value: String) -> Date? {
-        let iso8601 = ISO8601DateFormatter()
-        iso8601.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = iso8601.date(from: value) { return date }
-
-        for format in ["yyyy-MM-dd HH:mm:ss.SSSSSS", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd"] {
-            let formatter = DateFormatter()
-            formatter.dateFormat = format
-            if let date = formatter.date(from: value) { return date }
-        }
-        return nil
-    }
-}
-
 // MARK: - Table Row Comparator
 
 struct TableRowComparator: SortComparator, Hashable {
@@ -51,14 +24,6 @@ struct TableRowComparator: SortComparator, Hashable {
         case (nil, _): return .orderedDescending
         case (_, nil): return .orderedAscending
         case let (v1?, v2?):
-            if let num1 = Double(v1), let num2 = Double(v2) {
-                return num1 < num2 ? .orderedAscending : (num1 > num2 ? .orderedDescending : .orderedSame)
-            }
-            if TimestampUtils.isTimestamp(v1) && TimestampUtils.isTimestamp(v2),
-               let date1 = TimestampUtils.parseDate(v1),
-               let date2 = TimestampUtils.parseDate(v2) {
-                return date1 < date2 ? .orderedAscending : (date1 > date2 ? .orderedDescending : .orderedSame)
-            }
             return v1.localizedStandardCompare(v2)
         }
     }
@@ -79,8 +44,6 @@ struct QueryResultsView: View {
     @Environment(TabManager.self) private var tabManager
     @State private var viewModel: QueryResultsViewModel?
     @State private var sortOrder: [TableRowComparator] = []
-    // Tracks date format changes to trigger view refresh
-    @AppStorage(SettingsKeys.dateFormat) private var dateFormatSetting: String = DateFormat.iso.rawValue
     var searchText: String = ""
     var onDeleteKeyPressed: (() -> Void)?
     var onSpaceKeyPressed: (() -> Void)?
@@ -95,7 +58,6 @@ struct QueryResultsView: View {
         VStack(spacing: 0) {
             // Results or error display - greyed out during execution
             resultsContent
-                .id(dateFormatSetting) // Force refresh when date format changes
                 .opacity(isCurrentQueryExecuting ? 0.4 : 1.0)
                 .allowsHitTesting(!isCurrentQueryExecuting)
 
@@ -269,6 +231,6 @@ struct QueryResultsView: View {
 
     private func formatValue(_ value: String?) -> String {
         guard let value = value else { return "NULL" }
-        return TimestampUtils.isTimestamp(value) ? Formatters.formatTimestamp(value) : value
+        return value
     }
 }

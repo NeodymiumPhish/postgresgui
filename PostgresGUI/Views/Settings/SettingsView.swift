@@ -8,28 +8,14 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @Bindable private var settings = AppSettings.shared
-
     var body: some View {
-        Form {
-            Section("Date Format") {
-                Picker("Format", selection: $settings.dateFormat) {
-                    ForEach(DateFormat.allCases) { format in
-                        HStack {
-                            Text(format.displayName)
-                            Spacer()
-                            Text(format.example)
-                                .foregroundStyle(.secondary)
-                                .font(.caption)
-                        }
-                        .tag(format)
-                    }
-                }
-                .pickerStyle(.radioGroup)
-            }
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Settings")
+                .font(.title2)
+            Text("No configurable settings are available.")
+                .foregroundStyle(.secondary)
         }
-        .formStyle(.grouped)
-        .frame(width: 400, height: 220)
+        .frame(width: 400, height: 220, alignment: .topLeading)
         .padding()
     }
 }
