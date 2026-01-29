@@ -12,6 +12,11 @@ import Logging
 /// All logs are suppressed in Release builds for performance and privacy
 enum DebugLog {
 #if DEBUG
+    // Log directory path. If empty, file logging is disabled.
+    // If set, logs will be written to this directory/Logs/ with a new file created on each app run.
+    // Logs are never deleted - each run creates a new timestamped log file.
+    private static let logDirectory: String = ""
+    
     private static var isLoggingConfigured = false
     private static let loggingQueue = DispatchQueue(label: "com.postgresgui.debuglog", qos: .utility)
     private static let logTimestampFormatter: DateFormatter = {
@@ -32,8 +37,12 @@ enum DebugLog {
     static func configureLogging() {
         guard !isLoggingConfigured else { return }
         isLoggingConfigured = true
-
+        
+        // If logDirectory is empty, skip file logging
+        guard !logDirectory.isEmpty else { return }
+        
         let logFileURL = makeLogFileURL()
+        Swift.print("📝 Debug logs will be written to: \(logFileURL.path)")
         LoggingSystem.bootstrap { label in
             DebugFileLogHandler(
                 label: label,
@@ -49,16 +58,6 @@ enum DebugLog {
     static func print(_ items: Any..., separator: String = " ", terminator: String = "\n") {
         #if DEBUG
         Swift.print(items.map { "\($0)" }.joined(separator: separator), terminator: terminator)
-        #endif
-    }
-    
-    /// Print a formatted message only in Debug builds
-    /// - Parameters:
-    ///   - format: Format string
-    ///   - arguments: Arguments to format
-    static func printf(_ format: String, _ arguments: CVarArg...) {
-        #if DEBUG
-        Swift.print(String(format: format, arguments: arguments))
         #endif
     }
 }
@@ -96,12 +95,7 @@ private struct DebugFileLogHandler: LogHandler {
         self.queue = queue
 
         FileManager.default.createFile(atPath: logFileURL.path, contents: nil)
-        if let handle = try? FileHandle(forWritingTo: logFileURL) {
-            self.fileHandle = handle
-            try? handle.seekToEnd()
-        } else {
-            self.fileHandle = nil
-        }
+        self.fileHandle = try? FileHandle(forWritingTo: logFileURL)
     }
 
     subscript(metadataKey metadataKey: String) -> Logger.Metadata.Value? {
@@ -126,13 +120,8 @@ private struct DebugFileLogHandler: LogHandler {
         queue.async {
             let timestamp = DebugLog.localTimestamp()
             let lineText = "\(timestamp) [\(level)] \(label): \(message)\(metadataString)\n"
-            guard let data = lineText.data(using: .utf8) else { return }
-
-            if let handle = fileHandle {
-                try? handle.write(contentsOf: data)
-            } else {
-                try? FileHandle.standardError.write(contentsOf: data)
-            }
+            guard let data = lineText.data(using: .utf8), let handle = fileHandle else { return }
+            try? handle.write(contentsOf: data)
         }
     }
 }
@@ -143,13 +132,11 @@ private extension DebugLog {
     }
 
     static func makeLogFileURL() -> URL {
-        let env = ProcessInfo.processInfo.environment
-        let projectDir = env["PROJECT_DIR"] ?? FileManager.default.currentDirectoryPath
-        let logsDir = URL(fileURLWithPath: projectDir, isDirectory: true)
+        let logsDir = URL(fileURLWithPath: logDirectory, isDirectory: true)
             .appendingPathComponent("Logs", isDirectory: true)
-
+        
         try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
-
+        
         let filename = "postgresgui-\(filenameTimestampFormatter.string(from: Date())).log"
         return logsDir.appendingPathComponent(filename)
     }
