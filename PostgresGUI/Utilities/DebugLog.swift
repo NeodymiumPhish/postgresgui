@@ -15,7 +15,7 @@ enum DebugLog {
     // Log directory path. If empty, file logging is disabled.
     // If set, logs will be written to this directory/Logs/ with a new file created on each app run.
     // Logs are never deleted - each run creates a new timestamped log file.
-    private static let logDirectory: String = ""
+    private static let LOG_DIRECTORY: String = ""
     
     private static var isLoggingConfigured = false
     private static let loggingQueue = DispatchQueue(label: "com.postgresgui.debuglog", qos: .utility)
@@ -38,8 +38,8 @@ enum DebugLog {
         guard !isLoggingConfigured else { return }
         isLoggingConfigured = true
         
-        // If logDirectory is empty, skip file logging
-        guard !logDirectory.isEmpty else { return }
+        // If LOG_DIRECTORY is empty, skip file logging
+        guard !LOG_DIRECTORY.isEmpty else { return }
         
         let logFileURL = makeLogFileURL()
         Swift.print("📝 Debug logs will be written to: \(logFileURL.path)")
@@ -132,7 +132,7 @@ private extension DebugLog {
     }
 
     static func makeLogFileURL() -> URL {
-        let logsDir = URL(fileURLWithPath: logDirectory, isDirectory: true)
+        let logsDir = URL(fileURLWithPath: LOG_DIRECTORY, isDirectory: true)
             .appendingPathComponent("Logs", isDirectory: true)
         
         try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
