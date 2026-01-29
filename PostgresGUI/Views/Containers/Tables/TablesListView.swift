@@ -168,7 +168,7 @@ struct TablesListIsolated: View {
     }
 }
 
-// MARK: - Table Row View
+// MARK: - Table Row View (Container)
 
 struct TableListRowView: View {
     @Environment(AppState.self) private var appState
@@ -178,8 +178,6 @@ struct TableListRowView: View {
     let refreshQueryAction: (TableInfo) async -> Void
     var showSchemaPrefix: Bool = true
 
-    @State private var isHovered = false
-    @State private var isButtonHovered = false
     @State private var viewModel: TableContextMenuViewModel?
     @State private var isLoadingColumns = false
 
@@ -193,95 +191,50 @@ struct TableListRowView: View {
         appState.connection.getColumnInfo(for: table)
     }
 
-    /// Display name based on whether schema prefix should be shown
-    private var displayText: String {
-        showSchemaPrefix ? table.displayName : table.name
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Main table row
-            tableHeader
-
-            // Column list (shown when expanded)
-            if isExpanded {
-                columnsList
+        TableListRowComponent(
+            table: table,
+            isExpanded: isExpanded,
+            isExecutingQuery: isExecutingQuery,
+            columnInfo: columnInfo,
+            isLoadingColumns: isLoadingColumns,
+            showSchemaPrefix: showSchemaPrefix,
+            onToggleExpanded: {
+                toggleExpanded()
+            },
+            onShowAllRows: {
+                Task {
+                    appState.connection.selectedTable = table
+                    await appState.executeTableQuery(for: table)
+                }
+            },
+            onShowLimitedRows: {
+                Task {
+                    appState.connection.selectedTable = table
+                    await appState.executeTableQuery(for: table, limit: 100)
+                }
+            },
+            refreshQueryAction: {
+                Task {
+                    await refreshQueryAction(table)
+                }
+            },
+            onGenerateDDL: {
+                Task {
+                    await ensureViewModel().generateDDL()
+                }
+            },
+            onShowExport: {
+                ensureViewModel().showExportSheet = true
+            },
+            onTruncate: {
+                ensureViewModel().showTruncateConfirmation = true
+            },
+            onDrop: {
+                ensureViewModel().showDropConfirmation = true
             }
-        }
-        .contextMenu {
-            tableMenuContent
-        }
+        )
         .modifier(TableContextMenuModalsWrapper(viewModel: $viewModel))
-    }
-
-    // MARK: - Table Header
-
-    private var tableHeader: some View {
-        HStack(spacing: 8) {
-            // Expand/collapse chevron
-            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
-                .frame(width: 12)
-
-            Image(systemName: table.tableType == .foreign ? "tablecells.fill" : "tablecells")
-                .foregroundColor(.secondary)
-            Text(displayText)
-                .lineLimit(1)
-            Spacer()
-
-            Menu {
-                tableMenuContent
-            } label: {
-                Image(systemName: "ellipsis")
-                    .foregroundColor(isButtonHovered ? .primary : .secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 6)
-                    .background(isButtonHovered ? Color.secondary.opacity(0.2) : Color.clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                    .opacity((isHovered || isButtonHovered) ? 1.0 : 0.0)
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering in
-                isButtonHovered = hovering
-            }
-        }
-        .padding(.vertical, 1)
-        .padding(.horizontal, 6)
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            isHovered = hovering
-        }
-        .onTapGesture {
-            toggleExpanded()
-        }
-    }
-
-    // MARK: - Columns List
-
-    private var columnsList: some View {
-        Group {
-            if isLoadingColumns {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .scaleEffect(0.7)
-                    Spacer()
-                }
-                .padding(.vertical, 4)
-                .padding(.leading, 44)
-            } else if let columns = columnInfo, !columns.isEmpty {
-                ForEach(columns) { column in
-                    TableColumnRowView(column: column)
-                }
-            } else {
-                Text("No columns found")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.leading, 44)
-                    .padding(.vertical, 2)
-            }
-        }
     }
 
     // MARK: - Actions
@@ -339,8 +292,6 @@ struct TableListRowView: View {
         }
     }
 
-    // MARK: - Menu Content
-
     /// Ensures the viewModel exists, creating it lazily if needed.
     /// Called when menu actions require the ViewModel.
     private func ensureViewModel() -> TableContextMenuViewModel {
@@ -350,80 +301,6 @@ struct TableListRowView: View {
         let vm = TableContextMenuViewModel(table: table, appState: appState)
         viewModel = vm
         return vm
-    }
-
-    @ViewBuilder
-    private var tableMenuContent: some View {
-        // Show table data options
-        Button {
-            Task {
-                appState.connection.selectedTable = table
-                await appState.executeTableQuery(for: table)
-            }
-        } label: {
-            Label("Show All Rows", systemImage: "list.bullet")
-        }
-        .disabled(isExecutingQuery)
-
-        Button {
-            Task {
-                appState.connection.selectedTable = table
-                await appState.executeTableQuery(for: table, limit: 100)
-            }
-        } label: {
-            Label("Show 100 Rows", systemImage: "list.bullet")
-        }
-        .disabled(isExecutingQuery)
-
-        Divider()
-
-        // Refresh
-        Button {
-            Task {
-                await refreshQueryAction(table)
-            }
-        } label: {
-            Label("Refresh", systemImage: "arrow.clockwise")
-        }
-        .disabled(isExecutingQuery)
-
-        Divider()
-
-        // Generate DDL
-        Button {
-            Task {
-                await ensureViewModel().generateDDL()
-            }
-        } label: {
-            Label("Generate DDL", systemImage: "doc.text")
-        }
-        .disabled(isExecutingQuery)
-
-        // Export
-        Button {
-            ensureViewModel().showExportSheet = true
-        } label: {
-            Label("Export...", systemImage: "square.and.arrow.up")
-        }
-        .disabled(isExecutingQuery)
-
-        Divider()
-
-        // Truncate (destructive)
-        Button(role: .destructive) {
-            ensureViewModel().showTruncateConfirmation = true
-        } label: {
-            Label("Truncate...", systemImage: "trash.slash")
-        }
-        .disabled(isExecutingQuery)
-
-        // Drop (destructive)
-        Button(role: .destructive) {
-            ensureViewModel().showDropConfirmation = true
-        } label: {
-            Label("Drop...", systemImage: "trash")
-        }
-        .disabled(isExecutingQuery)
     }
 }
 

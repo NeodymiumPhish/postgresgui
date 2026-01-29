@@ -1,8 +1,9 @@
 //
-//  QueryResultsView.swift
+//  QueryResultsComponent.swift
 //  PostgresGUI
 //
-//  Displays query results in a table. Delegates business logic to QueryResultsViewModel.
+//  Presentational component for displaying query results.
+//  Receives data and callbacks - does not access AppState directly.
 //
 
 import SwiftUI
@@ -39,49 +40,64 @@ private extension ComparisonResult {
     }
 }
 
-struct QueryResultsView: View {
-    @Environment(AppState.self) private var appState
-    @Environment(TabManager.self) private var tabManager
-    @State private var viewModel: QueryResultsViewModel?
-    @State private var sortOrder: [TableRowComparator] = []
-    var searchText: String = ""
+// MARK: - Query Results Component
+
+struct QueryResultsComponent: View {
+    // Data
+    let results: [TableRow]
+    let columnNames: [String]?
+    let searchText: String
+    let isExecuting: Bool
+    let errorMessage: String?
+    let hasExecutedQuery: Bool
+    let currentPage: Int
+    let hasNextPage: Bool
+    let tableId: String?
+    
+    // Bindings
+    @Binding var selectedRowIDs: Set<TableRow.ID>
+    
+    // Callbacks
+    let onPreviousPage: () -> Void
+    let onNextPage: () -> Void
     var onDeleteKeyPressed: (() -> Void)?
     var onSpaceKeyPressed: (() -> Void)?
-
-    /// Whether the current query (for this saved query) is executing
-    private var isCurrentQueryExecuting: Bool {
-        appState.query.executingSavedQueryId == appState.query.currentSavedQueryId &&
-        appState.query.executingSavedQueryId != nil
+    
+    // Local state for sorting
+    @State private var sortOrder: [TableRowComparator] = []
+    
+    private var hasPreviousPage: Bool {
+        currentPage > 0
+    }
+    
+    private var showPagination: Bool {
+        currentPage > 0 || hasNextPage
     }
 
     var body: some View {
         VStack(spacing: 0) {
             // Results or error display - greyed out during execution
             resultsContent
-                .opacity(isCurrentQueryExecuting ? 0.4 : 1.0)
-                .allowsHitTesting(!isCurrentQueryExecuting)
+                .opacity(isExecuting ? 0.4 : 1.0)
+                .allowsHitTesting(!isExecuting)
 
             // Pagination row (only show if there's more than one page)
-            if appState.query.currentPage > 0 || appState.query.hasNextPage {
+            if showPagination {
                 paginationBar
             }
         }
         .padding(.leading, 4)
-        .onAppear {
-            viewModel = QueryResultsViewModel(appState: appState, tabManager: tabManager)
-        }
-        .onChange(of: appState.connection.selectedTable?.id) { oldValue, newValue in
+        .onChange(of: tableId) { oldValue, newValue in
             // Reset sort order when table changes
             if oldValue != newValue {
                 sortOrder = []
             }
-            viewModel?.handleTableSelectionChange(oldValue: oldValue, newValue: newValue)
         }
     }
 
     @ViewBuilder
     private var resultsContent: some View {
-        if let errorMessage = appState.query.queryErrorMessage {
+        if let errorMessage = errorMessage {
             ContentUnavailableView {
                 Label {
                     Text("Query Failed")
@@ -95,17 +111,17 @@ struct QueryResultsView: View {
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if appState.query.queryResults.isEmpty {
+        } else if results.isEmpty {
             // Show empty table with headers if column names are available
-            if let columnNames = getColumnNames(), !columnNames.isEmpty {
+            if let columnNames = columnNames, !columnNames.isEmpty {
                 // Empty table with overlay empty state message
                 emptyTableWithHeaders(columnNames: columnNames)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(alignment: .center) {
-                        EmptyQueryResultsView(hasExecutedQuery: appState.query.showQueryResults)
+                        EmptyQueryResultsView(hasExecutedQuery: hasExecutedQuery)
                     }
             } else {
-                EmptyQueryResultsView(hasExecutedQuery: appState.query.showQueryResults)
+                EmptyQueryResultsView(hasExecutedQuery: hasExecutedQuery)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else {
@@ -117,7 +133,7 @@ struct QueryResultsView: View {
     @ViewBuilder
     private var paginationBar: some View {
         HStack {
-            Text("\(appState.query.queryResults.count) rows")
+            Text("\(results.count) rows")
                 .font(.system(.body, design: .monospaced))
                 .foregroundStyle(.secondary)
 
@@ -125,24 +141,24 @@ struct QueryResultsView: View {
 
             HStack(spacing: 12) {
                 Button {
-                    viewModel?.goToPreviousPage()
+                    onPreviousPage()
                 } label: {
                     Image(systemName: "chevron.left")
                 }
                 .buttonStyle(.borderless)
-                .disabled(!canGoToPreviousPage(currentPage: appState.query.currentPage) || appState.query.isExecutingQuery)
+                .disabled(!hasPreviousPage || isExecuting)
 
-                Text("Page \(appState.query.currentPage + 1)")
+                Text("Page \(currentPage + 1)")
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(.secondary)
 
                 Button {
-                    viewModel?.goToNextPage()
+                    onNextPage()
                 } label: {
                     Image(systemName: "chevron.right")
                 }
                 .buttonStyle(.borderless)
-                .disabled(!appState.query.hasNextPage || appState.query.isExecutingQuery)
+                .disabled(!hasNextPage || isExecuting)
             }
         }
         .padding(.horizontal, 12)
@@ -155,11 +171,8 @@ struct QueryResultsView: View {
 
     @ViewBuilder
     private var resultsTable: some View {
-        if let columnNames = getColumnNames() {
-            Table(sortedResults, selection: Binding(
-                get: { appState.query.selectedRowIDs },
-                set: { appState.query.selectedRowIDs = $0 }
-            ), sortOrder: $sortOrder) {
+        if let columnNames = columnNames {
+            Table(sortedResults, selection: $selectedRowIDs, sortOrder: $sortOrder) {
                 TableColumnForEach(columnNames, id: \.self) { columnName in
                     TableColumn(columnName, sortUsing: TableRowComparator(columnName: columnName)) { row in
                         Text(formatValue(row.values[columnName] ?? nil))
@@ -169,14 +182,14 @@ struct QueryResultsView: View {
                     .width(min: Constants.ColumnWidth.tableColumnMin)
                 }
             }
-            .id(appState.connection.selectedTable?.id)
+            .id(tableId)
             .onDeleteCommand {
-                if !appState.query.selectedRowIDs.isEmpty {
+                if !selectedRowIDs.isEmpty {
                     onDeleteKeyPressed?()
                 }
             }
             .onKeyPress(.space) {
-                if !appState.query.selectedRowIDs.isEmpty {
+                if !selectedRowIDs.isEmpty {
                     onSpaceKeyPressed?()
                     return .handled
                 }
@@ -197,13 +210,13 @@ struct QueryResultsView: View {
                 .width(min: Constants.ColumnWidth.tableColumnMin)
             }
         }
-        .id(appState.connection.selectedTable?.id)
+        .id(tableId)
     }
 
     private var filteredResults: [TableRow] {
-        guard !searchText.isEmpty else { return appState.query.queryResults }
+        guard !searchText.isEmpty else { return results }
         let lowercasedSearch = searchText.lowercased()
-        return appState.query.queryResults.filter { row in
+        return results.filter { row in
             row.values.values.contains { value in
                 guard let value = value else { return false }
                 return value.lowercased().contains(lowercasedSearch)
@@ -213,20 +226,6 @@ struct QueryResultsView: View {
 
     private var sortedResults: [TableRow] {
         filteredResults.sorted(using: sortOrder)
-    }
-
-    private func getColumnNames() -> [String]? {
-        // First try to get column names from stored queryColumnNames (works even for empty results)
-        if let columnNames = appState.query.queryColumnNames, !columnNames.isEmpty {
-            return columnNames
-        }
-
-        // Fallback: Extract column names from the first row
-        guard let firstRow = appState.query.queryResults.first else {
-            return nil
-        }
-        // Sort column names alphabetically for consistent ordering
-        return Array(firstRow.values.keys.sorted())
     }
 
     private func formatValue(_ value: String?) -> String {

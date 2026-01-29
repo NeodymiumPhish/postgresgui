@@ -241,7 +241,21 @@ struct SavedQueriesSidebarSection: View {
                 set: { viewModel.queryToEdit = $0 }
             )
         ) { query in
-            EditQuerySheet(query: query)
+            EditQuerySheet(
+                initialName: query.name,
+                onSave: { newName in
+                    query.name = newName
+                    query.updatedAt = Date()
+                    // Update toolbar if this is the currently selected query
+                    if appState.query.currentSavedQueryId == query.id {
+                        appState.query.currentQueryName = newName
+                    }
+                    viewModel.queryToEdit = nil
+                },
+                onCancel: {
+                    viewModel.queryToEdit = nil
+                }
+            )
         }
         .sheet(
             item: Binding(
@@ -249,7 +263,17 @@ struct SavedQueriesSidebarSection: View {
                 set: { viewModel.folderToEdit = $0 }
             )
         ) { folder in
-            EditFolderSheet(folder: folder)
+            EditFolderSheet(
+                initialName: folder.name,
+                onSave: { newName in
+                    folder.name = newName
+                    folder.updatedAt = Date()
+                    viewModel.folderToEdit = nil
+                },
+                onCancel: {
+                    viewModel.folderToEdit = nil
+                }
+            )
         }
         .sheet(
             isPresented: Binding(
@@ -257,7 +281,30 @@ struct SavedQueriesSidebarSection: View {
                 set: { if !$0 { viewModel.queriesToMove = [] } }
             )
         ) {
-            MoveToFolderSheet(queries: viewModel.queriesToMove, folders: folders)
+            MoveToFolderSheet(
+                queryCount: viewModel.queriesToMove.count,
+                folders: folders,
+                currentFolderIds: Set(viewModel.queriesToMove.map { $0.folder?.id }),
+                onMoveToFolder: { folder in
+                    for query in viewModel.queriesToMove {
+                        query.folder = folder
+                        query.updatedAt = Date()
+                    }
+                    viewModel.queriesToMove = []
+                },
+                onCreateFolderAndMove: { folderName in
+                    let newFolder = QueryFolder(name: folderName)
+                    modelContext.insert(newFolder)
+                    for query in viewModel.queriesToMove {
+                        query.folder = newFolder
+                        query.updatedAt = Date()
+                    }
+                    viewModel.queriesToMove = []
+                },
+                onCancel: {
+                    viewModel.queriesToMove = []
+                }
+            )
         }
         .confirmationDialog(
             viewModel.queriesToDelete.count == 1

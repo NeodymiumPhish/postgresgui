@@ -122,6 +122,15 @@ struct RootView: View {
         )) {
             HelpView()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .showDesignSystem)) { _ in
+            appState.navigation.isShowingDesignSystem = true
+        }
+        .sheet(isPresented: Binding(
+            get: { appState.navigation.isShowingDesignSystem },
+            set: { appState.navigation.isShowingDesignSystem = $0 }
+        )) {
+            DesignSystemView()
+        }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .background {
                 Task { @MainActor in

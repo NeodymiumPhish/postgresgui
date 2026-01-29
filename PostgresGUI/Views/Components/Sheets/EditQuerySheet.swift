@@ -2,13 +2,17 @@
 //  EditQuerySheet.swift
 //  PostgresGUI
 //
+//  A component for renaming saved queries.
+//  Receives initial name and callbacks - does not mutate models directly.
+//
 
 import SwiftUI
 
 struct EditQuerySheet: View {
-    @Bindable var query: SavedQuery
-    @Environment(\.dismiss) private var dismiss
-    @Environment(AppState.self) private var appState
+    let initialName: String
+    let onSave: (String) -> Void
+    let onCancel: () -> Void
+
     @State private var editedName: String = ""
 
     private var canSave: Bool {
@@ -25,7 +29,7 @@ struct EditQuerySheet: View {
                 .onSubmit { if canSave { save() } }
 
             HStack {
-                Button("Cancel") { dismiss() }
+                Button("Cancel") { onCancel() }
                     .keyboardShortcut(.cancelAction)
 
                 Spacer()
@@ -37,16 +41,12 @@ struct EditQuerySheet: View {
         }
         .padding()
         .frame(width: 300)
-        .onAppear { editedName = query.name }
+        .onAppear { editedName = initialName }
     }
 
     private func save() {
-        query.name = editedName
-        query.updatedAt = Date()
-        // Update toolbar if this is the currently selected query
-        if appState.query.currentSavedQueryId == query.id {
-            appState.query.currentQueryName = editedName
-        }
-        dismiss()
+        let trimmedName = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+        onSave(trimmedName)
     }
 }

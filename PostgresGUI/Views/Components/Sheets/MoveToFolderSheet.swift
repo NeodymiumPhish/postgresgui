@@ -2,31 +2,38 @@
 //  MoveToFolderSheet.swift
 //  PostgresGUI
 //
+//  A component for moving queries to folders.
+//  Receives data and callbacks - does not access modelContext directly.
+//
 
 import SwiftUI
-import SwiftData
 
 struct MoveToFolderSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-
-    let queries: [SavedQuery]
+    let queryCount: Int
     let folders: [QueryFolder]
+    let currentFolderIds: Set<UUID?>  // Set of folder IDs the queries are currently in
+    let onMoveToFolder: (QueryFolder?) -> Void
+    let onCreateFolderAndMove: (String) -> Void
+    let onCancel: () -> Void
 
-    @State private var selectedFolderId: UUID?
     @State private var isCreatingNewFolder = false
     @State private var newFolderName = ""
     @FocusState private var isNewFolderFocused: Bool
+
+    /// Check if all queries are in the same folder
+    private func allInFolder(_ folderId: UUID?) -> Bool {
+        currentFolderIds.count == 1 && currentFolderIds.contains(folderId)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text(queries.count == 1 ? "Move Query to Folder" : "Move \(queries.count) Queries to Folder")
+                Text(queryCount == 1 ? "Move Query to Folder" : "Move \(queryCount) Queries to Folder")
                     .font(.headline)
                 Spacer()
                 Button {
-                    dismiss()
+                    onCancel()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.secondary)
@@ -42,15 +49,14 @@ struct MoveToFolderSheet: View {
                 VStack(spacing: 2) {
                     // No folder option (remove from folder)
                     Button {
-                        selectedFolderId = nil
-                        moveToFolder(nil)
+                        onMoveToFolder(nil)
                     } label: {
                         HStack {
                             Image(systemName: "tray")
                                 .foregroundColor(.secondary)
                             Text("No Folder")
                             Spacer()
-                            if queries.allSatisfy({ $0.folder == nil }) {
+                            if allInFolder(nil) {
                                 Image(systemName: "checkmark")
                                     .foregroundColor(.accentColor)
                             }
@@ -65,15 +71,14 @@ struct MoveToFolderSheet: View {
                     // Existing folders
                     ForEach(folders.sorted(by: { $0.name < $1.name })) { folder in
                         Button {
-                            selectedFolderId = folder.id
-                            moveToFolder(folder)
+                            onMoveToFolder(folder)
                         } label: {
                             HStack {
                                 Image(systemName: "folder")
                                     .foregroundColor(.secondary)
                                 Text(folder.name)
                                 Spacer()
-                                if queries.allSatisfy({ $0.folder?.id == folder.id }) {
+                                if allInFolder(folder.id) {
                                     Image(systemName: "checkmark")
                                         .foregroundColor(.accentColor)
                                 }
@@ -95,10 +100,10 @@ struct MoveToFolderSheet: View {
                                 .textFieldStyle(.plain)
                                 .focused($isNewFolderFocused)
                                 .onSubmit {
-                                    createAndMoveToNewFolder()
+                                    createFolder()
                                 }
                             Button("Create") {
-                                createAndMoveToNewFolder()
+                                createFolder()
                             }
                             .buttonStyle(.borderedProminent)
                             .disabled(newFolderName.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -117,7 +122,6 @@ struct MoveToFolderSheet: View {
                         .cornerRadius(6)
                     } else {
                         Button {
-                            DebugLog.print("📁 [MoveToFolderSheet] New Folder tapped")
                             isCreatingNewFolder = true
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 isNewFolderFocused = true
@@ -148,52 +152,18 @@ struct MoveToFolderSheet: View {
             HStack {
                 Spacer()
                 Button("Cancel") {
-                    DebugLog.print("❌ [MoveToFolderSheet] Cancel tapped")
-                    dismiss()
+                    onCancel()
                 }
                 .keyboardShortcut(.cancelAction)
             }
             .padding()
         }
         .frame(width: 350)
-        .onAppear {
-            DebugLog.print("📁 [MoveToFolderSheet] Opened for \(queries.count) queries")
-        }
     }
 
-    private func moveToFolder(_ folder: QueryFolder?) {
-        for query in queries {
-            query.folder = folder
-            query.updatedAt = Date()
-        }
-
-        do {
-            try modelContext.save()
-            DebugLog.print("📁 [MoveToFolderSheet] Moved \(queries.count) queries to folder: \(folder?.name ?? "None")")
-            dismiss()
-        } catch {
-            DebugLog.print("❌ [MoveToFolderSheet] Failed to move queries: \(error)")
-        }
-    }
-
-    private func createAndMoveToNewFolder() {
+    private func createFolder() {
         let trimmedName = newFolderName.trimmingCharacters(in: .whitespaces)
         guard !trimmedName.isEmpty else { return }
-
-        let newFolder = QueryFolder(name: trimmedName)
-        modelContext.insert(newFolder)
-
-        for query in queries {
-            query.folder = newFolder
-            query.updatedAt = Date()
-        }
-
-        do {
-            try modelContext.save()
-            DebugLog.print("📁 [MoveToFolderSheet] Created folder '\(trimmedName)' and moved \(queries.count) queries")
-            dismiss()
-        } catch {
-            DebugLog.print("❌ [MoveToFolderSheet] Failed to create folder and move queries: \(error)")
-        }
+        onCreateFolderAndMove(trimmedName)
     }
 }

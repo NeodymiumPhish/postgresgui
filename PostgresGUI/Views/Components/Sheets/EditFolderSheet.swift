@@ -2,13 +2,16 @@
 //  EditFolderSheet.swift
 //  PostgresGUI
 //
+//  A component for renaming query folders.
+//  Receives initial name and callbacks - does not mutate models directly.
+//
 
 import SwiftUI
-import SwiftData
 
 struct EditFolderSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Bindable var folder: QueryFolder
+    let initialName: String
+    let onSave: (String) -> Void
+    let onCancel: () -> Void
 
     @State private var folderName: String = ""
 
@@ -25,8 +28,7 @@ struct EditFolderSheet: View {
 
             HStack {
                 Button("Cancel") {
-                    DebugLog.print("❌ [EditFolderSheet] Cancel tapped for folder: \(folder.name)")
-                    dismiss()
+                    onCancel()
                 }
                 .keyboardShortcut(.cancelAction)
 
@@ -42,21 +44,13 @@ struct EditFolderSheet: View {
         .padding()
         .frame(width: 300)
         .onAppear {
-            folderName = folder.name
+            folderName = initialName
         }
     }
 
     private func saveChanges() {
         let trimmedName = folderName.trimmingCharacters(in: .whitespaces)
-        guard !trimmedName.isEmpty else {
-            DebugLog.print("⚠️ [EditFolderSheet] Empty folder name, not saving")
-            return
-        }
-
-        let oldName = folder.name
-        folder.name = trimmedName
-        folder.updatedAt = Date()
-        DebugLog.print("✅ [EditFolderSheet] Renamed folder from '\(oldName)' to '\(trimmedName)'")
-        dismiss()
+        guard !trimmedName.isEmpty else { return }
+        onSave(trimmedName)
     }
 }
